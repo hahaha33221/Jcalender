@@ -232,11 +232,21 @@ export function periodKey(c, d) {
   if (c === 'Y') return String(d.getFullYear());
   return iso(d);
 }
+/** 정기 체크가 도래하는 날 (고정 규칙) */
+export const DUE_RULE = { W: '매주 일요일', M: '매월 말일', Y: '매년 12월 30일' };
+
 /** 해당 날짜에 주기가 도래하는지. 수시체크는 도래 개념이 없다 */
-export function isDue(c, d, settings) {
+export function isDue(c, d) {
   if (c === 'D') return true;
-  if (c === 'W') return d.getDay() === Number(settings.weekDay);
-  if (c === 'M') { const n = new Date(d); n.setDate(d.getDate() + 1); return settings.monthDay === 'last' ? n.getDate() === 1 : d.getDate() === Number(settings.monthDay); }
-  if (c === 'Y') return d.getMonth() === 11 && d.getDate() === 31;
+  if (c === 'W') return d.getDay() === 0;
+  if (c === 'M') { const n = new Date(d); n.setDate(d.getDate() + 1); return n.getDate() === 1; }
+  if (c === 'Y') return d.getMonth() === 11 && d.getDate() === 30;
   return false;
+}
+
+/** d 이후(당일 포함) 처음 도래하는 날짜 */
+export function nextDue(c, d) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  for (let i = 0; i < 370; i++, x.setDate(x.getDate() + 1)) if (isDue(c, x)) return new Date(x);
+  return null;
 }

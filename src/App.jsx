@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { AREAS, CYCLES, ROWS, PRIO, defaultPrio, isDue, iso, pad, periodKey } from './data.js';
+import { AREAS, CYCLES, DUE_RULE, ROWS, PRIO, defaultPrio, isDue, iso, nextDue, pad, periodKey } from './data.js';
 import { mockAi, mockApi } from './mock.js';
 
 /* ───────────────────────── 공통 ───────────────────────── */
@@ -20,7 +20,7 @@ const seedEvents = () => {
     { id: uid(), date: d(4), time: '16:00', title: '팀 회의 (예시)', area: 'W' },
   ];
 };
-const INIT = { done: {}, outs: {}, prio: {}, events: null, log: [], settings: { weekDay: 0, monthDay: 'last' } };
+const INIT = { done: {}, outs: {}, prio: {}, events: null, log: [] };
 
 function useStore() {
   const [store, setStore] = useState(() => {
@@ -43,6 +43,7 @@ const useCtx = () => useContext(Ctx);
 export default function App() {
   const [store, setStore, persist] = useStore();
   const [page, setPage] = useState('home');
+  const [checkInit, setCheckInit] = useState(null);   // 대시보드에서 체크리스트로 이동할 때 적용할 필터
   const [panel, setPanel] = useState(null);
   const [pushes, setPushes] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -119,12 +120,16 @@ export default function App() {
     else setPanel({ row, kind: 'ai', text: o.text, saved: true });
   };
 
-  const ctx = { store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel };
-  const remaining = ROWS.filter(r => isDue(r.c, now, store.settings) && !isDone(r)).length;
-  const areaLeft = a => ROWS.filter(r => r.a === a && isDue(r.c, now, store.settings) && !isDone(r)).length;
+  /** 페이지 이동. 체크리스트는 { area, cyc } 필터를 받아 열 수 있다 */
+  const go = (p, init = null) => { setCheckInit(init); setPage(p); window.scrollTo(0, 0); };
+
+  const ctx = { store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go };
+  const remaining = ROWS.filter(r => isDue(r.c, now) && !isDone(r)).length;
+  const areaLeft = a => ROWS.filter(r => r.a === a && isDue(r.c, now) && !isDone(r)).length;
 
   const NAV = [
-    { id: 'home', label: '오늘 체크리스트', badge: remaining },
+    { id: 'home', label: '대시보드' },
+    { id: 'check', label: '체크리스트', badge: remaining },
     { sec: '상세 내용' },
     { id: 'P', label: AREAS.P.n, color: areaVar('P'), badge: areaLeft('P') },
     { id: 'B', label: AREAS.B.n, color: areaVar('B'), badge: areaLeft('B') },
@@ -142,7 +147,7 @@ export default function App() {
           <nav>
             {NAV.map((n, i) => n.sec
               ? <div className="nav-sec" key={i}>{n.sec}</div>
-              : <button key={n.id} className={page === n.id ? 'on' : ''} aria-current={page === n.id ? 'page' : undefined} style={n.color ? { '--ac': n.color } : undefined} onClick={() => setPage(n.id)}>
+              : <button key={n.id} className={page === n.id ? 'on' : ''} aria-current={page === n.id ? 'page' : undefined} style={n.color ? { '--ac': n.color } : undefined} onClick={() => go(n.id)}>
                   {n.color && <i className="dot" />}<span>{n.label}</span>{n.badge > 0 && <em title="오늘 남은 항목">{n.badge}</em>}
                 </button>)}
           </nav>
@@ -151,6 +156,7 @@ export default function App() {
         <main className="main">
           {!persist && <p className="banner">이 브라우저에서는 데이터가 저장되지 않습니다. 새로고침하면 진행 상태가 사라집니다.</p>}
           {page === 'home' && <Home />}
+          {page === 'check' && <CheckPage key={JSON.stringify(checkInit)} init={checkInit} />}
           {AREAS[page] && <AreaPage key={page} area={page} />}
           {page === 'progress' && <Progress />}
           {page === 'settings' && <Settings />}
@@ -162,15 +168,120 @@ export default function App() {
   );
 }
 
-/* ───────────────────────── 홈: 오늘 체크리스트 ───────────────────────── */
+/* ───────────────────────── 홈: 대시보드 ───────────────────────── */
+const fmtMD = d => `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`;
+const dayDiff = (a, b) => Math.round((b - a) / 864e5);
+
 function Home() {
   const { now } = useCtx();
   const [sel, setSel] = useState(iso(now));
+  const dueToday = ['W', 'M', 'Y'].filter(c => isDue(c, now));
   return (
     <>
-      <header className="page-h"><h1>오늘 체크리스트</h1><p>{now.getFullYear()}년 {now.getMonth() + 1}월 {now.getDate()}일 {WEEK[now.getDay()]}요일 · 일정 확인 후 우선순위 순으로 체크하세요.</p></header>
+      <header className="page-h"><h1>대시보드</h1><p>{now.getFullYear()}년 {now.getMonth() + 1}월 {now.getDate()}일 {WEEK[now.getDay()]}요일 · 일정과 오늘 남은 항목을 한눈에 확인하세요.</p></header>
       <Calendar sel={sel} setSel={setSel} />
-      <Checklist />
+      <div className="dash-top">
+        <Remain />
+        <DueCards />
+      </div>
+      {dueToday.map(c => <CycleSummary key={c} c={c} hot title={`오늘은 ${CYCLES[c]}일입니다`} note={`${DUE_RULE[c]} 도래 · 기간 ${periodKey(c, now)}`} />)}
+      <CycleSummary c="D" title="일일체크 요약" note="카테고리별 진행과 남은 항목 (우선순위순)" />
+      <CycleSummary c="S" title="수시체크 요약" note="필요할 때 체크하는 항목 · 오늘 기준" />
+    </>
+  );
+}
+
+/* 오늘 남은 항목 */
+function Remain() {
+  const { now, isDone, prioOf, go } = useCtx();
+  const cycles = Object.keys(CYCLES).filter(c => isDue(c, now));
+  const base = ROWS.filter(r => cycles.includes(r.c));
+  const doneN = base.filter(isDone).length;
+  const left = { 1: 0, 2: 0, 3: 0 };
+  base.filter(r => !isDone(r)).forEach(r => { left[prioOf(r)]++; });
+  return (
+    <section className="panel remain" aria-label="오늘 남은 항목">
+      <h2>오늘 남은 항목</h2>
+      <div className="sum-n"><b>{base.length - doneN}</b><span>개 남음 · {doneN}/{base.length} 완료</span></div>
+      <div className="pbar" role="progressbar" aria-valuenow={doneN} aria-valuemax={base.length}><i style={{ width: `${base.length ? doneN / base.length * 100 : 0}%` }} /></div>
+      <div className="sum-p"><span className="prio p1">높음 {left[1]}</span><span className="prio p2">중간 {left[2]}</span><span className="prio p3">낮음 {left[3]}</span></div>
+      <div className="sum-p">{cycles.map(c => {
+        const rs = base.filter(r => r.c === c);
+        return <span key={c} className="tag">{CYCLES[c].replace('체크-루틴', '').replace('체크', '')} {rs.filter(isDone).length}/{rs.length}</span>;
+      })}</div>
+      <button className="btn primary sm remain-go" onClick={() => go('check')}>체크리스트 열기</button>
+    </section>
+  );
+}
+
+/* 주간·월간·년간 도래일 */
+function DueCards() {
+  const { now, isDone, go } = useCtx();
+  return (
+    <div className="due-cards">
+      {['W', 'M', 'Y'].map(c => {
+        const nd = nextDue(c, now), dd = dayDiff(now, nd), today = dd === 0;
+        const rs = ROWS.filter(r => r.c === c), d = rs.filter(isDone).length;
+        return (
+          <button key={c} className={`due-card ${today ? 'hot' : ''}`} onClick={() => go('check', { cyc: c })}>
+            <span className="due-t">{CYCLES[c]}</span>
+            <b className="due-d">{today ? '오늘' : `D-${dd}`}</b>
+            <span className="due-r">{DUE_RULE[c]} · {fmtMD(nd)}</span>
+            <span className="due-c">{today ? `완료 ${d}/${rs.length}` : `${rs.length}개 항목`}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* 주기별 · 영역별 · 카테고리별 요약 */
+function CycleSummary({ c, title, note, hot }) {
+  const { isDone, prioOf, go } = useCtx();
+  return (
+    <section className={`panel csum ${hot ? 'hot' : ''}`} aria-label={title}>
+      <div className="csum-h"><h2>{title}</h2><span className="muted">{note}</span>
+        <button className="btn sm" onClick={() => go('check', { cyc: c })}>전체 보기</button></div>
+      <div className="acards">
+        {Object.keys(AREAS).map(a => {
+          const rs = ROWS.filter(r => r.a === a && r.c === c);
+          if (!rs.length) return null;
+          const d = rs.filter(isDone).length;
+          const cats = [];
+          rs.forEach(r => { let g = cats.find(x => x.cat === r.cat); if (!g) cats.push(g = { cat: r.cat, rows: [] }); g.rows.push(r); });
+          cats.forEach(g => { g.left = g.rows.filter(r => !isDone(r)).sort((x, y) => prioOf(x) - prioOf(y)); });
+          cats.sort((x, y) => (x.left.length ? Math.min(...x.left.map(prioOf)) : 4) - (y.left.length ? Math.min(...y.left.map(prioOf)) : 4));
+          return (
+            <div className="acard" key={a} style={{ '--ac': areaVar(a) }}>
+              <div className="acard-h"><i className="dot" /><b>{AREAS[a].n}</b><span className="muted">{d}/{rs.length}</span></div>
+              <div className="pbar"><i style={{ width: `${d / rs.length * 100}%` }} /></div>
+              <ul className="cats">{cats.map(g => {
+                const hi = g.left.filter(r => prioOf(r) === 1).length;
+                const names = g.left.slice(0, 2).map(r => r.action.replace(' (제안)', '')).join(', ');
+                return (
+                  <li key={g.cat}><button onClick={() => go('check', { area: a, cyc: c })} className={g.left.length ? '' : 'ok'}>
+                    <span className="cat-n">{g.cat}</span>
+                    {hi > 0 && <span className="prio p1">높음 {hi}</span>}
+                    <span className="cat-c">{g.rows.length - g.left.length}/{g.rows.length}</span>
+                    <span className="cat-l">{g.left.length ? names + (g.left.length > 2 ? ` 외 ${g.left.length - 2}` : '') : '모두 완료'}</span>
+                  </button></li>
+                );
+              })}</ul>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/* ───────────────────────── 체크리스트 ───────────────────────── */
+function CheckPage({ init }) {
+  const { now } = useCtx();
+  return (
+    <>
+      <header className="page-h"><h1>체크리스트</h1><p>{now.getFullYear()}년 {now.getMonth() + 1}월 {now.getDate()}일 {WEEK[now.getDay()]}요일 · 우선순위 순으로 체크하세요. 주간은 {DUE_RULE.W}, 월간은 {DUE_RULE.M}, 년간은 {DUE_RULE.Y}에 도래합니다.</p></header>
+      <Checklist init={init} />
     </>
   );
 }
@@ -198,7 +309,7 @@ function Calendar({ sel, setSel }) {
   };
   const delEvent = id => setStore(s => ({ ...s, events: s.events.filter(x => x.id !== id) }));
   const selDate = new Date(sel + 'T00:00:00');
-  const dueCycles = Object.keys(CYCLES).filter(c => c !== 'S' && isDue(c, selDate, store.settings));
+  const dueCycles = Object.keys(CYCLES).filter(c => c !== 'S' && isDue(c, selDate));
   const list = byDate[sel] || [];
 
   return (
@@ -214,7 +325,8 @@ function Calendar({ sel, setSel }) {
             const k = iso(d), evs = byDate[k] || [];
             return (
               <button key={k} role="gridcell" className={`cal-cell ${d.getMonth() !== ym.m ? 'out' : ''} ${k === todayStr ? 'today' : ''} ${k === sel ? 'sel' : ''}`} onClick={() => setSel(k)} aria-label={`${d.getMonth() + 1}월 ${d.getDate()}일 일정 ${evs.length}건`}>
-                <span className="cal-n">{d.getDate()}</span>
+                <span className="cal-top"><span className="cal-n">{d.getDate()}</span>
+                  {['Y', 'M', 'W'].filter(c => isDue(c, d)).map(c => <span key={c} className={`cal-due ${c}`}>{CYCLES[c].slice(0, 2)}</span>)}</span>
                 {evs.slice(0, 2).map(e => <span key={e.id} className="cal-ev" style={{ '--ac': areaVar(e.area) }}>{e.time && <small>{e.time}</small>} {e.title}</span>)}
                 {evs.length > 2 && <span className="cal-more">+{evs.length - 2}건</span>}
               </button>
@@ -245,14 +357,14 @@ function Calendar({ sel, setSel }) {
 }
 
 /* 카테고리별·우선순위순 체크리스트 (길게 스크롤) */
-function Checklist() {
+function Checklist({ init }) {
   const { store, now, isDone, prioOf, runMany, busy } = useCtx();
-  const [cyc, setCyc] = useState(null);           // null 이면 도래한 주기를 자동으로 사용
-  const [area, setArea] = useState('ALL');
+  const [cyc, setCyc] = useState(init?.cyc ? new Set([init.cyc]) : null);   // null 이면 도래한 주기를 자동으로 사용
+  const [area, setArea] = useState(init?.area ?? 'ALL');
   const [status, setStatus] = useState('TODO');
   const [sort, setSort] = useState('PRIO');
   const [q, setQ] = useState('');
-  const auto = useMemo(() => new Set(Object.keys(CYCLES).filter(c => isDue(c, now, store.settings))), [now, store.settings]);
+  const auto = useMemo(() => new Set(Object.keys(CYCLES).filter(c => isDue(c, now))), [now]);
   const active = cyc ?? auto;
   const toggleCyc = c => { const n = new Set(active); n.has(c) ? n.delete(c) : n.add(c); setCyc(n); };
 
@@ -344,7 +456,7 @@ function ActionRow({ row, showCycle }) {
 
 /* ───────────────────────── 상세: 영역 페이지 ───────────────────────── */
 function AreaPage({ area }) {
-  const { isDone, now, store } = useCtx();
+  const { isDone, now } = useCtx();
   const [cyc, setCyc] = useState('D');
   const [type, setType] = useState('ALL');
   const [q, setQ] = useState('');
@@ -369,7 +481,7 @@ function AreaPage({ area }) {
           {[['ALL', '전체'], ['API', 'API'], ['AI', 'AI'], ['없음', '없음']].map(([k, l]) => <button key={k} aria-pressed={type === k} onClick={() => setType(k)}>{l}</button>)}
         </div>
         <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="액션·내용 검색" aria-label="검색" />
-        <span className="muted grow-r">완료 {done}/{all.length} · API {cnt('API')} · AI {cnt('AI')} · 없음 {cnt('없음')}{cyc === 'S' ? '' : isDue(cyc, now, store.settings) ? ' · 오늘 도래' : ''}</span>
+        <span className="muted grow-r">완료 {done}/{all.length} · API {cnt('API')} · AI {cnt('AI')} · 없음 {cnt('없음')}{cyc === 'S' ? '' : isDue(cyc, now) ? ' · 오늘 도래' : ''}</span>
       </div>
       {tree.length === 0 && <div className="empty">조건에 맞는 액션이 없습니다.</div>}
       {tree.map(c => (
@@ -410,21 +522,24 @@ function Progress() {
 
 /* ───────────────────────── 설정 ───────────────────────── */
 function Settings() {
-  const { store, setStore } = useCtx();
+  const { setStore } = useCtx();
   const [arm, setArm] = useState(false);
-  const set = (k, v) => setStore(s => ({ ...s, settings: { ...s.settings, [k]: v } }));
   const reset = () => {
     if (!arm) { setArm(true); setTimeout(() => setArm(false), 3000); return; }
     setStore({ ...INIT, events: seedEvents() }); setArm(false);
   };
   return (
     <>
-      <header className="page-h"><h1>설정</h1><p>주간·월간 체크가 오늘 체크리스트에 나타나는 날을 정합니다.</p></header>
-      <div className="panel form">
-        <label>주간체크 요일<select value={store.settings.weekDay} onChange={e => set('weekDay', Number(e.target.value))}>{WEEK.map((w, i) => <option key={w} value={i}>{w}요일</option>)}</select></label>
-        <label>월간체크 기준일<select value={store.settings.monthDay} onChange={e => set('monthDay', e.target.value)}>
-          <option value="last">매월 말일</option><option value="1">매월 1일</option><option value="15">매월 15일</option><option value="25">매월 25일</option></select></label>
-        <p className="muted">년간체크는 12월 31일에 나타납니다. 수시체크는 홈에서 주기 버튼으로 직접 켭니다.</p>
+      <header className="page-h"><h1>설정</h1><p>정기 체크가 대시보드와 체크리스트에 나타나는 날입니다.</p></header>
+      <div className="panel">
+        <h2>체크 주기 규칙</h2>
+        <table className="prog rules"><tbody>
+          <tr><td>일일체크-루틴</td><td>매일</td></tr>
+          <tr><td>수시체크</td><td>필요할 때 (체크리스트에서 주기 버튼으로 켜기)</td></tr>
+          <tr><td>주간체크</td><td>{DUE_RULE.W}</td></tr>
+          <tr><td>월간체크</td><td>{DUE_RULE.M}</td></tr>
+          <tr><td>년간체크</td><td>{DUE_RULE.Y}</td></tr>
+        </tbody></table>
       </div>
       <div className="panel">
         <h2>데이터</h2>
