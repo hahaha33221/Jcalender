@@ -5,6 +5,7 @@ import FinanceView from './FinanceView.jsx';
 import GoalView from './GoalView.jsx';
 import RelationView from './RelationView.jsx';
 import LeisureView from './LeisureView.jsx';
+import ReviewView from './ReviewView.jsx';
 
 /* 카테고리 상세 화면 등록표
    - 키: '영역|카테고리'  (영역 P 개인, B 사업, W 근로)
@@ -18,6 +19,7 @@ import FinanceView from './FinanceView.jsx';
 import GoalView from './GoalView.jsx';
 import RelationView from './RelationView.jsx';
 import LeisureView from './LeisureView.jsx';
+import ReviewView from './ReviewView.jsx';
        'P|건강 관리': HealthView,                                                   */
 export const CATEGORY_VIEWS = {
   'P|건강 관리': HealthView,
@@ -26,6 +28,7 @@ export const CATEGORY_VIEWS = {
   'P|목표 관리': GoalView,
   'P|인맥/관계 관리': RelationView,
   'P|여가 관리': LeisureView,
+  'P|리뷰/회고, 저널링': ReviewView,
   'B|목표 관리': GoalView,
   'W|목표 관리': GoalView,
 };

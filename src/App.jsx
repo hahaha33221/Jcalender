@@ -8,6 +8,7 @@ import { GoalBoard } from './categories/GoalView.jsx';
 import ShoppingList from './categories/Shopping.jsx';
 import { seedPeople } from './categories/RelationView.jsx';
 import { seedLeisure } from './categories/LeisureView.jsx';
+import { seedJournal } from './categories/ReviewView.jsx';
 import { AREAS, CYCLES, DEFAULT_RULES, ROWS, PRIO, defaultPrio, dueRule, isDue, iso, nextDue, pad, periodKey, setRules } from './data.js';
 import { mockAi, mockApi } from './mock.js';
 import { SpeechRec, parseKoEvent } from './voice.js';
@@ -35,15 +36,15 @@ const readHash = () => {
   try { p = decodeURIComponent(p || ''); c = c ? decodeURIComponent(c) : null; } catch (e) { p = ''; c = null; }
   return PAGES.includes(p) ? { page: p, cat: AREAS[p] ? c : null } : { page: 'home', cat: null };
 };
-const INIT = { done: {}, outs: {}, prio: {}, events: null, anniv: null, annivDays: 10, health: null, finance: null, goals: null, people: null, leisure: null, rules: DEFAULT_RULES, log: [] };
-const seedAll = () => ({ ...INIT, events: seedEvents(), anniv: seedAnniv(), health: seedHealth(), finance: seedFinance(), goals: seedGoals(), people: seedPeople(), leisure: seedLeisure() });
+const INIT = { done: {}, outs: {}, prio: {}, events: null, anniv: null, annivDays: 10, health: null, finance: null, goals: null, people: null, leisure: null, journal: null, rules: DEFAULT_RULES, log: [] };
+const seedAll = () => ({ ...INIT, events: seedEvents(), anniv: seedAnniv(), health: seedHealth(), finance: seedFinance(), goals: seedGoals(), people: seedPeople(), leisure: seedLeisure(), journal: seedJournal() });
 
 function useStore() {
   const [store, setStore] = useState(() => {
     let v = null;
     try { v = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* 저장소 사용 불가 또는 손상 */ }
     const merged = { ...INIT, ...(v || {}) };
-    return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: merged.goals ? addExampleGoals(migrateGoals(merged.goals)) : seedGoals(), people: merged.people ?? seedPeople(), leisure: merged.leisure ?? seedLeisure() };
+    return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: merged.goals ? addExampleGoals(migrateGoals(merged.goals)) : seedGoals(), people: merged.people ?? seedPeople(), leisure: merged.leisure ?? seedLeisure(), journal: merged.journal ?? seedJournal() };
   });
   const [persist, setPersist] = useState(true);
   useEffect(() => {
