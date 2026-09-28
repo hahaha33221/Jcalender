@@ -3,6 +3,7 @@ import { ActionRow, Ctx, WEEK, areaVar, num, useCtx } from './shared.jsx';
 import { viewFor } from './categories/index.js';
 import { seedHealth } from './categories/health.js';
 import { seedFinance } from './categories/finance.js';
+import { seedGoals } from './categories/goals.js';
 import ShoppingList from './categories/Shopping.jsx';
 import { AREAS, CYCLES, DEFAULT_RULES, ROWS, PRIO, defaultPrio, dueRule, isDue, iso, nextDue, pad, periodKey, setRules } from './data.js';
 import { mockAi, mockApi } from './mock.js';
@@ -31,15 +32,15 @@ const readHash = () => {
   try { p = decodeURIComponent(p || ''); c = c ? decodeURIComponent(c) : null; } catch (e) { p = ''; c = null; }
   return PAGES.includes(p) ? { page: p, cat: AREAS[p] ? c : null } : { page: 'home', cat: null };
 };
-const INIT = { done: {}, outs: {}, prio: {}, events: null, anniv: null, annivDays: 10, health: null, finance: null, rules: DEFAULT_RULES, log: [] };
-const seedAll = () => ({ ...INIT, events: seedEvents(), anniv: seedAnniv(), health: seedHealth(), finance: seedFinance() });
+const INIT = { done: {}, outs: {}, prio: {}, events: null, anniv: null, annivDays: 10, health: null, finance: null, goals: null, rules: DEFAULT_RULES, log: [] };
+const seedAll = () => ({ ...INIT, events: seedEvents(), anniv: seedAnniv(), health: seedHealth(), finance: seedFinance(), goals: seedGoals() });
 
 function useStore() {
   const [store, setStore] = useState(() => {
     let v = null;
     try { v = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* 저장소 사용 불가 또는 손상 */ }
     const merged = { ...INIT, ...(v || {}) };
-    return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance() };
+    return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: merged.goals ?? seedGoals() };
   });
   const [persist, setPersist] = useState(true);
   useEffect(() => {
