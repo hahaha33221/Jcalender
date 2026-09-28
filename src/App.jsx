@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActionRow, Ctx, WEEK, areaVar, useCtx } from './shared.jsx';
 import { viewFor } from './categories/index.js';
+import { seedHealth } from './categories/health.js';
 import { AREAS, CYCLES, DUE_RULE, ROWS, PRIO, defaultPrio, isDue, iso, nextDue, pad, periodKey } from './data.js';
 import { mockAi, mockApi } from './mock.js';
 import { SpeechRec, parseKoEvent } from './voice.js';
@@ -28,15 +29,15 @@ const readHash = () => {
   try { p = decodeURIComponent(p || ''); c = c ? decodeURIComponent(c) : null; } catch (e) { p = ''; c = null; }
   return PAGES.includes(p) ? { page: p, cat: AREAS[p] ? c : null } : { page: 'home', cat: null };
 };
-const INIT = { done: {}, outs: {}, prio: {}, events: null, anniv: null, annivDays: 10, log: [] };
-const seedAll = () => ({ ...INIT, events: seedEvents(), anniv: seedAnniv() });
+const INIT = { done: {}, outs: {}, prio: {}, events: null, anniv: null, annivDays: 10, health: null, log: [] };
+const seedAll = () => ({ ...INIT, events: seedEvents(), anniv: seedAnniv(), health: seedHealth() });
 
 function useStore() {
   const [store, setStore] = useState(() => {
     let v = null;
     try { v = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* 저장소 사용 불가 또는 손상 */ }
     const merged = { ...INIT, ...(v || {}) };
-    return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv() };
+    return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth() };
   });
   const [persist, setPersist] = useState(true);
   useEffect(() => {

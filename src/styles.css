@@ -3,6 +3,7 @@
   --side:#17303b; --sideink:#c9d7de; --sidehover:#21414f; --invert:#fff;
   --a1:#0e7c66; --a2:#a8690a; --a3:#2f5d9e; --ai:#7a5c99; --aisoft:#efe8f6; --apisoft:#e1eaf7; --nonesoft:#eceff1;
   --ok:#0e7c66; --oksoft:#dff1ec; --over:#b3382c; --oversoft:#f9e2df; --warn:#a8690a; --warnsoft:#fbefd9;
+  --viz-ex:#1baf7a; --viz-sl:#2a78d6;
   box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 @media (prefers-color-scheme: dark) {
@@ -11,6 +12,7 @@
     --side:#0b1317; --sideink:#a9b8c3; --sidehover:#182730; --invert:#0e171d;
     --a1:#2bb595; --a2:#e0a94a; --a3:#6ea0e0; --ai:#b79bdc; --aisoft:#2a2138; --apisoft:#1a2c47; --nonesoft:#22323c;
     --ok:#2bb595; --oksoft:#123a31; --over:#ef7d70; --oversoft:#3d1c19; --warn:#e0a94a; --warnsoft:#3a2d12;
+    --viz-ex:#199e70; --viz-sl:#3987e5;
   }
 }
 :root[data-theme="dark"] {
@@ -18,6 +20,7 @@
   --side:#0b1317; --sideink:#a9b8c3; --sidehover:#182730; --invert:#0e171d;
   --a1:#2bb595; --a2:#e0a94a; --a3:#6ea0e0; --ai:#b79bdc; --aisoft:#2a2138; --apisoft:#1a2c47; --nonesoft:#22323c;
   --ok:#2bb595; --oksoft:#123a31; --over:#ef7d70; --oversoft:#3d1c19; --warn:#e0a94a; --warnsoft:#3a2d12;
+    --viz-ex:#199e70; --viz-sl:#3987e5;
 }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); height: 100%; }
 * { box-sizing: border-box; }
@@ -333,3 +336,40 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
 .catv-item-h { display: flex; align-items: baseline; gap: 8px; padding: 4px 0 6px; border-bottom: 2px solid var(--ac); margin-bottom: 6px; }
 .catv-item-h h3 { flex: 1; }
 .cat-nav { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+
+/* 건강 관리: 운동·수면 그래프 */
+.hv-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.hv-stat { display: flex; flex-direction: column; gap: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 12.5px; border-left: 4px solid var(--viz-ex); }
+.hv-stat.sl { border-left-color: var(--viz-sl); }
+.hv-stat b { font-size: 21px; line-height: 1.3; letter-spacing: -.01em; color: var(--ink); }
+.hv-sub { color: var(--ink2); }
+.hv-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.hv-charts .panel { margin: 0; min-width: 0; }
+.hv-ch { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.hv-ch h2 { margin: 0; }
+.bchart { position: relative; width: 100%; }
+.bchart svg { display: block; overflow: visible; }
+.bc-grid { stroke: var(--line2); stroke-width: 1; }
+.bc-base { stroke: var(--line); stroke-width: 1; }
+.bc-tick { font-size: 11px; fill: var(--ink3); }
+.bc-val { font-size: 11.5px; font-weight: 700; fill: var(--ink); }
+.bc-goal { stroke: var(--ink2); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.bc-goal-t { font-size: 11px; fill: var(--ink2); }
+.bc-hl { fill: var(--ink); opacity: .05; }
+.bc-hit { cursor: pointer; outline: none; }
+.bc-hit:focus-visible { stroke: var(--a3); stroke-width: 2; }
+.bc-tip { position: absolute; transform: translate(-50%, -100%); pointer-events: none; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; box-shadow: 0 4px 16px rgba(0,0,0,.15); font-size: 12px; display: flex; flex-direction: column; white-space: nowrap; z-index: 2; color: var(--ink); }
+.bc-tip b { font-size: 12.5px; }
+.hv-table td, .hv-table th { white-space: nowrap; }
+.hv-forms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.hv-form { margin: 0; min-width: 0; }
+.hv-form form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.hv-form label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink2); flex: 1 1 110px; }
+.hv-form .note { margin: 8px 0 6px; }
+.hv-goal { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; color: var(--ink2); }
+.hv-goal input { width: 64px; padding: 2px 6px; }
+.hv-recent { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+.hv-recent li { display: flex; gap: 10px; align-items: center; padding: 4px 0; border-top: 1px solid var(--line2); }
+.hv-recent li > span:first-child { color: var(--ink3); width: 38px; flex: none; }
+.hv-sec { margin: 24px 0 8px; font-size: 16px; }
+@media (max-width: 1100px) { .hv-charts, .hv-forms { grid-template-columns: minmax(0, 1fr); } }

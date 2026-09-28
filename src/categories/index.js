@@ -1,4 +1,5 @@
 import DefaultView from './DefaultView.jsx';
+import HealthView from './HealthView.jsx';
 
 /* 카테고리 상세 화면 등록표
    - 키: '영역|카테고리'  (영역 P 개인활동, B 사업활동, W 근로활동)
@@ -9,6 +10,7 @@ import DefaultView from './DefaultView.jsx';
    예) import HealthView from './HealthView.jsx';
        'P|건강 관리': HealthView,                                                   */
 export const CATEGORY_VIEWS = {
+  'P|건강 관리': HealthView,
 };
 
 export const viewFor = (area, cat) => CATEGORY_VIEWS[`${area}|${cat}`] || DefaultView;
