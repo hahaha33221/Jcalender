@@ -3,7 +3,8 @@ import { ActionRow, Ctx, WEEK, areaVar, num, useCtx } from './shared.jsx';
 import { viewFor } from './categories/index.js';
 import { seedHealth } from './categories/health.js';
 import { seedFinance } from './categories/finance.js';
-import { seedGoals } from './categories/goals.js';
+import { boardForYear, boardKey, migrateGoals, seedGoals } from './categories/goals.js';
+import { GoalBoard } from './categories/GoalView.jsx';
 import ShoppingList from './categories/Shopping.jsx';
 import { AREAS, CYCLES, DEFAULT_RULES, ROWS, PRIO, defaultPrio, dueRule, isDue, iso, nextDue, pad, periodKey, setRules } from './data.js';
 import { mockAi, mockApi } from './mock.js';
@@ -40,7 +41,7 @@ function useStore() {
     let v = null;
     try { v = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* 저장소 사용 불가 또는 손상 */ }
     const merged = { ...INIT, ...(v || {}) };
-    return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: merged.goals ?? seedGoals() };
+    return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: merged.goals ? migrateGoals(merged.goals) : seedGoals() };
   });
   const [persist, setPersist] = useState(true);
   useEffect(() => {
@@ -645,7 +646,9 @@ function categoriesOf(area, now, isDone) {
 }
 
 function AreaPage({ area }) {
-  const { isDone, now, go, openCat } = useCtx();
+  const { store, isDone, now, go, openCat } = useCtx();
+  const boards = store.goals?.boards || {};
+  const goalsOf = c => (boards[boardKey(area, c)] ? boardForYear(boards[boardKey(area, c)], now.getFullYear()).items.filter(i => !i.parent).length : 0);
   const [cyc, setCyc] = useState('ALL');
   const cats = categoriesOf(area, now, isDone);
   const shown = cats.filter(g => cyc === 'ALL' || g.cyc[cyc]);
@@ -668,7 +671,8 @@ function AreaPage({ area }) {
           <button key={g.cat} className="tile" onClick={() => openCat(area, g.cat)}>
             <span className="tile-h"><b>{g.cat}</b><span className="tile-go" aria-hidden="true">›</span></span>
             <span className="tile-items">{g.items.slice(0, 5).map(it => <span key={it} className="tile-item">{it}</span>)}{g.items.length > 5 && <span className="tile-item more">외 {g.items.length - 5}</span>}</span>
-            <span className="tile-cyc">{Object.keys(CYCLES).filter(c => g.cyc[c]).map(c => <span key={c} className={`cyc c-${c}`}>{CYCLES[c].slice(0, 2)} {g.cyc[c]}</span>)}</span>
+            <span className="tile-cyc">{Object.keys(CYCLES).filter(c => g.cyc[c]).map(c => <span key={c} className={`cyc c-${c}`}>{CYCLES[c].slice(0, 2)} {g.cyc[c]}</span>)}
+              {goalsOf(g.cat) > 0 && <span className="cyc goal">{now.getFullYear()}년 목표 {goalsOf(g.cat)}</span>}</span>
             <span className="tile-f">
               <span className={g.left ? 'tile-left' : 'muted'}>{g.due ? (g.left ? `오늘 남은 ${g.left}개` : '오늘 할 일 완료') : '오늘 도래 없음'}</span>
               <span className="muted">액션 {g.rows.length}</span>
@@ -695,6 +699,7 @@ function CategoryPage({ area, cat }) {
         <button onClick={() => go(area)}>{AREAS[area].n}</button><span aria-hidden="true">›</span><b>{cat}</b>
       </nav>
       <View area={area} cat={cat} group={g} />
+      {cat !== '목표 관리' && <GoalBoard area={area} cat={cat} title={`${cat} 목표`} />}
       <div className="cat-nav">
         <span className="muted">다른 카테고리</span>
         <div className="chips">{cats.filter(x => x.cat !== cat).map(x => <button key={x.cat} onClick={() => openCat(area, x.cat)}>{x.cat}</button>)}</div>

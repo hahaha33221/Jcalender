@@ -433,14 +433,14 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
 @media (max-width: 1100px) { .fv-grid { grid-template-columns: minmax(0, 1fr); } }
 
 /* 목표 관리: WBS + 일정 막대 + 마일스톤 */
-.wbs { width: 100%; border-collapse: collapse; min-width: 980px; font-size: 13px; }
+.wbs { width: 100%; border-collapse: collapse; min-width: 760px; font-size: 13px; }
 .wbs th, .wbs td { padding: 5px 6px; border-bottom: 1px solid var(--line2); text-align: left; vertical-align: middle; }
 .wbs th { color: var(--ink2); font-weight: 500; font-size: 12px; white-space: nowrap; }
 .wbs input, .wbs select { border-color: transparent; background: transparent; padding: 3px 6px; font-size: 13px; }
 .wbs input:hover, .wbs select:hover, .wbs input:focus, .wbs select:focus { border-color: var(--line); background: var(--input); }
 .wbs input[type=date] { width: 124px; padding: 3px 2px; }
 .wbs .c-code { width: 52px; color: var(--ink3); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.wbs .c-name { min-width: 230px; }
+.wbs .c-name { min-width: 260px; width: 40%; }
 .wbs .c-prog { width: 78px; }
 .wbs .c-prog select { width: 72px; }
 .wbs .c-tl { width: 25%; min-width: 220px; }
@@ -473,3 +473,38 @@ tr.lv0 .gbar { top: 4px; height: 14px; }
 .mile-tb select { min-width: 160px; }
 .mile-tb tr.is-done input:not([type=checkbox]) { color: var(--ink3); text-decoration: line-through; }
 .late-t { color: var(--over); font-weight: 500; }
+
+/* 카테고리별 목표 보드 (연 단위) */
+.goalb { margin-top: 28px; padding-top: 18px; border-top: 2px solid var(--ac); }
+.goalb-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.goalb-h h2 { margin: 0; font-size: 17px; }
+.goalb-h .year-pick { margin-left: auto; }
+.goalb-empty { margin: 4px 0; }
+.year-pick { display: inline-flex; align-items: center; gap: 8px; }
+.year-pick b { min-width: 58px; text-align: center; }
+.cyc.goal { background: var(--aisoft); color: var(--ai); }
+.linkish { border: 0; background: none; padding: 0; color: var(--a3); cursor: pointer; font: inherit; text-align: left; }
+.linkish:hover { text-decoration: underline; }
+.goal-ov td, .goal-ov th { text-align: left; }
+.goal-ov-n { font-weight: 500; min-width: 180px; }
+.goal-ov-p { min-width: 150px; }
+.goal-ov-p { display: flex; align-items: center; gap: 8px; }
+.goal-ov-p .pbar { flex: 1; margin: 0; }
+.goal-ov-p b { font-size: 12.5px; min-width: 36px; text-align: right; }
+
+/* 연간 일정표 (간트) */
+.gantt { min-width: 720px; font-size: 12.5px; }
+.gantt-row { display: grid; grid-template-columns: 220px minmax(0, 1fr); align-items: center; min-height: 28px; border-bottom: 1px solid var(--line2); }
+.gantt-row.lv0 { background: var(--paper); font-weight: 700; }
+.gantt-row.lv1 { font-weight: 500; }
+.gantt-head { min-height: 24px; border-bottom: 1px solid var(--line); }
+.gantt-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 10px; }
+.gantt-label em { font-style: normal; color: var(--ink3); font-weight: 400; margin-right: 4px; }
+.gantt-track { position: relative; height: 28px; }
+.gantt-head .gantt-track { height: 24px; }
+.gantt-month { position: absolute; top: 4px; font-size: 11px; color: var(--ink3); padding-left: 4px; border-left: 1px solid var(--line); height: 20px; }
+.gantt-grid { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line2); }
+.gantt .gbar { top: 8px; height: 12px; }
+.gantt-row.lv0 .gbar { top: 7px; height: 14px; }
+.gantt .mile { top: 8px; }
+.gantt .tl-today { top: 0; bottom: 0; }

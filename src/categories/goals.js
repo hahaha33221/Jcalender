@@ -1,10 +1,13 @@
 import { iso } from '../data.js';
 
-/* 목표 관리 (WBS + 마일스톤). 영역(P·B·W)마다 따로 저장한다
-   goals[area] = {
+/* 목표 관리 (WBS + 마일스톤). 카테고리마다 따로 저장하고 연 단위로 본다
+   goals = { v: 2, boards: { '영역|카테고리': {
      items: [{ id, parent(null 이면 최상위 목표), name, start, end, progress(0~100, 하위가 없는 작업만 사용) }],
      miles: [{ id, name, date, link(연결된 item id 또는 null), done }],
-   } */
+   } } }
+   '영역|목표 관리' 보드는 영역 전체에 걸친 목표를 담는다 */
+export const boardKey = (area, cat) => `${area}|${cat}`;
+export const EMPTY = { items: [], miles: [] };
 const uid = () => Math.random().toString(36).slice(2, 10);
 export const toDate = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 export const addDays = (s, n) => { const d = toDate(s); d.setDate(d.getDate() + n); return iso(d); };
@@ -13,6 +16,7 @@ export const daysBetween = (a, b) => Math.round((toDate(b) - toDate(a)) / 864e5)
 /* ── 예시 데이터 (오늘 기준 날짜) ── */
 const TEMPLATES = {
   P: {
+    cats: ['건강 관리', '자기계발/학습'],
     goals: [
       ['건강한 몸 만들기 (예시)', -20, 70, [
         ['운동 습관 만들기', -20, 30, [['주 3회 러닝 4주 유지', -20, 8, 60], ['근력 운동 루틴 정하기', -10, 5, 100], ['5km 기록 30분 이내', 9, 30, 0]]],
@@ -25,6 +29,7 @@ const TEMPLATES = {
     miles: [['5km 완주', 30, 0], ['영어 시험 응시', 46, 1], ['근력 루틴 확정', 5, 0, true]],
   },
   B: {
+    cats: ['매출/매입', '재고/상품'],
     goals: [
       ['4분기 매출 목표 달성 (예시)', -10, 90, [
         ['신규 고객 확보', -10, 50, [['제안서 템플릿 정비', -10, -1, 100], ['잠재 고객 20곳 발굴', 0, 25, 35], ['미팅 8건 진행', 15, 50, 0]]],
@@ -39,6 +44,7 @@ const TEMPLATES = {
     miles: [['상품 구성 확정', -5, 1, true], ['신규 상품 출시일', 60, 1], ['4분기 마감', 90, 0]],
   },
   W: {
+    cats: ['업무 할일/프로젝트', '직무 학습'],
     goals: [
       ['프로젝트 A 완수 (예시)', -35, 55, [
         ['요구사항 정리', -35, -15, [['현업 인터뷰', -35, -25, 100], ['요구사항 문서', -24, -15, 100]]],
@@ -53,22 +59,49 @@ const TEMPLATES = {
   },
 };
 
+/** 예시: 영역마다 목표 2개를 각각 알맞은 카테고리 보드에 넣는다 */
 export function seedGoals(today = new Date()) {
-  const t = iso(today), out = {};
+  const t = iso(today), boards = {};
   for (const [area, tpl] of Object.entries(TEMPLATES)) {
-    const items = [];
-    const walk = (list, parent) => list.forEach(([name, s, e, sub]) => {
-      const id = uid();
-      const leaf = typeof sub === 'number';
-      items.push({ id, parent, name, start: addDays(t, s), end: addDays(t, e), progress: leaf ? sub : 0 });
-      if (!leaf) walk(sub, id);
+    tpl.goals.forEach((goal, gi) => {
+      const items = [];
+      const walk = (list, parent) => list.forEach(([name, s, e, sub]) => {
+        const id = uid();
+        const leaf = typeof sub === 'number';
+        items.push({ id, parent, name, start: addDays(t, s), end: addDays(t, e), progress: leaf ? sub : 0 });
+        if (!leaf) walk(sub, id);
+      });
+      walk([goal], null);
+      const miles = tpl.miles.filter(m => m[2] === gi).map(([name, d, , done]) => ({ id: uid(), name, date: addDays(t, d), link: items[0].id, done: !!done }));
+      boards[boardKey(area, tpl.cats[gi])] = { items, miles };
     });
-    walk(tpl.goals, null);
-    const roots = items.filter(i => !i.parent);
-    const miles = tpl.miles.map(([name, d, root, done]) => ({ id: uid(), name, date: addDays(t, d), link: roots[root]?.id || null, done: !!done }));
-    out[area] = { items, miles };
   }
-  return out;
+  return { v: 2, boards };
+}
+
+/** 이전 형식(영역별 한 덩어리)을 카테고리 보드로 옮긴다. 예시 목표는 이름으로 원래 카테고리를 찾고, 나머지는 '목표 관리' 보드로 */
+export function migrateGoals(old) {
+  if (!old || old.v === 2) return old;
+  const boards = {};
+  for (const [area, g] of Object.entries(old)) {
+    const tpl = TEMPLATES[area];
+    if (!tpl || !g?.items) continue;
+    const rootOf = id => { let it = g.items.find(i => i.id === id); while (it?.parent) it = g.items.find(i => i.id === it.parent); return it; };
+    const catOf = root => { const gi = tpl.goals.findIndex(x => x[0] === root?.name); return gi >= 0 ? tpl.cats[gi] : '목표 관리'; };
+    g.items.forEach(it => { const k = boardKey(area, catOf(rootOf(it.id))); (boards[k] ||= { items: [], miles: [] }).items.push(it); });
+    g.miles.forEach(m => { const k = boardKey(area, m.link ? catOf(rootOf(m.link)) : '목표 관리'); (boards[k] ||= { items: [], miles: [] }).miles.push(m); });
+  }
+  return { v: 2, boards };
+}
+
+/** 선택한 해에 걸치는 최상위 목표와 그 하위만 남긴 보드 */
+export function boardForYear(g, year) {
+  const y0 = `${year}-01-01`, y1 = `${year}-12-31`;
+  const roots = new Set(g.items.filter(i => !i.parent && i.start <= y1 && i.end >= y0).map(i => i.id));
+  const keep = new Set(roots);
+  let grew = true;
+  while (grew) { grew = false; g.items.forEach(i => { if (i.parent && keep.has(i.parent) && !keep.has(i.id)) { keep.add(i.id); grew = true; } }); }
+  return { items: g.items.filter(i => keep.has(i.id)), miles: g.miles.filter(m => m.date.slice(0, 4) === String(year)) };
 }
 
 /* ── 계산 ── */
@@ -106,9 +139,11 @@ export function statusOf(it, progress, today) {
 }
 
 /* ── 변경 ── */
-export const addItem = (g, parent, today) => {
+/** 항목 추가. 최상위 목표는 선택한 해 안에서 (올해면 오늘부터) 연말까지로 잡는다 */
+export const addItem = (g, parent, today, year = Number(today.slice(0, 4))) => {
   const p = g.items.find(i => i.id === parent);
-  const start = p ? p.start : today, end = p ? p.end : addDays(today, 30);
+  const y0 = `${year}-01-01`, y1 = `${year}-12-31`;
+  const start = p ? p.start : (today >= y0 && today <= y1 ? today : y0), end = p ? p.end : y1;
   const siblings = childrenOf(g.items, parent || null).length;
   return { ...g, items: [...g.items, { id: uid(), parent: parent || null, name: p ? `새 작업 ${siblings + 1}` : `새 목표 ${siblings + 1}`, start, end, progress: 0 }] };
 };
