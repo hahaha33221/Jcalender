@@ -153,13 +153,13 @@ export default function App() {
 
   const NAV = [
     { id: 'home', label: '대시보드' },
+    { id: 'progress', label: '진행 현황' },
     { id: 'check', label: '체크리스트', badge: remaining },
     { sec: '상세 내용' },
     { id: 'P', label: AREAS.P.n, color: areaVar('P'), badge: areaLeft('P') },
     { id: 'B', label: AREAS.B.n, color: areaVar('B'), badge: areaLeft('B') },
     { id: 'W', label: AREAS.W.n, color: areaVar('W'), badge: areaLeft('W') },
     { sec: '관리' },
-    { id: 'progress', label: '진행 현황' },
     { id: 'settings', label: '설정' },
   ];
 
