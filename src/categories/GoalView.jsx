@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AREAS, iso } from '../data.js';
-import { ActionRow, WEEK, areaVar, useCtx } from '../shared.jsx';
+import { ActionRow, areaVar, useCtx } from '../shared.jsx';
 import {
   EMPTY, addItem, addMile, boardForYear, boardKey, daysBetween, delItem, delMile, flatten, progressOf, seedGoals, statusOf, toDate, updItem, updMile,
 } from './goals.js';
@@ -9,7 +9,6 @@ import {
    - GoalBoard: 카테고리 하나의 목표 보드. 모든 카테고리 상세 페이지 아래에 붙는다
    - GoalView : '목표 관리' 카테고리 화면. 영역 전체 목표 현황 + 영역 공통 목표 보드 */
 const md = s => { const d = toDate(s); return `${d.getMonth() + 1}/${d.getDate()}`; };
-const mdw = s => { const d = toDate(s); return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`; };
 const clampPct = v => Math.max(0, Math.min(100, v));
 const nextDay = s => { const d = toDate(s); d.setDate(d.getDate() + 1); return iso(d); };
 
@@ -64,7 +63,6 @@ export function GoalBoard({ area, cat, title = '목표 관리', year: yearProp, 
   const pct = s => clampPct((daysBetween(y0, s) / span) * 100);
   const pos = s => `${pct(s)}%`;
   const showToday = today >= y0 && today <= y1;
-  const milesOf = id => g.miles.filter(m => m.link === id);
   const mDate = mform.date >= y0 && mform.date <= y1 ? mform.date : (showToday ? today : `${year}-06-30`);
 
   const setDate = (it, k, v) => {
@@ -157,14 +155,13 @@ export function GoalBoard({ area, cat, title = '목표 관리', year: yearProp, 
                       {showToday && <i className="tl-today" style={{ left: pos(today) }} />}
                       {r > l && <span className={`gbar ${st.k}`} style={{ left: `${l}%`, width: `${r - l}%` }} title={`${it.name} · ${md(it.start)} ~ ${md(it.end)} · ${p}%`}>
                         <i style={{ width: `${p}%` }} /></span>}
-                      {milesOf(it.id).map(m => <span key={m.id} className={`mile ${m.done ? 'done' : m.date < today ? 'late' : ''}`} style={{ left: pos(m.date) }} title={`${m.name} · ${mdw(m.date)}`} />)}
                     </div>
                   </div>
                 );
               })}
             </div>
           </div>
-          <p className="note">진한 부분이 진행률, 빨간 세로선은 오늘, 마름모는 연결된 마일스톤입니다(보라: 예정, 빨강: 지남, 초록: 완료).</p>
+          <p className="note">진한 부분이 진행률, 빨간 세로선은 오늘입니다.</p>
         </div>
       )}
 

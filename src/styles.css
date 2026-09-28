@@ -465,9 +465,6 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
 .gbar i { display: block; height: 100%; background: var(--ac); }
 tr.lv0 .gbar { top: 4px; height: 14px; }
 .gbar.late { box-shadow: 0 0 0 1.5px var(--over); }
-.mile { position: absolute; top: 5px; width: 11px; height: 11px; margin-left: -5.5px; background: var(--ai); transform: rotate(45deg); border: 2px solid var(--card); box-sizing: content-box; z-index: 1; }
-.mile.done { background: var(--ok); }
-.mile.late { background: var(--over); }
 .mile-tb td, .mile-tb th { padding: 5px 6px; text-align: left; }
 .mile-tb td:nth-child(4) { min-width: 180px; }
 .mile-tb select { min-width: 160px; }
@@ -506,5 +503,4 @@ tr.lv0 .gbar { top: 4px; height: 14px; }
 .gantt-grid { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line2); }
 .gantt .gbar { top: 8px; height: 12px; }
 .gantt-row.lv0 .gbar { top: 7px; height: 14px; }
-.gantt .mile { top: 8px; }
 .gantt .tl-today { top: 0; bottom: 0; }
