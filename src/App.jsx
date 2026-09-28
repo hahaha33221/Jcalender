@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActionRow, Ctx, WEEK, areaVar, useCtx } from './shared.jsx';
 import { viewFor } from './categories/index.js';
 import { seedHealth } from './categories/health.js';
-import { AREAS, CYCLES, DUE_RULE, ROWS, PRIO, defaultPrio, isDue, iso, nextDue, pad, periodKey } from './data.js';
+import { AREAS, CYCLES, DEFAULT_RULES, ROWS, PRIO, defaultPrio, dueRule, isDue, iso, nextDue, pad, periodKey, setRules } from './data.js';
 import { mockAi, mockApi } from './mock.js';
 import { SpeechRec, parseKoEvent } from './voice.js';
 import { HOLIDAYS } from './holidays.js';
@@ -29,7 +29,7 @@ const readHash = () => {
   try { p = decodeURIComponent(p || ''); c = c ? decodeURIComponent(c) : null; } catch (e) { p = ''; c = null; }
   return PAGES.includes(p) ? { page: p, cat: AREAS[p] ? c : null } : { page: 'home', cat: null };
 };
-const INIT = { done: {}, outs: {}, prio: {}, events: null, anniv: null, annivDays: 10, health: null, log: [] };
+const INIT = { done: {}, outs: {}, prio: {}, events: null, anniv: null, annivDays: 10, health: null, rules: DEFAULT_RULES, log: [] };
 const seedAll = () => ({ ...INIT, events: seedEvents(), anniv: seedAnniv(), health: seedHealth() });
 
 function useStore() {
@@ -50,6 +50,7 @@ function useStore() {
 /* ───────────────────────── 앱 ───────────────────────── */
 export default function App() {
   const [store, setStore, persist] = useStore();
+  setRules(store.rules);                           // 도래 규칙을 저장된 설정으로 맞춘다 (렌더 전에)
   const [route, setRoute] = useState(readHash);    // 주소 #/페이지/카테고리 와 연동 (브라우저 뒤로가기 지원)
   const { page, cat } = route;
   const [checkInit, setCheckInit] = useState(null);   // 대시보드에서 체크리스트로 이동할 때 적용할 필터
@@ -202,7 +203,7 @@ function Home() {
         <Remain />
         <DueCards />
       </div>
-      {dueToday.map(c => <CycleSummary key={c} c={c} hot title={`오늘은 ${CYCLES[c]}일입니다`} note={`${DUE_RULE[c]} 도래 · 기간 ${periodKey(c, now)}`} />)}
+      {dueToday.map(c => <CycleSummary key={c} c={c} hot title={`오늘은 ${CYCLES[c]}일입니다`} note={`${dueRule(c)} 도래 · 기간 ${periodKey(c, now)}`} />)}
       <CycleSummary c="D" title="일일체크 요약" note="카테고리별 진행과 남은 항목 (우선순위순)" />
       <CycleSummary c="S" title="수시체크 요약" note="필요할 때 체크하는 항목 · 오늘 기준" />
     </>
@@ -265,7 +266,7 @@ function DueCards() {
           <button key={c} className={`due-card ${today ? 'hot' : ''}`} onClick={() => go('check', { cyc: c })}>
             <span className="due-t">{CYCLES[c]}</span>
             <b className="due-d">{today ? '오늘' : `D-${dd}`}</b>
-            <span className="due-r">{DUE_RULE[c]} · {fmtMD(nd)}</span>
+            <span className="due-r">{dueRule(c)} · {fmtMD(nd)}</span>
             <span className="due-c">{today ? `완료 ${d}/${rs.length}` : `${rs.length}개 항목`}</span>
           </button>
         );
@@ -319,7 +320,7 @@ function CheckPage({ init }) {
   const { now } = useCtx();
   return (
     <>
-      <header className="page-h"><h1>체크리스트</h1><p>{now.getFullYear()}년 {now.getMonth() + 1}월 {now.getDate()}일 {WEEK[now.getDay()]}요일 · 우선순위 순으로 체크하세요. 주간은 {DUE_RULE.W}, 월간은 {DUE_RULE.M}, 년간은 {DUE_RULE.Y}에 도래합니다.</p></header>
+      <header className="page-h"><h1>체크리스트</h1><p>{now.getFullYear()}년 {now.getMonth() + 1}월 {now.getDate()}일 {WEEK[now.getDay()]}요일 · 우선순위 순으로 체크하세요. 주간은 {dueRule('W')}, 월간은 {dueRule('M')}, 년간은 {dueRule('Y')}에 도래합니다.</p></header>
       <Checklist init={init} />
     </>
   );
@@ -551,7 +552,7 @@ function Checklist({ init }) {
   const [status, setStatus] = useState('TODO');
   const [sort, setSort] = useState('PRIO');
   const [q, setQ] = useState('');
-  const auto = useMemo(() => new Set(Object.keys(CYCLES).filter(c => isDue(c, now))), [now]);
+  const auto = useMemo(() => new Set(Object.keys(CYCLES).filter(c => isDue(c, now))), [now, store.rules]);
   const active = cyc ?? auto;
   const toggleCyc = c => { const n = new Set(active); n.has(c) ? n.delete(c) : n.add(c); setCyc(n); };
 
@@ -726,28 +727,43 @@ function Progress() {
 
 /* ───────────────────────── 설정 ───────────────────────── */
 function Settings() {
-  const { setStore } = useCtx();
+  const { store, setStore } = useCtx();
   const [arm, setArm] = useState(false);
+  const rules = { ...DEFAULT_RULES, ...store.rules };
+  const setRule = (k, v) => setStore(s => ({ ...s, rules: { ...DEFAULT_RULES, ...s.rules, [k]: v } }));
+  const isDefault = Object.keys(DEFAULT_RULES).every(k => String(rules[k]) === String(DEFAULT_RULES[k]));
   const reset = () => {
     if (!arm) { setArm(true); setTimeout(() => setArm(false), 3000); return; }
     setStore(seedAll()); setArm(false);
   };
+  const days = n => Array.from({ length: n }, (_, i) => i + 1);
+  const yearDays = new Date(2025, Number(rules.yearMonth), 0).getDate();   // 윤년 아닌 해 기준
   return (
     <>
-      <header className="page-h"><h1>설정</h1><p>정기 체크 규칙과 데이터를 관리합니다. 기념일은 개인 › 기념일 관리에서 관리합니다.</p></header>
+      <header className="page-h"><h1>설정</h1><p>정기 체크가 도래하는 날과 데이터를 관리합니다. 바꾸면 대시보드, 캘린더, 체크리스트에 바로 반영됩니다.</p></header>
       <div className="panel">
-        <h2>체크 주기 규칙</h2>
+        <div className="csum-h"><h2>체크 주기 규칙</h2>
+          <button className="btn sm" disabled={isDefault} onClick={() => setStore(s => ({ ...s, rules: DEFAULT_RULES }))}>기본값으로</button></div>
         <table className="prog rules"><tbody>
           <tr><td>일일체크-루틴</td><td>매일</td></tr>
           <tr><td>수시체크</td><td>필요할 때 (체크리스트에서 주기 버튼으로 켜기)</td></tr>
-          <tr><td>주간체크</td><td>{DUE_RULE.W}</td></tr>
-          <tr><td>월간체크</td><td>{DUE_RULE.M}</td></tr>
-          <tr><td>년간체크</td><td>{DUE_RULE.Y}</td></tr>
+          <tr><td>주간체크</td><td><div className="rule-in">매주
+            <select value={rules.weekDay} onChange={e => setRule('weekDay', Number(e.target.value))} aria-label="주간체크 요일">
+              {WEEK.map((w, i) => <option key={w} value={i}>{w}요일</option>)}</select></div></td></tr>
+          <tr><td>월간체크</td><td><div className="rule-in">매월
+            <select value={rules.monthDay} onChange={e => setRule('monthDay', e.target.value === 'last' ? 'last' : Number(e.target.value))} aria-label="월간체크 기준일">
+              <option value="last">말일</option>{days(31).map(d => <option key={d} value={d}>{d}일</option>)}</select></div></td></tr>
+          <tr><td>년간체크</td><td><div className="rule-in">매년
+            <select value={rules.yearMonth} onChange={e => setRule('yearMonth', Number(e.target.value))} aria-label="년간체크 월">
+              {days(12).map(m => <option key={m} value={m}>{m}월</option>)}</select>
+            <select value={Math.min(rules.yearDay, yearDays)} onChange={e => setRule('yearDay', Number(e.target.value))} aria-label="년간체크 일">
+              {days(yearDays).map(d => <option key={d} value={d}>{d}일</option>)}</select></div></td></tr>
         </tbody></table>
+        <p className="note">기본값: 주간 일요일, 월간 말일, 년간 12월 30일. 월간 기준일이 없는 달(예: 31일)은 그 달 말일에 도래합니다.</p>
       </div>
       <div className="panel">
         <h2>데이터</h2>
-        <p className="muted">체크 상태, 일정, 우선순위 설정은 이 브라우저에만 저장됩니다.</p>
+        <p className="muted">체크 상태, 일정, 기념일, 건강 기록, 설정은 이 브라우저에만 저장됩니다.</p>
         <button className={`btn ${arm ? 'danger' : ''}`} onClick={reset}>{arm ? '정말 초기화할까요?' : '모든 데이터 초기화'}</button>
       </div>
     </>

@@ -232,15 +232,37 @@ export function periodKey(c, d) {
   if (c === 'Y') return String(d.getFullYear());
   return iso(d);
 }
-/** 정기 체크가 도래하는 날 (고정 규칙) */
-export const DUE_RULE = { W: '매주 일요일', M: '매월 말일', Y: '매년 12월 30일' };
+/** 정기 체크가 도래하는 날. 설정에서 바꾸며, 앱이 저장된 값으로 setRules 를 호출해 맞춘다 */
+export const DEFAULT_RULES = { weekDay: 0, monthDay: 'last', yearMonth: 12, yearDay: 30 };
+let RULES = { ...DEFAULT_RULES };
+export const setRules = r => { RULES = { ...DEFAULT_RULES, ...(r || {}) }; };
 
-/** 해당 날짜에 주기가 도래하는지. 수시체크는 도래 개념이 없다 */
+const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
+const lastDate = (y, m) => new Date(y, m + 1, 0).getDate();   // m: 0~11
+
+/** 주기 규칙 문구 (예: 매주 일요일) */
+export function dueRule(c) {
+  if (c === 'D') return '매일';
+  if (c === 'S') return '필요할 때';
+  if (c === 'W') return `매주 ${WEEKDAY[RULES.weekDay]}요일`;
+  if (c === 'M') return RULES.monthDay === 'last' ? '매월 말일' : `매월 ${RULES.monthDay}일`;
+  if (c === 'Y') return `매년 ${RULES.yearMonth}월 ${RULES.yearDay}일`;
+  return '';
+}
+
+/** 해당 날짜에 주기가 도래하는지. 수시체크는 도래 개념이 없다.
+    월간 기준일이 그 달에 없으면(예: 31일) 그 달 말일에 도래한다 */
 export function isDue(c, d) {
   if (c === 'D') return true;
-  if (c === 'W') return d.getDay() === 0;
-  if (c === 'M') { const n = new Date(d); n.setDate(d.getDate() + 1); return n.getDate() === 1; }
-  if (c === 'Y') return d.getMonth() === 11 && d.getDate() === 30;
+  if (c === 'W') return d.getDay() === Number(RULES.weekDay);
+  if (c === 'M') {
+    const last = lastDate(d.getFullYear(), d.getMonth());
+    return d.getDate() === (RULES.monthDay === 'last' ? last : Math.min(Number(RULES.monthDay), last));
+  }
+  if (c === 'Y') {
+    const m = Number(RULES.yearMonth) - 1;
+    return d.getMonth() === m && d.getDate() === Math.min(Number(RULES.yearDay), lastDate(d.getFullYear(), m));
+  }
   return false;
 }
 
