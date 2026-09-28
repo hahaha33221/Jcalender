@@ -86,6 +86,14 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--ac, var(--
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line2); border-left: 1px solid var(--line2); }
 .cal-dow { text-align: center; padding: 5px 0; font-size: 12px; color: var(--ink2); border-right: 1px solid var(--line2); border-bottom: 1px solid var(--line2); background: var(--paper); }
 .cal-dow.sun { color: var(--over); }
+.cal-dow.sat { color: var(--a3); }
+.cal-cell.sun .cal-n, .day-h h2.sun { color: var(--over); }
+.cal-cell.sat .cal-n, .day-h h2.sat { color: var(--a3); }
+.cal-cell.today.sun .cal-n, .cal-cell.today.sat .cal-n { color: var(--invert); }
+.cal-hol { font-size: 11px; color: var(--over); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-anniv { font-size: 11px; color: var(--ai); background: var(--aisoft); border-radius: 3px; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day-tags { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 6px; }
+.day-tags span { font-size: 12px; }
 .cal-cell { min-height: 84px; text-align: left; padding: 4px 5px; border: 0; border-right: 1px solid var(--line2); border-bottom: 1px solid var(--line2); background: var(--card); cursor: pointer; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
 .cal-cell:hover { background: var(--paper); }
 .cal-cell.out { opacity: .45; }
@@ -235,6 +243,27 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
 .cal-due.M { background: var(--apisoft); color: var(--a3); }
 .cal-due.Y { background: var(--oversoft); color: var(--over); }
 .rules { max-width: 520px; }
+.anniv { margin-bottom: 16px; }
+.anniv-list { display: flex; gap: 10px; flex-wrap: wrap; }
+.anniv-card { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; align-items: center; border: 1px solid var(--line2); border-left: 4px solid var(--ai); border-radius: 6px; padding: 8px 12px; min-width: 220px; flex: 1 1 220px; max-width: 360px; }
+.anniv-d { grid-row: span 2; font-size: 20px; color: var(--ai); min-width: 52px; }
+.anniv-card.soon .anniv-d { color: var(--over); }
+.anniv-card.hot { background: var(--oversoft); border-left-color: var(--over); }
+.anniv-card.hot .anniv-d { color: var(--over); }
+.anniv-n { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.anniv-m { font-size: 12px; color: var(--ink2); }
+.anniv-empty { margin: 0; }
+.anniv-days { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink2); margin-bottom: 12px; }
+.anniv-days span { display: flex; align-items: center; gap: 6px; color: var(--ink); }
+.anniv-days input { width: 80px; }
+.anniv-tb td { padding: 5px 6px; }
+.anniv-tb td:first-child { min-width: 160px; }
+.anniv-tb input[type=date] { min-width: 140px; }
+.nowrap { white-space: nowrap; }
+.anniv-add { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+.anniv-add > input:first-child { flex: 2 1 200px; width: auto; }
+.anniv-add > input[type=date], .anniv-add > select { flex: 1 1 130px; width: auto; }
+.chk { display: flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap; }
 .rules td { text-align: left !important; }
 .rules td:first-child { font-weight: 500; width: 140px; }
 
