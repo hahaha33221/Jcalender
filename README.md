@@ -5,8 +5,9 @@
 ## 실행
 ```
 npm install
-npm run dev        # 개발 서버 (http://localhost:5173)
+npm run dev        # 개발 서버 (http://localhost:5288)
 npm run build      # 배포용 빌드 (dist/)
+npm run preview    # 빌드 결과 미리보기 (http://localhost:5289)
 ```
 
 ## 화면
