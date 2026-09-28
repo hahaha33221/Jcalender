@@ -198,13 +198,17 @@ export const AREAS = { P: { n: '개인', v: '--a1' }, B: { n: '사업', v: '--a2
 export const CYCLES = { D: '일일체크-루틴', S: '수시체크', W: '주간체크', M: '월간체크', Y: '년간체크' };
 export const TY = { A: 'API', I: 'AI', N: '없음' };
 export const ROWS = [];
+/** 쓰지 않는 카테고리. 목록에서만 빼고, 다른 항목의 id(체크 기록)가 바뀌지 않도록 데이터 줄은 남겨 둔다 */
+export const HIDDEN_CATS = new Set(['P|개인 일정/캘린더', 'P|습관/루틴 관리']);
 (() => {
   let a, c, cat = '', item = '', n = 0;
   for (const line of RAW.trim().split('\n')) {
     if (line[0] === '#') { [a, c] = line.slice(1).split('|'); cat = ''; item = ''; n = 0; continue; }
     const [ct, it, ac, ty, de] = line.split('|');
     if (ct) cat = ct; if (it) item = it;
-    ROWS.push({ id: `${a}${c}${n++}`, a, c, cat, item, action: ac, ty: TY[ty], code: ty, detail: de });
+    const id = `${a}${c}${n++}`;                      // 줄 순서로 id 를 매기므로 숨긴 줄도 번호는 센다
+    if (HIDDEN_CATS.has(`${a}|${cat}`)) continue;
+    ROWS.push({ id, a, c, cat, item, action: ac, ty: TY[ty], code: ty, detail: de });
   }
 })();
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AREAS, iso } from '../data.js';
+import { AREAS, ROWS, iso } from '../data.js';
 import { ActionRow, areaVar, useCtx } from '../shared.jsx';
 import {
   EMPTY, addItem, addMile, boardForYear, boardKey, daysBetween, delItem, delMile, flatten, progressOf, seedGoals, statusOf, toDate, updItem, updMile,
@@ -200,60 +200,163 @@ export function GoalBoard({ area, cat, title = '목표 관리', year: yearProp, 
   );
 }
 
-/* '목표 관리' 카테고리 화면: 영역 전체 목표 현황 + 영역 공통 목표 */
+/* '목표 관리' 카테고리 화면: 영역의 모든 카테고리 목표를 모아서 본다 (통합 WBS · 연간 일정표 · 마일스톤) + 영역 공통 목표 */
 export default function GoalView({ area, cat, group }) {
-  const { now, isDone, openCat } = useCtx();
+  const { now, isDone, openCat, setStore } = useCtx();
   const today = iso(now);
   const [year, setYear] = useState(now.getFullYear());
+  const [tasks, setTasks] = useState(false);        // 작업(3단계)까지 펼치기
+  const [fold, setFold] = useState({});             // 접은 카테고리
   const { boards } = useGoals(area, cat);
 
-  // 영역의 모든 카테고리 보드에서 그 해의 최상위 목표를 모은다
-  const all = Object.entries(boards).filter(([k]) => k.startsWith(`${area}|`)).flatMap(([k, b]) => {
-    const c = k.slice(2), yb = boardForYear(b, year);
-    return yb.items.filter(i => !i.parent).map(it => {
-      const p = progressOf(yb.items, it.id);
-      const ms = yb.miles.filter(m => !m.done && m.date >= today).sort((a, b2) => a.date.localeCompare(b2.date));
-      return { c, it, p, st: statusOf(it, p, today), next: ms[0] };
-    });
-  }).sort((a, b) => a.it.end.localeCompare(b.it.end));
-  const avg = all.length ? Math.round(all.reduce((a, x) => a + x.p, 0) / all.length) : 0;
-  const cats = new Set(all.map(x => x.c));
+  // 카테고리 순서: 영역 공통(목표 관리) → 데이터 순서. 숨긴 카테고리는 뺀다
+  const order = ['목표 관리', ...new Set(ROWS.filter(r => r.a === area && r.cat !== '목표 관리').map(r => r.cat))];
+  const groups = order.map((c, ci) => {
+    const b = boards[boardKey(area, c)];
+    if (!b) return null;
+    const yb = boardForYear(b, year);
+    const rows = flatten(yb.items);
+    const roots = rows.filter(r => r.level === 0);
+    if (!roots.length && !yb.miles.length) return null;
+    let w = 0, sum = 0;
+    roots.forEach(r => { const d = Math.max(1, daysBetween(r.item.start, r.item.end) + 1); w += d; sum += d * progressOf(yb.items, r.item.id); });
+    const starts = roots.map(r => r.item.start).sort(), ends = roots.map(r => r.item.end).sort();
+    return { c, key: boardKey(area, c), yb, rows, roots, p: w ? Math.round(sum / w) : 0, start: starts[0], end: ends[ends.length - 1] };
+  }).filter(Boolean).map((g, i) => ({ ...g, n: i + 1 }));
+
+  const allRoots = groups.flatMap(g => g.roots.map(r => ({ g, r, p: progressOf(g.yb.items, r.item.id) })));
+  const allLeaves = groups.flatMap(g => g.rows.filter(r => !r.hasKids).map(r => ({ g, r, st: statusOf(r.item, progressOf(g.yb.items, r.item.id), today) })));
+  let W = 0, S = 0;
+  allRoots.forEach(x => { const d = Math.max(1, daysBetween(x.r.item.start, x.r.item.end) + 1); W += d; S += d * x.p; });
+  const avg = W ? Math.round(S / W) : 0;
+  const miles = groups.flatMap(g => g.yb.miles.map(m => ({ g, m, link: g.rows.find(r => r.item.id === m.link) }))).sort((a, b) => a.m.date.localeCompare(b.m.date));
+  const nextMile = miles.find(x => !x.m.done && x.m.date >= today);
+  const setMile = (key, id, patch) => setStore(s => {
+    const cur = s.goals?.v === 2 ? s.goals : seedGoals(now);
+    const b = cur.boards[key] || EMPTY;
+    return { ...s, goals: { ...cur, boards: { ...cur.boards, [key]: updMile(b, id, patch) } } };
+  });
+
+  // 연간 일정표 위치
+  const y0 = `${year}-01-01`, y1 = `${year}-12-31`, span = daysBetween(y0, y1) + 1;
+  const pct = d => clampPct((daysBetween(y0, d) / span) * 100);
+  const showToday = today >= y0 && today <= y1;
+  const bar = (it, p, st, cls = '') => {
+    const l = pct(it.start), r = pct(nextDay(it.end));
+    return r > l ? <span className={`gbar ${st} ${cls}`} style={{ left: `${l}%`, width: `${r - l}%` }} title={`${it.name} · ${md(it.start)} ~ ${md(it.end)} · ${p}%`}><i style={{ width: `${p}%` }} /></span> : null;
+  };
   const items = group.items.map(it => ({ it, rows: group.rows.filter(r => r.item === it) }));
+  const catLabel = c => (c === '목표 관리' ? '영역 공통' : c);
 
   return (
     <div className="catv gv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 카테고리마다 세운 {year}년 목표를 한눈에 봅니다. 각 카테고리 상세 페이지 아래에서도 목표를 관리할 수 있습니다.</p>
+        <p>{AREAS[area].n} · 각 카테고리에서 세운 {year}년 목표를 모두 모아 봅니다. 목표 수정은 카테고리 이름을 눌러 해당 페이지에서 합니다.</p>
       </header>
 
-      <div className="bar"><YearPicker year={year} setYear={setYear} /></div>
+      <div className="bar"><YearPicker year={year} setYear={setYear} />
+        <div className="chips grow-r" role="group" aria-label="보기"><button aria-pressed={tasks} onClick={() => setTasks(!tasks)}>작업까지 보기</button></div></div>
 
       <div className="hv-stats">
-        <div className="hv-stat sl"><span className="muted">{year}년 목표</span><b>{all.length}</b><span className="hv-sub">{cats.size}개 카테고리</span></div>
-        <div className="hv-stat sl"><span className="muted">평균 진행률</span><b>{avg}%</b><span className="pbar"><i style={{ width: `${avg}%`, background: 'var(--ac)' }} /></span></div>
-        <div className="hv-stat sl"><span className="muted">완료 목표</span><b>{all.filter(x => x.p >= 100).length}</b><span className="hv-sub">지연 {all.filter(x => x.st.k === 'late').length}</span></div>
+        <div className="hv-stat sl"><span className="muted">{year}년 목표</span><b>{allRoots.length}</b><span className="hv-sub">{groups.length}개 카테고리 · 작업 {allLeaves.length}</span></div>
+        <div className="hv-stat sl"><span className="muted">전체 진행률</span><b>{avg}%</b><span className="pbar"><i style={{ width: `${avg}%`, background: 'var(--ac)' }} /></span></div>
+        <div className={`hv-stat ${allLeaves.some(x => x.st.k === 'late') ? 'over' : 'sl'}`}><span className="muted">완료 목표 · 지연 작업</span>
+          <b>{allRoots.filter(x => x.p >= 100).length} · {allLeaves.filter(x => x.st.k === 'late').length}</b><span className="hv-sub">지연 작업은 종료일이 지난 미완료 작업</span></div>
+        <div className="hv-stat ex"><span className="muted">다음 마일스톤</span><b>{nextMile ? (nextMile.m.date === today ? '오늘' : `D-${daysBetween(today, nextMile.m.date)}`) : '-'}</b>
+          <span className="hv-sub">{nextMile ? `${nextMile.m.name} · ${catLabel(nextMile.g.c)}` : '없음'}</span></div>
       </div>
 
       <section className="panel">
-        <div className="csum-h"><h2>카테고리별 목표 현황</h2><span className="muted">{year}년 · 종료일 순</span></div>
-        {all.length ? (
-          <div className="tablewrap"><table className="prog goal-ov">
-            <thead><tr><th>카테고리</th><th>목표</th><th>기간</th><th>진행률</th><th>상태</th><th>다음 마일스톤</th></tr></thead>
-            <tbody>{all.map(x => (
-              <tr key={x.it.id}>
-                <td><button className="linkish" onClick={() => openCat(area, x.c)}>{x.c}</button></td>
-                <td className="goal-ov-n">{x.it.name}</td>
-                <td className="nowrap">{md(x.it.start)} ~ {md(x.it.end)}</td>
-                <td><div className="goal-ov-p"><span className="pbar"><i style={{ width: `${x.p}%`, background: 'var(--ac)' }} /></span><b>{x.p}%</b></div></td>
-                <td><span className={`st ${x.st.k}`}>{x.st.t}</span></td>
-                <td className="nowrap">{x.next ? `${x.next.name} · D-${daysBetween(today, x.next.date)}` : '-'}</td>
-              </tr>))}</tbody>
+        <div className="csum-h"><h2>통합 WBS</h2><span className="muted">카테고리 › 목표 › 단계{tasks ? ' › 작업' : ''}</span></div>
+        {groups.length ? (
+          <div className="tablewrap"><table className="wbs agg">
+            <thead><tr><th className="c-code">WBS</th><th className="c-name">항목</th><th>기간</th><th className="c-pbar">진행률</th><th>상태</th></tr></thead>
+            <tbody>{groups.map(g => [
+              <tr key={g.key} className="cat-row">
+                <td className="c-code">{g.n}</td>
+                <td className="c-name"><div className="wbs-name">
+                  <button className="fold" onClick={() => setFold({ ...fold, [g.key]: !fold[g.key] })} aria-label={fold[g.key] ? '펼치기' : '접기'}>{fold[g.key] ? '▸' : '▾'}</button>
+                  <button className="linkish" onClick={() => openCat(area, g.c)}>{catLabel(g.c)}</button><small className="muted">목표 {g.roots.length}</small></div></td>
+                <td className="nowrap">{g.start ? `${md(g.start)} ~ ${md(g.end)}` : '-'}</td>
+                <td><div className="goal-ov-p"><span className="pbar"><i style={{ width: `${g.p}%`, background: 'var(--ac)' }} /></span><b>{g.p}%</b></div></td>
+                <td />
+              </tr>,
+              ...(fold[g.key] ? [] : g.rows.filter(r => tasks || r.level < 2).map(r => {
+                const p = progressOf(g.yb.items, r.item.id), st = statusOf(r.item, p, today);
+                return (
+                  <tr key={r.item.id} className={`lv${Math.min(r.level, 2)}`}>
+                    <td className="c-code">{g.n}.{r.code}</td>
+                    <td className="c-name"><div className="wbs-name" style={{ paddingLeft: 20 + r.level * 18 }}><span className="agg-n">{r.item.name}</span></div></td>
+                    <td className="nowrap">{md(r.item.start)} ~ {md(r.item.end)}</td>
+                    <td><div className="goal-ov-p"><span className="pbar"><i style={{ width: `${p}%`, background: 'var(--ac)' }} /></span><b>{p}%</b></div></td>
+                    <td><span className={`st ${st.k}`}>{st.t}</span></td>
+                  </tr>
+                );
+              })),
+            ])}</tbody>
           </table></div>
         ) : <p className="muted">{year}년에 세운 목표가 없습니다.</p>}
       </section>
 
-      <GoalBoard area={area} cat={cat} title="영역 공통 목표" year={year} setYear={setYear} />
+      {groups.length > 0 && (
+        <section className="panel">
+          <div className="csum-h"><h2>통합 연간 일정표</h2><span className="muted">{year}년 1월 ~ 12월 · 카테고리 › 목표{tasks ? ' › 단계' : ''}</span></div>
+          <div className="tablewrap"><div className="gantt">
+            <div className="gantt-row gantt-head"><span className="gantt-label" />
+              <div className="gantt-track">
+                {Array.from({ length: 12 }, (_, m) => <span key={m} className="gantt-month" style={{ left: `${pct(`${year}-${String(m + 1).padStart(2, '0')}-01`)}%` }}>{m + 1}월</span>)}
+                {showToday && <i className="tl-today" style={{ left: `${pct(today)}%` }} />}
+              </div></div>
+            {groups.map(g => [
+              <div key={g.key} className="gantt-row cat-row">
+                <span className="gantt-label"><em>{g.n}</em> {catLabel(g.c)}</span>
+                <div className="gantt-track">
+                  {Array.from({ length: 12 }, (_, m) => <i key={m} className="gantt-grid" style={{ left: `${pct(`${year}-${String(m + 1).padStart(2, '0')}-01`)}%` }} />)}
+                  {showToday && <i className="tl-today" style={{ left: `${pct(today)}%` }} />}
+                  {g.start && bar({ name: catLabel(g.c), start: g.start, end: g.end }, g.p, 'run', 'cat')}
+                </div></div>,
+              ...g.rows.filter(r => r.level === 0 || (tasks && r.level === 1)).map(r => {
+                const p = progressOf(g.yb.items, r.item.id), st = statusOf(r.item, p, today);
+                return (
+                  <div key={r.item.id} className={`gantt-row lv${r.level + 1}`}>
+                    <span className="gantt-label" style={{ paddingLeft: 14 + r.level * 14 }}><em>{g.n}.{r.code}</em> {r.item.name}</span>
+                    <div className="gantt-track">
+                      {Array.from({ length: 12 }, (_, m) => <i key={m} className="gantt-grid" style={{ left: `${pct(`${year}-${String(m + 1).padStart(2, '0')}-01`)}%` }} />)}
+                      {showToday && <i className="tl-today" style={{ left: `${pct(today)}%` }} />}
+                      {bar(r.item, p, st.k)}
+                    </div></div>
+                );
+              }),
+            ])}
+          </div></div>
+          <p className="note">진한 부분이 진행률, 빨간 세로선은 오늘입니다. 카테고리 줄은 그 카테고리 목표 전체 기간입니다.</p>
+        </section>
+      )}
+
+      <section className="panel">
+        <div className="csum-h"><h2>통합 마일스톤</h2><span className="muted">{year}년 · {miles.filter(x => x.m.done).length}/{miles.length} 완료</span></div>
+        {miles.length ? (
+          <div className="tablewrap"><table className="prog mile-tb">
+            <thead><tr><th>완료</th><th>날짜</th><th>남은 날</th><th>마일스톤</th><th>카테고리</th><th>연결 목표</th></tr></thead>
+            <tbody>{miles.map(({ g, m, link }) => {
+              const dd = daysBetween(today, m.date);
+              return (
+                <tr key={m.id} className={m.done ? 'is-done' : ''}>
+                  <td><input type="checkbox" checked={m.done} onChange={e => setMile(g.key, m.id, { done: e.target.checked })} aria-label={`${m.name} 완료`} /></td>
+                  <td className="nowrap">{md(m.date)}</td>
+                  <td className={`nowrap ${!m.done && dd < 0 ? 'late-t' : ''}`}>{m.done ? '완료' : dd === 0 ? '오늘' : dd > 0 ? `D-${dd}` : `${-dd}일 지남`}</td>
+                  <td className={m.done ? 'muted' : ''}>{m.name}</td>
+                  <td><button className="linkish" onClick={() => openCat(area, g.c)}>{catLabel(g.c)}</button></td>
+                  <td className="muted">{link ? `${g.n}.${link.code} ${link.item.name}` : '-'}</td>
+                </tr>
+              );
+            })}</tbody>
+          </table></div>
+        ) : <p className="muted">{year}년 마일스톤이 없습니다.</p>}
+      </section>
+
+      <GoalBoard area={area} cat={cat} title="영역 공통 목표 편집" year={year} setYear={setYear} />
 
       <h2 className="hv-sec">목표 관리 체크 항목</h2>
       <div className="catv-items">
