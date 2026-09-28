@@ -6,7 +6,7 @@ import { AREAS, CYCLES, DUE_RULE, ROWS, PRIO, defaultPrio, isDue, iso, nextDue, 
 import { mockAi, mockApi } from './mock.js';
 import { SpeechRec, parseKoEvent } from './voice.js';
 import { HOLIDAYS } from './holidays.js';
-import { ANNIV_KINDS, annivOn, nextAnniv, seedAnniv } from './anniv.js';
+import { annivOn, nextAnniv, seedAnniv } from './anniv.js';
 
 /* ───────────────────────── 공통 ───────────────────────── */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -211,13 +211,13 @@ function Home() {
 
 /* 다가오는 기념일 (설정한 일수 이내) */
 function AnnivStrip() {
-  const { store, now, go } = useCtx();
+  const { store, now, openCat } = useCtx();
   const days = store.annivDays;
   const list = store.anniv.map(a => ({ a, n: nextAnniv(a, now) })).filter(x => x.n && x.n.dday <= days).sort((x, y) => x.n.dday - y.n.dday);
   return (
     <section className="panel anniv" aria-label="다가오는 기념일">
       <div className="csum-h"><h2>다가오는 기념일</h2><span className="muted">D-{days}일 이내 · {list.length}건</span>
-        <button className="btn sm" onClick={() => go('settings')}>기념일 관리</button></div>
+        <button className="btn sm" onClick={() => openCat('P', '기념일 관리')}>기념일 관리</button></div>
       {list.length ? (
         <div className="anniv-list">{list.map(({ a, n }) => (
           <div key={a.id} className={`anniv-card ${n.dday === 0 ? 'hot' : n.dday <= 3 ? 'soon' : ''}`}>
@@ -611,7 +611,7 @@ function Checklist({ init }) {
         const gd = g.rows.filter(x => isDone(x.r)).length;
         return (
           <div className="group" key={g.key} style={{ '--ac': areaVar(g.a) }}>
-            <div className="group-h"><i className="dot" /><h3>{AREAS[g.a].n.replace('활동', '')} · {g.cat}</h3>
+            <div className="group-h"><i className="dot" /><h3>{AREAS[g.a].n} · {g.cat}</h3>
               {g.score < 4 && <span className={`prio p${g.score}`}>{PRIO[g.score]}</span>}<span className="muted">{gd}/{g.rows.length}</span></div>
             {g.rows.map(x => <ActionRow key={x.r.id} row={x.r} showCycle />)}
           </div>
@@ -734,7 +734,7 @@ function Settings() {
   };
   return (
     <>
-      <header className="page-h"><h1>설정</h1><p>정기 체크 규칙과 기념일을 관리합니다.</p></header>
+      <header className="page-h"><h1>설정</h1><p>정기 체크 규칙과 데이터를 관리합니다. 기념일은 개인 › 기념일 관리에서 관리합니다.</p></header>
       <div className="panel">
         <h2>체크 주기 규칙</h2>
         <table className="prog rules"><tbody>
@@ -745,63 +745,12 @@ function Settings() {
           <tr><td>년간체크</td><td>{DUE_RULE.Y}</td></tr>
         </tbody></table>
       </div>
-      <AnnivSettings />
       <div className="panel">
         <h2>데이터</h2>
         <p className="muted">체크 상태, 일정, 우선순위 설정은 이 브라우저에만 저장됩니다.</p>
         <button className={`btn ${arm ? 'danger' : ''}`} onClick={reset}>{arm ? '정말 초기화할까요?' : '모든 데이터 초기화'}</button>
       </div>
     </>
-  );
-}
-
-/* 기념일 관리 */
-function AnnivSettings() {
-  const { store, setStore, now } = useCtx();
-  const blank = { name: '', date: iso(now), kind: '생일', yearly: true };
-  const [f, setF] = useState(blank);
-  const setDays = v => setStore(s => ({ ...s, annivDays: Math.max(0, Math.min(365, Number(v) || 0)) }));
-  const upd = (id, patch) => setStore(s => ({ ...s, anniv: s.anniv.map(a => (a.id === id ? { ...a, ...patch } : a)) }));
-  const del = id => setStore(s => ({ ...s, anniv: s.anniv.filter(a => a.id !== id) }));
-  const add = e => {
-    e.preventDefault();
-    if (!f.name.trim() || !f.date) return;
-    setStore(s => ({ ...s, anniv: [...s.anniv, { id: uid(), ...f, name: f.name.trim() }] }));
-    setF(blank);
-  };
-  const sorted = [...store.anniv].sort((x, y) => (nextAnniv(x, now)?.dday ?? 9999) - (nextAnniv(y, now)?.dday ?? 9999));
-  return (
-    <div className="panel">
-      <h2>기념일 관리</h2>
-      <label className="anniv-days">대시보드 표시 기간
-        <span><b>D-</b><input type="number" min="0" max="365" value={store.annivDays} onChange={e => setDays(e.target.value)} aria-label="며칠 전부터 표시" />일 전부터 표시</span></label>
-      <div className="tablewrap">
-        <table className="prog anniv-tb">
-          <thead><tr><th>이름</th><th>날짜</th><th>종류</th><th>매년</th><th>다음</th><th /></tr></thead>
-          <tbody>{sorted.map(a => {
-            const n = nextAnniv(a, now);
-            return (
-              <tr key={a.id}>
-                <td><input value={a.name} onChange={e => upd(a.id, { name: e.target.value })} aria-label="이름" /></td>
-                <td><input type="date" value={a.date} onChange={e => e.target.value && upd(a.id, { date: e.target.value })} aria-label="날짜" /></td>
-                <td><select value={a.kind} onChange={e => upd(a.id, { kind: e.target.value })} aria-label="종류">{ANNIV_KINDS.map(k => <option key={k}>{k}</option>)}</select></td>
-                <td><input type="checkbox" checked={a.yearly} onChange={e => upd(a.id, { yearly: e.target.checked })} aria-label="매년 반복" /></td>
-                <td className="nowrap">{n ? (n.dday === 0 ? '오늘' : `D-${n.dday}`) : '지남'}</td>
-                <td><button className="btn sm" onClick={() => del(a.id)}>삭제</button></td>
-              </tr>
-            );
-          })}</tbody>
-        </table>
-      </div>
-      <form className="anniv-add" onSubmit={add}>
-        <input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="기념일 이름 (예: 아버지 생신)" aria-label="새 기념일 이름" />
-        <input type="date" value={f.date} onChange={e => setF({ ...f, date: e.target.value })} aria-label="새 기념일 날짜" />
-        <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} aria-label="새 기념일 종류">{ANNIV_KINDS.map(k => <option key={k}>{k}</option>)}</select>
-        <label className="chk"><input type="checkbox" checked={f.yearly} onChange={e => setF({ ...f, yearly: e.target.checked })} />매년</label>
-        <button className="btn primary" disabled={!f.name.trim()}>추가</button>
-      </form>
-      <p className="note">기념일 종류는 처음 날짜의 연도로 몇 주년인지 계산합니다. 매년 반복을 끄면 그 날짜 한 번만 표시됩니다.</p>
-    </div>
   );
 }
 

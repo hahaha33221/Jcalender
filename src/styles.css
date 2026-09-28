@@ -24,7 +24,7 @@
 }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); height: 100%; }
 * { box-sizing: border-box; }
-body { margin: 0; height: 100%; font-family: "Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif; color: var(--ink); background: var(--paper); font-size: 14px; line-height: 1.55; }
+body { margin: 0; height: 100%; word-break: keep-all; overflow-wrap: break-word; font-family: "Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif; color: var(--ink); background: var(--paper); font-size: 14px; line-height: 1.55; }
 button,input,select,textarea { font: inherit; color: inherit; }
 h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
 h2 { font-size: 15px; margin: 0 0 8px; }
@@ -263,6 +263,13 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
 .anniv-tb td:first-child { min-width: 160px; }
 .anniv-tb input[type=date] { min-width: 140px; }
 .nowrap { white-space: nowrap; }
+.anniv-months { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+.anniv-month { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--line2); border-top: 3px solid var(--ai); border-radius: 6px; padding: 8px 10px; font-size: 12.5px; min-width: 0; }
+.anniv-month.none { border-top-color: var(--line); }
+.anniv-month b { font-size: 13px; margin-bottom: 2px; }
+.anniv-month span { line-height: 1.45; }
+.anniv-month em { font-style: normal; color: var(--ai); font-weight: 700; }
+.anniv-month small { color: var(--ink3); }
 .anniv-add { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
 .anniv-add > input:first-child { flex: 2 1 200px; width: auto; }
 .anniv-add > input[type=date], .anniv-add > select { flex: 1 1 130px; width: auto; }

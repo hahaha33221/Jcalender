@@ -4,7 +4,7 @@ import { ActionRow, WEEK, areaVar, useCtx } from '../shared.jsx';
 import BarChart from './BarChart.jsx';
 import { WORKOUT_TYPES, avgClock, estimateKcal, fmtDur, seedHealth, sleepMinutes } from './health.js';
 
-/* 개인활동 › 건강 관리 전용 화면: 운동·수면 기록 그래프 */
+/* 개인 › 건강 관리 전용 화면: 운동·수면 기록 그래프 */
 const RANGES = [7, 14, 30];
 const uid = () => Math.random().toString(36).slice(2, 10);
 const md = d => `${d.getMonth() + 1}/${d.getDate()}`;
