@@ -80,7 +80,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--ac, var(--
 /* 캘린더 */
 .cal { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; margin-bottom: 22px; }
 .cal-main,.cal-side { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
-.cal-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.cal-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .cal-h h2 { margin: 0; font-size: 17px; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line2); border-left: 1px solid var(--line2); }
 .cal-dow { text-align: center; padding: 5px 0; font-size: 12px; color: var(--ink2); border-right: 1px solid var(--line2); border-bottom: 1px solid var(--line2); background: var(--paper); }
@@ -94,11 +94,29 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--ac, var(--
 .cal-ev { font-size: 11.5px; border-left: 3px solid var(--ac); background: var(--paper); padding: 0 4px; border-radius: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-ev small { color: var(--ink3); }
 .cal-more { font-size: 11px; color: var(--ink3); }
-.agenda { list-style: none; margin: 0 0 10px; padding: 0; }
-.agenda li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line2); }
-.agenda .tm { font-size: 12.5px; color: var(--ink3); width: 40px; flex: none; }
-.due-note { font-size: 12.5px; color: var(--ok); margin: 0 0 8px; }
-.ev-form { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.cal-side { display: flex; flex-direction: column; min-height: 0; }
+.day-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.day-h h2 { margin: 0 0 6px; }
+.due-note { font-size: 12.5px; color: var(--ok); margin: 0 0 6px; }
+.tl { flex: 1; min-height: 240px; max-height: 470px; overflow-y: auto; border-top: 1px solid var(--line2); }
+.tl-row, .allday { display: grid; grid-template-columns: 46px minmax(0, 1fr); border-bottom: 1px solid var(--line2); min-height: 38px; }
+.allday { border-top: 1px solid var(--line2); background: var(--paper); }
+.tl-h { font-size: 11.5px; color: var(--ink3); padding: 4px 0 0 2px; }
+.tl-row.now { background: var(--oksoft); }
+.tl-row.now .tl-h { color: var(--ok); font-weight: 700; }
+.tl-evs { display: flex; flex-direction: column; gap: 3px; padding: 3px 0 3px 6px; border-left: 1px solid var(--line2); }
+.tl-ev { display: flex; align-items: center; gap: 6px; font-size: 12.5px; border-left: 3px solid var(--ac); background: var(--card); border-radius: 3px; padding: 3px 6px; box-shadow: 0 0 0 1px var(--line2); }
+.tl-ev small { color: var(--ink3); margin-right: 2px; }
+.tl-del { border: 0; background: none; color: var(--ink3); font-size: 11.5px; cursor: pointer; padding: 0 2px; }
+.tl-del:hover { color: var(--over); }
+.tl-add { flex: 1; min-height: 22px; border: 0; background: none; cursor: pointer; border-radius: 3px; color: var(--ink3); font-size: 12px; text-align: left; }
+.tl-add:hover { background: var(--paper); }
+.tl-add:hover:empty::after { content: "+ 일정 추가"; }
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; width: min(400px, 100%); display: flex; flex-direction: column; gap: 10px; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+.modal h2 { margin: 0; }
+.modal label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink2); }
+.modal .note { margin: 0; }
 
 /* 체크리스트 */
 .check { margin-bottom: 30px; }

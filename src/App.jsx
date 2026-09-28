@@ -287,10 +287,12 @@ function CheckPage({ init }) {
 }
 
 /* 일정관리 캘린더 */
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
+
 function Calendar({ sel, setSel }) {
   const { store, setStore, now, todayStr } = useCtx();
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
-  const [form, setForm] = useState({ title: '', time: '', area: 'P' });
+  const [adding, setAdding] = useState(null);     // null 이면 닫힘, { date, time } 이면 일정 추가 창 열림
   const first = new Date(ym.y, ym.m, 1), start = new Date(ym.y, ym.m, 1 - first.getDay());
   const cells = Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
   const byDate = useMemo(() => {
@@ -301,11 +303,11 @@ function Calendar({ sel, setSel }) {
   }, [store.events]);
   const move = n => { const d = new Date(ym.y, ym.m + n, 1); setYm({ y: d.getFullYear(), m: d.getMonth() }); };
   const goToday = () => { setYm({ y: now.getFullYear(), m: now.getMonth() }); setSel(todayStr); };
-  const addEvent = e => {
-    e.preventDefault();
-    if (!form.title.trim()) return;
-    setStore(s => ({ ...s, events: [...s.events, { id: uid(), date: sel, time: form.time, title: form.title.trim(), area: form.area }] }));
-    setForm({ ...form, title: '', time: '' });
+  const pick = k => { setSel(k); const d = new Date(k + 'T00:00:00'); if (d.getMonth() !== ym.m) setYm({ y: d.getFullYear(), m: d.getMonth() }); };
+  const addEvent = ev => {
+    setStore(s => ({ ...s, events: [...s.events, { id: uid(), ...ev }] }));
+    pick(ev.date);
+    setAdding(null);
   };
   const delEvent = id => setStore(s => ({ ...s, events: s.events.filter(x => x.id !== id) }));
   const selDate = new Date(sel + 'T00:00:00');
@@ -317,14 +319,17 @@ function Calendar({ sel, setSel }) {
       <div className="cal-main">
         <div className="cal-h">
           <h2>{ym.y}년 {ym.m + 1}월</h2>
-          <div className="btns"><button className="btn sm" onClick={() => move(-1)} aria-label="이전 달">이전</button><button className="btn sm" onClick={goToday}>오늘</button><button className="btn sm" onClick={() => move(1)} aria-label="다음 달">다음</button></div>
+          <div className="btns">
+            <button className="btn sm" onClick={() => move(-1)} aria-label="이전 달">이전</button><button className="btn sm" onClick={goToday}>오늘</button><button className="btn sm" onClick={() => move(1)} aria-label="다음 달">다음</button>
+            <button className="btn sm primary" onClick={() => setAdding({ date: sel, time: '' })}>+ 일정 추가</button>
+          </div>
         </div>
         <div className="cal-grid" role="grid">
           {WEEK.map((w, i) => <div key={w} className={`cal-dow ${i === 0 ? 'sun' : ''}`}>{w}</div>)}
           {cells.map(d => {
             const k = iso(d), evs = byDate[k] || [];
             return (
-              <button key={k} role="gridcell" className={`cal-cell ${d.getMonth() !== ym.m ? 'out' : ''} ${k === todayStr ? 'today' : ''} ${k === sel ? 'sel' : ''}`} onClick={() => setSel(k)} aria-label={`${d.getMonth() + 1}월 ${d.getDate()}일 일정 ${evs.length}건`}>
+              <button key={k} role="gridcell" className={`cal-cell ${d.getMonth() !== ym.m ? 'out' : ''} ${k === todayStr ? 'today' : ''} ${k === sel ? 'sel' : ''}`} onClick={() => pick(k)} aria-label={`${d.getMonth() + 1}월 ${d.getDate()}일 일정 ${evs.length}건`}>
                 <span className="cal-top"><span className="cal-n">{d.getDate()}</span>
                   {['Y', 'M', 'W'].filter(c => isDue(c, d)).map(c => <span key={c} className={`cal-due ${c}`}>{CYCLES[c].slice(0, 2)}</span>)}</span>
                 {evs.slice(0, 2).map(e => <span key={e.id} className="cal-ev" style={{ '--ac': areaVar(e.area) }}>{e.time && <small>{e.time}</small>} {e.title}</span>)}
@@ -334,25 +339,94 @@ function Calendar({ sel, setSel }) {
           })}
         </div>
       </div>
-      <div className="cal-side">
-        <h2>{selDate.getMonth() + 1}월 {selDate.getDate()}일 ({WEEK[selDate.getDay()]}) 일정</h2>
-        {dueCycles.length > 1 && <p className="due-note">이 날은 {dueCycles.filter(c => c !== 'D').map(c => CYCLES[c]).join(', ')}일입니다.</p>}
-        {list.length ? <ul className="agenda">{list.map(e => (
-          <li key={e.id} style={{ '--ac': areaVar(e.area) }}><i className="dot" /><span className="tm">{e.time || '종일'}</span><span className="grow">{e.title}</span>
-            <button className="btn sm" onClick={() => delEvent(e.id)} aria-label={`${e.title} 삭제`}>삭제</button></li>))}</ul>
-          : <p className="muted">등록된 일정이 없습니다.</p>}
-        <form className="ev-form" onSubmit={addEvent}>
-          <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="일정 제목" aria-label="일정 제목" />
-          <div className="row2">
-            <input type="time" value={form.time} onChange={e => setForm({ ...form, time: e.target.value })} aria-label="시간" />
-            <select value={form.area} onChange={e => setForm({ ...form, area: e.target.value })} aria-label="영역">
-              {Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}
-            </select>
-          </div>
-          <button className="btn primary">일정 추가</button>
-        </form>
-      </div>
+      <DayTimeline date={selDate} isToday={sel === todayStr} list={list} dueCycles={dueCycles}
+        onAdd={time => setAdding({ date: sel, time })} onDelete={delEvent} />
+      {adding && <EventDialog init={adding} onSave={addEvent} onClose={() => setAdding(null)} />}
     </section>
+  );
+}
+
+/* 선택한 날짜의 1시간 단위 일정 */
+function DayTimeline({ date, isToday, list, dueCycles, onAdd, onDelete }) {
+  const box = useRef(null);
+  const allDay = list.filter(e => !e.time);
+  const byHour = {};
+  list.filter(e => e.time).forEach(e => { (byHour[Number(e.time.slice(0, 2))] ||= []).push(e); });
+  const nowH = new Date().getHours();
+  // 날짜를 바꾸면 첫 일정 시각(없으면 오늘은 현재 시각, 다른 날은 8시) 근처로 스크롤
+  const firstH = list.filter(e => e.time).map(e => Number(e.time.slice(0, 2)))[0];
+  const focusH = Math.max(0, (firstH ?? (isToday ? nowH : 8)) - 1);
+  useEffect(() => {
+    const el = box.current?.querySelector(`[data-h="${focusH}"]`);
+    if (el) box.current.scrollTop = el.offsetTop - box.current.offsetTop;
+  }, [iso(date), focusH]);
+
+  return (
+    <div className="cal-side">
+      <div className="day-h">
+        <h2>{date.getMonth() + 1}월 {date.getDate()}일 ({WEEK[date.getDay()]})</h2>
+        <span className="muted">일정 {list.length}건</span>
+      </div>
+      {dueCycles.length > 1 && <p className="due-note">이 날은 {dueCycles.filter(c => c !== 'D').map(c => CYCLES[c]).join(', ')}일입니다.</p>}
+      {allDay.length > 0 && (
+        <div className="allday"><span className="tl-h">종일</span>
+          <div className="tl-evs">{allDay.map(e => <TimelineEvent key={e.id} e={e} onDelete={onDelete} />)}</div></div>)}
+      <div className="tl" ref={box} aria-label="시간대별 일정">
+        {HOURS.map(h => {
+          const evs = byHour[h] || [];
+          return (
+            <div key={h} data-h={h} className={`tl-row ${isToday && h === nowH ? 'now' : ''}`}>
+              <span className="tl-h">{pad(h)}:00</span>
+              <div className="tl-evs">
+                {evs.map(e => <TimelineEvent key={e.id} e={e} onDelete={onDelete} />)}
+                <button className="tl-add" onClick={() => onAdd(`${pad(h)}:00`)} aria-label={`${h}시에 일정 추가`}>{evs.length ? '+' : ''}</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="note">빈 시간을 누르면 그 시각으로 일정을 추가합니다.</p>
+    </div>
+  );
+}
+
+function TimelineEvent({ e, onDelete }) {
+  return (
+    <div className="tl-ev" style={{ '--ac': areaVar(e.area) }}>
+      <span className="grow"><small>{e.time || '종일'}</small> {e.title}</span>
+      <button className="tl-del" onClick={() => onDelete(e.id)} aria-label={`${e.title} 삭제`}>삭제</button>
+    </div>
+  );
+}
+
+/* 일정 추가 창 */
+function EventDialog({ init, onSave, onClose }) {
+  const [f, setF] = useState({ title: '', date: init.date, time: init.time, area: 'P' });
+  useEffect(() => {
+    const esc = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, []);
+  const submit = e => {
+    e.preventDefault();
+    if (!f.title.trim() || !f.date) return;
+    onSave({ date: f.date, time: f.time, title: f.title.trim(), area: f.area });
+  };
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <form className="modal" role="dialog" aria-label="일정 추가" onClick={e => e.stopPropagation()} onSubmit={submit}>
+        <h2>일정 추가</h2>
+        <label>제목<input autoFocus value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="일정 제목" /></label>
+        <div className="row2">
+          <label>날짜<input type="date" value={f.date} onChange={e => setF({ ...f, date: e.target.value })} /></label>
+          <label>시간<input type="time" value={f.time} onChange={e => setF({ ...f, time: e.target.value })} /></label>
+        </div>
+        <label>영역<select value={f.area} onChange={e => setF({ ...f, area: e.target.value })}>
+          {Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}</select></label>
+        <p className="note">시간을 비우면 종일 일정으로 등록됩니다.</p>
+        <div className="btns"><button type="button" className="btn" onClick={onClose}>취소</button><button className="btn primary" disabled={!f.title.trim()}>추가</button></div>
+      </form>
+    </div>
   );
 }
 
