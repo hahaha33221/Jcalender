@@ -1,6 +1,7 @@
 import DefaultView from './DefaultView.jsx';
 import HealthView from './HealthView.jsx';
 import AnnivView from './AnnivView.jsx';
+import FinanceView from './FinanceView.jsx';
 
 /* 카테고리 상세 화면 등록표
    - 키: '영역|카테고리'  (영역 P 개인, B 사업, W 근로)
@@ -10,10 +11,12 @@ import AnnivView from './AnnivView.jsx';
 
    예) import HealthView from './HealthView.jsx';
 import AnnivView from './AnnivView.jsx';
+import FinanceView from './FinanceView.jsx';
        'P|건강 관리': HealthView,                                                   */
 export const CATEGORY_VIEWS = {
   'P|건강 관리': HealthView,
   'P|기념일 관리': AnnivView,
+  'P|개인 재무': FinanceView,
 };
 
 export const viewFor = (area, cat) => CATEGORY_VIEWS[`${area}|${cat}`] || DefaultView;

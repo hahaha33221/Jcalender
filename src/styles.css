@@ -209,6 +209,7 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
 
 /* 대시보드 */
 .dash-top { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }
+.cal { margin-bottom: 16px; }
 .dash-top .panel { margin: 0; }
 .remain { display: flex; flex-direction: column; gap: 4px; }
 .remain h2 { margin: 0; }
@@ -382,3 +383,43 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
 .hv-recent li > span:first-child { color: var(--ink3); width: 38px; flex: none; }
 .hv-sec { margin: 24px 0 8px; font-size: 16px; }
 @media (max-width: 1100px) { .hv-charts, .hv-forms { grid-template-columns: minmax(0, 1fr); } }
+
+/* 구매해야 할 물품 */
+.shop-add { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.shop-add > input:first-child { flex: 3 1 180px; width: auto; }
+.shop-add > input, .shop-add > select { flex: 1 1 110px; width: auto; }
+.shop-add .shop-qty { flex: 0 1 110px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink2); white-space: nowrap; }
+.shop-add .shop-qty input { width: 64px; }
+.shop-list { list-style: none; margin: 0; padding: 0; }
+.shop-list li { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line2); flex-wrap: wrap; }
+.shop-n { flex: 1 1 180px; min-width: 0; }
+.shop-n .tag { margin-left: 6px; }
+.shop-pay { display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--ink2); }
+.shop-pay input { width: 110px; padding: 3px 8px; text-align: right; }
+.shop-list.done b { font-weight: 400; color: var(--ink2); }
+.shop-empty { margin: 4px 0; }
+.shop-h3 { margin: 14px 0 4px; font-size: 13.5px; }
+.shop.compact .shop-list li { padding: 5px 0; }
+.shop .note { margin: 6px 0 0; }
+
+/* 개인 재무 */
+.hv-stat.over { border-left-color: var(--over); }
+.hv-stat.over b { color: var(--over); }
+.fv-budget { display: flex; align-items: center; gap: 4px; }
+.fv-budget input { width: 110px; padding: 1px 6px; font-size: 12px; }
+.fv-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.fv-grid .panel { min-width: 0; }
+.fv-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.fv-form label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink2); flex: 1 1 110px; }
+.fv-form label.wide { flex: 2 1 180px; }
+.fv-bars { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.fv-bars li { display: grid; grid-template-columns: 64px minmax(0, 1fr) 92px; align-items: center; gap: 8px; font-size: 12.5px; }
+.fv-bl { color: var(--ink2); }
+.fv-track { height: 14px; background: var(--line2); border-radius: 0 4px 4px 0; overflow: hidden; }
+.fv-track i { display: block; height: 100%; background: var(--viz-sl); border-radius: 0 4px 4px 0; }
+.fv-bv { text-align: right; font-weight: 500; }
+.fv-month { width: auto; padding: 2px 8px; }
+.fv-table td.num { text-align: right; white-space: nowrap; }
+.fv-table td:nth-child(3) { text-align: left; }
+.fv-table .tag { margin-left: 6px; }
+@media (max-width: 1100px) { .fv-grid { grid-template-columns: minmax(0, 1fr); } }

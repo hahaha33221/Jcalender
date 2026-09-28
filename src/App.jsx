@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActionRow, Ctx, WEEK, areaVar, useCtx } from './shared.jsx';
 import { viewFor } from './categories/index.js';
 import { seedHealth } from './categories/health.js';
+import { seedFinance } from './categories/finance.js';
+import ShoppingList from './categories/Shopping.jsx';
 import { AREAS, CYCLES, DEFAULT_RULES, ROWS, PRIO, defaultPrio, dueRule, isDue, iso, nextDue, pad, periodKey, setRules } from './data.js';
 import { mockAi, mockApi } from './mock.js';
 import { SpeechRec, parseKoEvent } from './voice.js';
@@ -29,15 +31,15 @@ const readHash = () => {
   try { p = decodeURIComponent(p || ''); c = c ? decodeURIComponent(c) : null; } catch (e) { p = ''; c = null; }
   return PAGES.includes(p) ? { page: p, cat: AREAS[p] ? c : null } : { page: 'home', cat: null };
 };
-const INIT = { done: {}, outs: {}, prio: {}, events: null, anniv: null, annivDays: 10, health: null, rules: DEFAULT_RULES, log: [] };
-const seedAll = () => ({ ...INIT, events: seedEvents(), anniv: seedAnniv(), health: seedHealth() });
+const INIT = { done: {}, outs: {}, prio: {}, events: null, anniv: null, annivDays: 10, health: null, finance: null, rules: DEFAULT_RULES, log: [] };
+const seedAll = () => ({ ...INIT, events: seedEvents(), anniv: seedAnniv(), health: seedHealth(), finance: seedFinance() });
 
 function useStore() {
   const [store, setStore] = useState(() => {
     let v = null;
     try { v = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* 저장소 사용 불가 또는 손상 */ }
     const merged = { ...INIT, ...(v || {}) };
-    return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth() };
+    return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance() };
   });
   const [persist, setPersist] = useState(true);
   useEffect(() => {
@@ -197,12 +199,13 @@ function Home() {
   return (
     <>
       <header className="page-h"><h1>대시보드</h1><p>{now.getFullYear()}년 {now.getMonth() + 1}월 {now.getDate()}일 {WEEK[now.getDay()]}요일 · 일정과 오늘 남은 항목을 한눈에 확인하세요.</p></header>
-      <Calendar sel={sel} setSel={setSel} />
-      <AnnivStrip />
       <div className="dash-top">
         <Remain />
         <DueCards />
       </div>
+      <Calendar sel={sel} setSel={setSel} />
+      <AnnivStrip />
+      <ShoppingList compact />
       {dueToday.map(c => <CycleSummary key={c} c={c} hot title={`오늘은 ${CYCLES[c]}일입니다`} note={`${dueRule(c)} 도래 · 기간 ${periodKey(c, now)}`} />)}
       <CycleSummary c="D" title="일일체크 요약" note="카테고리별 진행과 남은 항목 (우선순위순)" />
       <CycleSummary c="S" title="수시체크 요약" note="필요할 때 체크하는 항목 · 오늘 기준" />
