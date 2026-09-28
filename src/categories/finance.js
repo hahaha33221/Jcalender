@@ -7,7 +7,7 @@ import { ROWS, iso } from '../data.js';
      shopping: [{ id, name, qty, price(예상), cat, added, bought?: 'YYYY-MM-DD', paid?: 실제 금액 }],
    } */
 export const EXP_CATS = ['식비', '생활용품', '교통', '여가', '선물', '의료', '기타'];
-export const won = n => `${Math.round(n || 0).toLocaleString()}원`;
+export const won = n => `${Math.round(n || 0).toLocaleString('ko-KR')}원`;
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 // 오늘 지출을 기록하면 일일체크의 "지출 입력"을 완료한다

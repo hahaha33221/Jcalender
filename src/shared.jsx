@@ -4,6 +4,18 @@ import { AREAS, CYCLES, PRIO } from './data.js';
 /* 여러 화면(App, 카테고리 전용 화면)이 함께 쓰는 공통 요소 */
 export const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 export const SENS = /검진|결과지|급여|명세|계약|명함|공제/;
+/** 숫자를 세 자리마다 쉼표로 (1000000 → 1,000,000) */
+export const num = n => Number(n || 0).toLocaleString('ko-KR');
+
+/** 금액 입력칸: 입력하는 동안에도 쉼표를 보여주고, onChange 로는 숫자(또는 '')를 넘긴다 */
+export function MoneyInput({ value, onChange, ...rest }) {
+  const shown = value === '' || value == null ? '' : num(value);
+  return (
+    <input type="text" inputMode="numeric" value={shown} {...rest}
+      onChange={e => { const d = e.target.value.replace(/[^0-9]/g, '').slice(0, 13); onChange(d === '' ? '' : Number(d)); }} />
+  );
+}
+
 export const areaVar = a => (AREAS[a] ? `var(${AREAS[a].v})` : 'var(--ink3)');
 
 /** 앱 상태와 동작 (store, now, isDone, toggle, run, go 등) */

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { iso } from '../data.js';
-import { useCtx } from '../shared.jsx';
+import { MoneyInput, useCtx } from '../shared.jsx';
 import { ACT_EXPENSE, EXP_CATS, addShop, buyShop, delShop, seedFinance, unbuyShop, won } from './finance.js';
 
 /** 재무 데이터와 변경 함수. 오늘 날짜 지출이 생기면 일일체크 "지출 입력"을 완료한다 */
@@ -48,7 +48,7 @@ export default function ShoppingList({ compact }) {
       <form className="shop-add" onSubmit={add}>
         <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="물품 이름 (예: 샴푸)" aria-label="물품 이름" />
         {!compact && <label className="shop-qty">수량<input type="number" min="1" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} /></label>}
-        <input type="number" min="0" step="100" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} placeholder="예상 금액(원)" aria-label="예상 금액" />
+        <MoneyInput value={form.price} onChange={v => setForm({ ...form, price: v })} placeholder="예상 금액(원)" aria-label="예상 금액" />
         <select value={form.cat} onChange={e => setForm({ ...form, cat: e.target.value })} aria-label="지출 분류">{EXP_CATS.map(c => <option key={c}>{c}</option>)}</select>
         <button className="btn primary" disabled={!form.name.trim()}>추가</button>
       </form>
@@ -56,8 +56,8 @@ export default function ShoppingList({ compact }) {
         <ul className="shop-list">{shown.map(s => (
           <li key={s.id}>
             <span className="shop-n"><b>{s.name}</b>{s.qty > 1 && <span className="muted"> ×{s.qty}</span>}<span className="tag">{s.cat}</span></span>
-            <label className="shop-pay"><input type="number" min="0" step="100" value={paid[s.id] ?? s.price * s.qty}
-              onChange={e => setPaid({ ...paid, [s.id]: e.target.value })} aria-label={`${s.name} 결제 금액`} />원</label>
+            <label className="shop-pay"><MoneyInput value={paid[s.id] ?? s.price * s.qty}
+              onChange={v => setPaid({ ...paid, [s.id]: v })} aria-label={`${s.name} 결제 금액`} />원</label>
             <button className="btn sm primary" onClick={() => buy(s)}>구매 완료</button>
             <button className="tl-del" onClick={() => update(x => delShop(x, s.id))} aria-label={`${s.name} 삭제`}>삭제</button>
           </li>))}</ul>

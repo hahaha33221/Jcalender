@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AREAS, iso } from '../data.js';
-import { ActionRow, WEEK, areaVar, useCtx } from '../shared.jsx';
+import { ActionRow, MoneyInput, WEEK, areaVar, useCtx } from '../shared.jsx';
 import ShoppingList, { useFinance } from './Shopping.jsx';
 import { EXP_CATS, addExpense, delExpense, won } from './finance.js';
 
@@ -43,7 +43,7 @@ export default function FinanceView({ area, cat, group }) {
         <div className="hv-stat sl"><span className="muted">{month === ym ? '이번 달' : month.replace('-', '년 ') + '월'} 지출</span><b>{won(total)}</b><span className="hv-sub">{monthExp.length}건</span></div>
         <div className={`hv-stat ${ratio > 1 ? 'over' : 'sl'}`}>
           <span className="muted">예산 대비</span><b>{f.budget ? `${Math.round(ratio * 100)}%` : '-'}</b>
-          <span className="hv-sub fv-budget">예산 <input type="number" min="0" step="10000" value={f.budget} onChange={e => setBudget(e.target.value)} aria-label="월 예산" />원</span>
+          <span className="hv-sub fv-budget">예산 <MoneyInput value={f.budget} onChange={setBudget} aria-label="월 예산" />원</span>
           <span className="pbar"><i style={{ width: `${Math.min(100, ratio * 100)}%`, background: ratio > 1 ? 'var(--over)' : 'var(--viz-sl)' }} /></span>
         </div>
         <div className="hv-stat ex"><span className="muted">구매 예정</span><b>{won(expect)}</b><span className="hv-sub">{todo.length}건</span></div>
@@ -58,7 +58,7 @@ export default function FinanceView({ area, cat, group }) {
             <form className="fv-form" onSubmit={add}>
               <label>날짜<input type="date" value={form.date} max={today} onChange={e => setForm({ ...form, date: e.target.value })} /></label>
               <label>분류<select value={form.cat} onChange={e => setForm({ ...form, cat: e.target.value })}>{EXP_CATS.map(c => <option key={c}>{c}</option>)}</select></label>
-              <label>금액(원)<input type="number" min="0" step="100" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} /></label>
+              <label>금액(원)<MoneyInput value={form.amount} onChange={v => setForm({ ...form, amount: v })} /></label>
               <label className="wide">메모<input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} placeholder="예: 점심" /></label>
               <button className="btn primary" disabled={!Number(form.amount)}>기록</button>
             </form>

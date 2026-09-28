@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AREAS, ROWS, iso } from '../data.js';
-import { ActionRow, WEEK, areaVar, useCtx } from '../shared.jsx';
+import { ActionRow, WEEK, areaVar, num, useCtx } from '../shared.jsx';
 import BarChart from './BarChart.jsx';
 import { WORKOUT_TYPES, avgClock, estimateKcal, fmtDur, seedHealth, sleepMinutes } from './health.js';
 
@@ -37,7 +37,7 @@ export default function HealthView({ area, cat, group }) {
 
   const exData = byDay.map(x => ({
     key: x.k, label: md(x.d), value: x.min, title: longDate(x.d),
-    tip: [...x.ws.map(w => `${w.type} ${w.minutes}분`), `합계 ${x.min}분 · ${x.kcal}kcal`],
+    tip: [...x.ws.map(w => `${w.type} ${w.minutes}분`), `합계 ${num(x.min)}분 · ${num(x.kcal)}kcal`],
   }));
   const slData = byDay.map(x => ({
     key: x.k, label: md(x.d), value: x.sleepMin, title: longDate(x.d),
@@ -81,7 +81,7 @@ export default function HealthView({ area, cat, group }) {
 
       <div className="hv-stats">
         <Stat label="운동 합계" value={fmtDur(exTotal)} sub={`${range}일 중 ${exDays.length}일 운동`} tone="ex" />
-        <Stat label="소모 칼로리" value={`${kcalTotal.toLocaleString()}kcal`} sub={`운동한 날 평균 ${exDays.length ? Math.round(kcalTotal / exDays.length) : 0}kcal`} tone="ex" />
+        <Stat label="소모 칼로리" value={`${num(kcalTotal)}kcal`} sub={`운동한 날 평균 ${num(exDays.length ? Math.round(kcalTotal / exDays.length) : 0)}kcal`} tone="ex" />
         <Stat label="평균 수면" value={slAvg ? fmtDur(slAvg) : '-'} sub={`목표 ${fmtDur(health.goalSleep)} 달성 ${slGoalHit}/${slDays.length}일`} tone="sl" />
         <Stat label="평균 취침 · 기상" value={`${avgClock(slDays.map(x => x.sl.bed), true)} · ${avgClock(slDays.map(x => x.sl.wake))}`} sub="자정 넘긴 취침도 이어서 계산" tone="sl" />
       </div>
@@ -91,7 +91,7 @@ export default function HealthView({ area, cat, group }) {
           <table className="prog hv-table">
             <thead><tr><th>날짜</th><th>운동</th><th>운동 시간</th><th>칼로리</th><th>취침</th><th>기상</th><th>수면</th></tr></thead>
             <tbody>{[...byDay].reverse().map(x => (
-              <tr key={x.k}><td>{longDate(x.d)}</td><td>{x.ws.map(w => w.type).join(', ') || '-'}</td><td>{x.min ? `${x.min}분` : '-'}</td><td>{x.kcal || '-'}</td>
+              <tr key={x.k}><td>{longDate(x.d)}</td><td>{x.ws.map(w => w.type).join(', ') || '-'}</td><td>{x.min ? `${num(x.min)}분` : '-'}</td><td>{x.kcal ? num(x.kcal) : '-'}</td>
                 <td>{x.sl?.bed || '-'}</td><td>{x.sl?.wake || '-'}</td><td>{x.sl ? fmtDur(x.sleepMin) : '-'}</td></tr>))}</tbody>
           </table>
         </div>
@@ -156,7 +156,7 @@ function WorkoutForm({ today, onAdd, recent, onDelete }) {
       </form>
       <p className="note">칼로리는 종류별 평균값으로 추정합니다. 오늘 기록을 넣으면 일일체크의 "운동 기록"이 완료됩니다.</p>
       <ul className="hv-recent">{recent.map(w => (
-        <li key={w.id}><span>{w.date.slice(5).replace('-', '/')}</span><span className="grow">{w.type} {w.minutes}분 · {w.kcal}kcal</span><button className="tl-del" onClick={() => onDelete(w.id)}>삭제</button></li>))}</ul>
+        <li key={w.id}><span>{w.date.slice(5).replace('-', '/')}</span><span className="grow">{w.type} {num(w.minutes)}분 · {num(w.kcal)}kcal</span><button className="tl-del" onClick={() => onDelete(w.id)}>삭제</button></li>))}</ul>
     </section>
   );
 }

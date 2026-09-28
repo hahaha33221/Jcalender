@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActionRow, Ctx, WEEK, areaVar, useCtx } from './shared.jsx';
+import { ActionRow, Ctx, WEEK, areaVar, num, useCtx } from './shared.jsx';
 import { viewFor } from './categories/index.js';
 import { seedHealth } from './categories/health.js';
 import { seedFinance } from './categories/finance.js';
@@ -133,7 +133,7 @@ export default function App() {
   };
 
   /** 페이지 이동. 체크리스트는 { area, cyc } 필터를 받아 열 수 있다 */
-  useEffect(() => { const f = () => setRoute(readHash()); window.addEventListener('hashchange', f); return () => window.removeEventListener('hashchange', f); }, []);
+  useEffect(() => { const f = () => { setRoute(readHash()); setPanel(null); }; window.addEventListener('hashchange', f); return () => window.removeEventListener('hashchange', f); }, []);   // 페이지를 옮기면 결과 패널은 닫는다
   const nav = (p, c = null) => {
     const h = `#/${[p, c].filter(Boolean).map(encodeURIComponent).join('/')}`;
     if (window.location.hash !== h) window.location.hash = h; else setRoute({ page: p, cat: c });
@@ -774,6 +774,10 @@ function Settings() {
 }
 
 /* ───────────────────────── 결과 패널 (시뮬레이션) ───────────────────────── */
+/** 예시 응답 JSON. 1,000 이상 숫자는 쉼표를 넣어 보여준다 (year 같은 연도 값은 그대로) */
+const prettyJson = b => JSON.stringify(b, null, 2)
+  .replace(/("([^"]+)":\s*)(-?\d{4,})(?=[,\n}])/g, (m, pre, key, n) => (/year/i.test(key) ? m : pre + num(n)));
+
 function Drawer({ panel, onClose }) {
   const { finish, store } = useCtx();
   const { row } = panel;
@@ -786,7 +790,7 @@ function Drawer({ panel, onClose }) {
       <div className="kv">자동화 내용: {row.detail}</div>
       {panel.kind === 'api' && (<>
         <ul className="steps">{STEPS.map((s, i) => <li key={s} className={i < panel.step ? 'ok' : i === panel.step ? 'run' : ''}>{s}</li>)}</ul>
-        {panel.res && <><div className="kv"><code>{panel.res.m}</code> <code>{panel.res.e}</code></div><pre>{JSON.stringify(panel.res.b, null, 2)}</pre></>}
+        {panel.res && <><div className="kv"><code>{panel.res.m}</code> <code>{panel.res.e}</code></div><pre>{prettyJson(panel.res.b)}</pre></>}
       </>)}
       {panel.kind === 'ai' && <div className="ai-out">{panel.text || 'AI가 생성 중…'}</div>}
       {panel.kind === 'manual' && (<>
