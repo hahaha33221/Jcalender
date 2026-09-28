@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AREAS, CYCLES, DUE_RULE, ROWS, PRIO, defaultPrio, isDue, iso, nextDue, pad, periodKey } from './data.js';
 import { mockAi, mockApi } from './mock.js';
+import { SpeechRec, parseKoEvent } from './voice.js';
 
 /* ───────────────────────── 공통 ───────────────────────── */
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
@@ -292,7 +293,8 @@ const HOURS = Array.from({ length: 24 }, (_, h) => h);
 function Calendar({ sel, setSel }) {
   const { store, setStore, now, todayStr } = useCtx();
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
-  const [adding, setAdding] = useState(null);     // null 이면 닫힘, { date, time } 이면 일정 추가 창 열림
+  const [adding, setAdding] = useState(null);     // null 이면 닫힘, { date, time, ... } 이면 일정 추가 창 열림
+  const [voice, setVoice] = useState(false);
   const first = new Date(ym.y, ym.m, 1), start = new Date(ym.y, ym.m, 1 - first.getDay());
   const cells = Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
   const byDate = useMemo(() => {
@@ -322,6 +324,7 @@ function Calendar({ sel, setSel }) {
           <div className="btns">
             <button className="btn sm" onClick={() => move(-1)} aria-label="이전 달">이전</button><button className="btn sm" onClick={goToday}>오늘</button><button className="btn sm" onClick={() => move(1)} aria-label="다음 달">다음</button>
             <button className="btn sm primary" onClick={() => setAdding({ date: sel, time: '' })}>+ 일정 추가</button>
+            <button className="btn sm" onClick={() => setVoice(true)}>음성으로 추가</button>
           </div>
         </div>
         <div className="cal-grid" role="grid">
@@ -342,6 +345,7 @@ function Calendar({ sel, setSel }) {
       <DayTimeline date={selDate} isToday={sel === todayStr} list={list} dueCycles={dueCycles}
         onAdd={time => setAdding({ date: sel, time })} onDelete={delEvent} />
       {adding && <EventDialog init={adding} onSave={addEvent} onClose={() => setAdding(null)} />}
+      {voice && <VoiceDialog now={now} onDone={ev => { setVoice(false); setAdding(ev); }} onClose={() => setVoice(false)} />}
     </section>
   );
 }
@@ -401,7 +405,7 @@ function TimelineEvent({ e, onDelete }) {
 
 /* 일정 추가 창 */
 function EventDialog({ init, onSave, onClose }) {
-  const [f, setF] = useState({ title: '', date: init.date, time: init.time, area: 'P' });
+  const [f, setF] = useState({ title: init.title || '', date: init.date, time: init.time || '', area: init.area || 'P' });
   useEffect(() => {
     const esc = e => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', esc);
@@ -416,7 +420,8 @@ function EventDialog({ init, onSave, onClose }) {
     <div className="modal-bg" onClick={onClose}>
       <form className="modal" role="dialog" aria-label="일정 추가" onClick={e => e.stopPropagation()} onSubmit={submit}>
         <h2>일정 추가</h2>
-        <label>제목<input autoFocus value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="일정 제목" /></label>
+        {init.heard && <p className="heard">인식한 문장: “{init.heard}”<br /><span className="muted">내용을 확인하고 틀린 부분은 고친 뒤 추가하세요.</span></p>}
+        <label>제목<input autoFocus={!init.heard} value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="일정 제목" /></label>
         <div className="row2">
           <label>날짜<input type="date" value={f.date} onChange={e => setF({ ...f, date: e.target.value })} /></label>
           <label>시간<input type="time" value={f.time} onChange={e => setF({ ...f, time: e.target.value })} /></label>
@@ -425,6 +430,71 @@ function EventDialog({ init, onSave, onClose }) {
           {Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}</select></label>
         <p className="note">시간을 비우면 종일 일정으로 등록됩니다.</p>
         <div className="btns"><button type="button" className="btn" onClick={onClose}>취소</button><button className="btn primary" disabled={!f.title.trim()}>추가</button></div>
+      </form>
+    </div>
+  );
+}
+
+/* 음성으로 일정 추가: 말한 문장을 날짜·시간·제목으로 나눠 추가 창에 채운다 */
+function VoiceDialog({ now, onDone, onClose }) {
+  const [state, setState] = useState(SpeechRec ? 'listening' : 'unsupported');   // listening | idle | error | unsupported
+  const [text, setText] = useState('');
+  const [err, setErr] = useState('');
+  const rec = useRef(null);
+  const finalText = useRef('');
+
+  const finish = said => {
+    const t = said.trim();
+    if (!t) return;
+    onDone({ ...parseKoEvent(t, now), heard: t });
+  };
+  const listen = () => {
+    if (!SpeechRec) return;
+    rec.current?.abort();
+    const r = new SpeechRec();
+    r.lang = 'ko-KR'; r.interimResults = true; r.continuous = false;
+    finalText.current = ''; setText(''); setErr(''); setState('listening');
+    r.onresult = e => {
+      let fin = '', mid = '';
+      for (const res of e.results) (res.isFinal ? (fin += res[0].transcript) : (mid += res[0].transcript));
+      finalText.current = fin; setText(fin + mid);
+    };
+    r.onerror = e => {
+      setState('error');
+      setErr(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? '마이크 사용 권한이 없습니다. 브라우저 주소창의 마이크 권한을 허용하거나, 아래에 직접 입력하세요.'
+        : e.error === 'no-speech' ? '말소리가 들리지 않았습니다. 다시 말하기를 누르세요.'
+        : `음성 인식 오류(${e.error}). 아래에 직접 입력해도 됩니다.`);
+    };
+    r.onend = () => {
+      rec.current = null;
+      if (finalText.current.trim()) finish(finalText.current);
+      else setState(s => (s === 'listening' ? 'idle' : s));
+    };
+    rec.current = r;
+    try { r.start(); } catch (e) { setState('error'); setErr('음성 인식을 시작하지 못했습니다. 아래에 직접 입력하세요.'); }
+  };
+  useEffect(() => {
+    if (SpeechRec) listen();
+    const esc = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', esc);
+    return () => { window.removeEventListener('keydown', esc); rec.current?.abort(); };
+  }, []);
+
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <form className="modal" role="dialog" aria-label="음성으로 일정 추가" onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); rec.current?.abort(); finish(text); }}>
+        <h2>음성으로 일정 추가</h2>
+        <div className={`mic ${state === 'listening' ? 'on' : ''}`} aria-live="polite">
+          <span className="mic-dot" />
+          {state === 'listening' ? '듣고 있습니다. 말씀하세요.' : state === 'unsupported' ? '이 브라우저는 음성 인식을 지원하지 않습니다. (Chrome, Edge, Safari 권장)' : state === 'error' ? err : '다시 말하기를 누르거나 아래 문장을 고쳐서 분석하세요.'}
+        </div>
+        <p className="note">예) “내일 오후 3시 반 치과 예약”, “다음주 수요일 10시 팀 회의”, “10월 5일 고객 미팅”</p>
+        <label>인식된 문장<textarea rows={2} value={text} onChange={e => { setText(e.target.value); if (state === 'listening') { rec.current?.abort(); setState('idle'); } }} placeholder="여기에 직접 입력해도 됩니다" /></label>
+        <div className="btns">
+          <button type="button" className="btn" onClick={onClose}>취소</button>
+          {SpeechRec && <button type="button" className="btn" onClick={listen} disabled={state === 'listening'}>다시 말하기</button>}
+          <button className="btn primary" disabled={!text.trim()}>이 내용으로 추가</button>
+        </div>
       </form>
     </div>
   );

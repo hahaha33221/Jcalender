@@ -82,6 +82,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--ac, var(--
 .cal-main,.cal-side { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
 .cal-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .cal-h h2 { margin: 0; font-size: 17px; }
+.cal-h .btns { flex-wrap: wrap; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line2); border-left: 1px solid var(--line2); }
 .cal-dow { text-align: center; padding: 5px 0; font-size: 12px; color: var(--ink2); border-right: 1px solid var(--line2); border-bottom: 1px solid var(--line2); background: var(--paper); }
 .cal-dow.sun { color: var(--over); }
@@ -117,6 +118,12 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--ac, var(--
 .modal h2 { margin: 0; }
 .modal label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink2); }
 .modal .note { margin: 0; }
+.heard { margin: 0; font-size: 12.5px; background: var(--apisoft); border-radius: 6px; padding: 8px 10px; }
+.mic { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 8px; background: var(--paper); font-size: 13px; color: var(--ink2); }
+.mic-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--ink3); flex: none; }
+.mic.on { color: var(--ink); }
+.mic.on .mic-dot { background: var(--over); animation: mic 1.2s ease-in-out infinite; }
+@keyframes mic { 0%, 100% { box-shadow: 0 0 0 0 var(--oversoft); } 50% { box-shadow: 0 0 0 8px var(--oversoft); } }
 
 /* 체크리스트 */
 .check { margin-bottom: 30px; }
@@ -232,14 +239,14 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
 .rules td:first-child { font-weight: 500; width: 140px; }
 
 @media (max-width: 1100px) {
-  .cal { grid-template-columns: 1fr; }
+  .cal { grid-template-columns: minmax(0, 1fr); }
   .dash-top { grid-template-columns: 1fr; }
   .acards { grid-template-columns: 1fr 1fr; }
   .check-top { grid-template-columns: 1fr; position: static; }
 }
 @media (max-width: 860px) {
-  .app { grid-template-columns: 1fr; }
-  .nav { position: static; height: auto; padding: 12px; gap: 8px; }
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .nav { position: static; height: auto; padding: 12px; gap: 8px; min-width: 0; }
   .nav nav { flex-direction: row; overflow-x: auto; gap: 4px; }
   .nav-sec,.nav-foot { display: none; }
   .nav button { white-space: nowrap; }
@@ -258,4 +265,4 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
   .cal-due { font-size: 9.5px; padding: 0 2px; }
   .bar input[type=search] { width: 100%; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
