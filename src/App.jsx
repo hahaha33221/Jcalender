@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActionRow, Ctx, WEEK, areaVar, useCtx } from './shared.jsx';
+import { viewFor } from './categories/index.js';
 import { AREAS, CYCLES, DUE_RULE, ROWS, PRIO, defaultPrio, isDue, iso, nextDue, pad, periodKey } from './data.js';
 import { mockAi, mockApi } from './mock.js';
 import { SpeechRec, parseKoEvent } from './voice.js';
@@ -6,12 +8,9 @@ import { HOLIDAYS } from './holidays.js';
 import { ANNIV_KINDS, annivOn, nextAnniv, seedAnniv } from './anniv.js';
 
 /* ───────────────────────── 공통 ───────────────────────── */
-const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
-const SENS = /검진|결과지|급여|명세|계약|명함|공제/;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const hhmm = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
-const areaVar = a => (AREAS[a] ? `var(${AREAS[a].v})` : 'var(--ink3)');
 
 /* ───────────────────────── 저장소 (브라우저 localStorage) ───────────────────────── */
 const KEY = 'lifeboard.react.v1';
@@ -22,6 +21,12 @@ const seedEvents = () => {
     { id: uid(), date: d(2), time: '10:30', title: '치과 검진 (예시)', area: 'P' },
     { id: uid(), date: d(4), time: '16:00', title: '팀 회의 (예시)', area: 'W' },
   ];
+};
+const PAGES = ['home', 'check', 'P', 'B', 'W', 'progress', 'settings'];
+const readHash = () => {
+  let [p, c] = window.location.hash.replace(/^#\/?/, '').split('/');
+  try { p = decodeURIComponent(p || ''); c = c ? decodeURIComponent(c) : null; } catch (e) { p = ''; c = null; }
+  return PAGES.includes(p) ? { page: p, cat: AREAS[p] ? c : null } : { page: 'home', cat: null };
 };
 const INIT = { done: {}, outs: {}, prio: {}, events: null, anniv: null, annivDays: 10, log: [] };
 const seedAll = () => ({ ...INIT, events: seedEvents(), anniv: seedAnniv() });
@@ -40,13 +45,12 @@ function useStore() {
   return [store, setStore, persist];
 }
 
-const Ctx = createContext(null);
-const useCtx = () => useContext(Ctx);
 
 /* ───────────────────────── 앱 ───────────────────────── */
 export default function App() {
   const [store, setStore, persist] = useStore();
-  const [page, setPage] = useState('home');
+  const [route, setRoute] = useState(readHash);    // 주소 #/페이지/카테고리 와 연동 (브라우저 뒤로가기 지원)
+  const { page, cat } = route;
   const [checkInit, setCheckInit] = useState(null);   // 대시보드에서 체크리스트로 이동할 때 적용할 필터
   const [panel, setPanel] = useState(null);
   const [pushes, setPushes] = useState([]);
@@ -125,9 +129,16 @@ export default function App() {
   };
 
   /** 페이지 이동. 체크리스트는 { area, cyc } 필터를 받아 열 수 있다 */
-  const go = (p, init = null) => { setCheckInit(init); setPage(p); window.scrollTo(0, 0); };
+  useEffect(() => { const f = () => setRoute(readHash()); window.addEventListener('hashchange', f); return () => window.removeEventListener('hashchange', f); }, []);
+  const nav = (p, c = null) => {
+    const h = `#/${[p, c].filter(Boolean).map(encodeURIComponent).join('/')}`;
+    if (window.location.hash !== h) window.location.hash = h; else setRoute({ page: p, cat: c });
+    window.scrollTo(0, 0);
+  };
+  const go = (p, init = null) => { setCheckInit(init); nav(p); };
+  const openCat = (a, c) => nav(a, c);
 
-  const ctx = { store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go };
+  const ctx = { store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go, openCat };
   const remaining = ROWS.filter(r => isDue(r.c, now) && !isDone(r)).length;
   const areaLeft = a => ROWS.filter(r => r.a === a && isDue(r.c, now) && !isDone(r)).length;
 
@@ -161,7 +172,8 @@ export default function App() {
           {!persist && <p className="banner">이 브라우저에서는 데이터가 저장되지 않습니다. 새로고침하면 진행 상태가 사라집니다.</p>}
           {page === 'home' && <Home />}
           {page === 'check' && <CheckPage key={JSON.stringify(checkInit)} init={checkInit} />}
-          {AREAS[page] && <AreaPage key={page} area={page} />}
+          {AREAS[page] && !cat && <AreaPage key={page} area={page} />}
+          {AREAS[page] && cat && <CategoryPage key={`${page}|${cat}`} area={page} cat={cat} />}
           {page === 'progress' && <Progress />}
           {page === 'settings' && <Settings />}
         </main>
@@ -608,62 +620,79 @@ function Checklist({ init }) {
   );
 }
 
-/* 액션 한 줄 */
-function ActionRow({ row, showCycle }) {
-  const { isDone, prioOf, cyclePrio, toggle, run, view, busy } = useCtx();
-  const done = isDone(row), p = prioOf(row), sens = SENS.test(`${row.item} ${row.action} ${row.detail}`);
-  const name = row.action.replace(' (제안)', '');
+
+/* ───────────────────────── 상세: 영역 페이지 (카테고리 버튼) ───────────────────────── */
+/** 영역의 카테고리 목록. 카테고리마다 세부 항목, 주기별 개수, 오늘 남은 개수를 모은다 */
+function categoriesOf(area, now, isDone) {
+  const m = new Map();
+  ROWS.filter(r => r.a === area).forEach(r => {
+    if (!m.has(r.cat)) m.set(r.cat, { cat: r.cat, rows: [], items: [], cyc: {} });
+    const g = m.get(r.cat);
+    g.rows.push(r);
+    if (!g.items.includes(r.item)) g.items.push(r.item);
+    g.cyc[r.c] = (g.cyc[r.c] || 0) + 1;
+  });
+  return [...m.values()].map(g => {
+    const due = g.rows.filter(r => isDue(r.c, now));
+    return { ...g, due: due.length, left: due.filter(r => !isDone(r)).length, done: g.rows.filter(isDone).length };
+  });
+}
+
+function AreaPage({ area }) {
+  const { isDone, now, go, openCat } = useCtx();
+  const [cyc, setCyc] = useState('ALL');
+  const cats = categoriesOf(area, now, isDone);
+  const shown = cats.filter(g => cyc === 'ALL' || g.cyc[cyc]);
+  const total = cats.reduce((n, g) => n + g.rows.length, 0), left = cats.reduce((n, g) => n + g.left, 0);
   return (
-    <div className={`row ${done ? 'done' : ''}`} style={{ '--ac': areaVar(row.a) }}>
-      <input type="checkbox" checked={done} disabled={busy} onChange={() => toggle(row)} aria-label={`${name} 완료`} />
-      <div className="act"><b>{name}</b>{row.action.includes('(제안)') && <span className="tag">제안</span>}{sens && <span className="tag sens">민감정보</span>}
-        <div className="sub">{row.item}{showCycle && ` · ${CYCLES[row.c]}`}</div></div>
-      <span className={`badge ${row.code}`}>{row.ty}</span>
-      <button className={`prio p${p}`} onClick={() => cyclePrio(row)} title="눌러서 우선순위 변경">{PRIO[p]}</button>
-      <div className="det">{row.detail}</div>
-      <div className="btns">{done
-        ? <button className="btn sm" onClick={() => view(row)}>결과</button>
-        : <button className="btn sm primary" disabled={busy} onClick={() => run(row)}>{row.ty === '없음' ? '메모' : '실행'}</button>}</div>
-    </div>
+    <>
+      <header className="page-h" style={{ '--ac': areaVar(area) }}>
+        <h1 className="area-title">{AREAS[area].n}</h1>
+        <p>카테고리 {cats.length}개 · 액션 {total}개 · 오늘 남은 항목 {left}개. 카테고리를 누르면 상세 페이지로 들어갑니다.</p>
+      </header>
+      <div className="bar">
+        <div className="chips" role="group" aria-label="주기로 거르기">
+          <button aria-pressed={cyc === 'ALL'} onClick={() => setCyc('ALL')}>전체</button>
+          {Object.entries(CYCLES).map(([k, n]) => <button key={k} aria-pressed={cyc === k} onClick={() => setCyc(k)}>{n.replace('-루틴', '')}</button>)}
+        </div>
+        <button className="btn sm grow-r" onClick={() => go('check', { area })}>체크리스트로 보기</button>
+      </div>
+      <div className="tiles" style={{ '--ac': areaVar(area) }}>
+        {shown.map(g => (
+          <button key={g.cat} className="tile" onClick={() => openCat(area, g.cat)}>
+            <span className="tile-h"><b>{g.cat}</b><span className="tile-go" aria-hidden="true">›</span></span>
+            <span className="tile-items">{g.items.slice(0, 5).map(it => <span key={it} className="tile-item">{it}</span>)}{g.items.length > 5 && <span className="tile-item more">외 {g.items.length - 5}</span>}</span>
+            <span className="tile-cyc">{Object.keys(CYCLES).filter(c => g.cyc[c]).map(c => <span key={c} className={`cyc c-${c}`}>{CYCLES[c].slice(0, 2)} {g.cyc[c]}</span>)}</span>
+            <span className="tile-f">
+              <span className={g.left ? 'tile-left' : 'muted'}>{g.due ? (g.left ? `오늘 남은 ${g.left}개` : '오늘 할 일 완료') : '오늘 도래 없음'}</span>
+              <span className="muted">액션 {g.rows.length}</span>
+            </span>
+            <span className="pbar"><i style={{ width: `${g.rows.length ? g.done / g.rows.length * 100 : 0}%` }} /></span>
+          </button>
+        ))}
+      </div>
+      {shown.length === 0 && <div className="empty">이 주기에 해당하는 카테고리가 없습니다.</div>}
+    </>
   );
 }
 
-/* ───────────────────────── 상세: 영역 페이지 ───────────────────────── */
-function AreaPage({ area }) {
-  const { isDone, now } = useCtx();
-  const [cyc, setCyc] = useState('D');
-  const [type, setType] = useState('ALL');
-  const [q, setQ] = useState('');
-  const all = ROWS.filter(r => r.a === area && r.c === cyc);
-  const rows = all.filter(r => (type === 'ALL' || r.ty === type) && (!q || `${r.cat} ${r.item} ${r.action} ${r.detail}`.toLowerCase().includes(q.toLowerCase())));
-  const done = all.filter(isDone).length;
-  const cnt = t => all.filter(r => r.ty === t).length;
-  const tree = [];
-  rows.forEach(r => {
-    let c = tree.find(x => x.cat === r.cat); if (!c) tree.push(c = { cat: r.cat, items: [] });
-    let it = c.items.find(x => x.item === r.item); if (!it) c.items.push(it = { item: r.item, rows: [] });
-    it.rows.push(r);
-  });
+/* ───────────────────────── 상세: 카테고리 페이지 ───────────────────────── */
+function CategoryPage({ area, cat }) {
+  const { now, isDone, openCat, go } = useCtx();
+  const cats = categoriesOf(area, now, isDone);
+  const g = cats.find(x => x.cat === cat);
+  if (!g) return <div className="empty">카테고리를 찾을 수 없습니다. <button className="btn sm" onClick={() => go(area)}>{AREAS[area].n}로 돌아가기</button></div>;
+  const View = viewFor(area, cat);
   return (
     <>
-      <header className="page-h" style={{ '--ac': areaVar(area) }}><h1 className="area-title">{AREAS[area].n}</h1><p>주기별 상세 액션입니다. 체크 상태는 {CYCLES[cyc]}의 현재 기간({periodKey(cyc, now)}) 기준입니다.</p></header>
-      <div className="tabs" role="tablist" style={{ '--ac': areaVar(area) }}>
-        {Object.entries(CYCLES).map(([k, n]) => <button key={k} role="tab" aria-selected={k === cyc} onClick={() => setCyc(k)}>{n} <small>{ROWS.filter(r => r.a === area && r.c === k).length}</small></button>)}
+      <nav className="crumb" aria-label="위치">
+        <button onClick={() => go(area)}>{AREAS[area].n}</button><span aria-hidden="true">›</span><b>{cat}</b>
+      </nav>
+      <View area={area} cat={cat} group={g} />
+      <div className="cat-nav">
+        <span className="muted">다른 카테고리</span>
+        <div className="chips">{cats.filter(x => x.cat !== cat).map(x => <button key={x.cat} onClick={() => openCat(area, x.cat)}>{x.cat}</button>)}</div>
       </div>
-      <div className="bar">
-        <div className="chips" role="group" aria-label="자동화 유형">
-          {[['ALL', '전체'], ['API', 'API'], ['AI', 'AI'], ['없음', '없음']].map(([k, l]) => <button key={k} aria-pressed={type === k} onClick={() => setType(k)}>{l}</button>)}
-        </div>
-        <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="액션·내용 검색" aria-label="검색" />
-        <span className="muted grow-r">완료 {done}/{all.length} · API {cnt('API')} · AI {cnt('AI')} · 없음 {cnt('없음')}{cyc === 'S' ? '' : isDue(cyc, now) ? ' · 오늘 도래' : ''}</span>
-      </div>
-      {tree.length === 0 && <div className="empty">조건에 맞는 액션이 없습니다.</div>}
-      {tree.map(c => (
-        <div className="group" key={c.cat} style={{ '--ac': areaVar(area) }}>
-          <div className="group-h"><i className="dot" /><h3>{c.cat}</h3></div>
-          {c.items.map(it => <div key={it.item}><div className="item">{it.item}</div>{it.rows.map(r => <ActionRow key={r.id} row={r} />)}</div>)}
-        </div>
-      ))}
     </>
   );
 }
