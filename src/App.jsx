@@ -3,7 +3,7 @@ import { ActionRow, Ctx, WEEK, areaVar, num, useCtx } from './shared.jsx';
 import { viewFor } from './categories/index.js';
 import { seedHealth } from './categories/health.js';
 import { seedFinance } from './categories/finance.js';
-import { boardForYear, boardKey, migrateGoals, seedGoals } from './categories/goals.js';
+import { addExampleGoals, boardForYear, boardKey, migrateGoals, seedGoals } from './categories/goals.js';
 import { GoalBoard } from './categories/GoalView.jsx';
 import ShoppingList from './categories/Shopping.jsx';
 import { AREAS, CYCLES, DEFAULT_RULES, ROWS, PRIO, defaultPrio, dueRule, isDue, iso, nextDue, pad, periodKey, setRules } from './data.js';
@@ -41,7 +41,7 @@ function useStore() {
     let v = null;
     try { v = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* 저장소 사용 불가 또는 손상 */ }
     const merged = { ...INIT, ...(v || {}) };
-    return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: merged.goals ? migrateGoals(merged.goals) : seedGoals() };
+    return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: merged.goals ? addExampleGoals(migrateGoals(merged.goals)) : seedGoals() };
   });
   const [persist, setPersist] = useState(true);
   useEffect(() => {

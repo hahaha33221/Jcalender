@@ -1,4 +1,5 @@
 import { iso } from '../data.js';
+import { GOAL_EXAMPLES } from './goalExamples.js';
 
 /* 목표 관리 (WBS + 마일스톤). 카테고리마다 따로 저장하고 연 단위로 본다
    goals = { v: 2, boards: { '영역|카테고리': {
@@ -13,7 +14,7 @@ export const toDate = s => { const [y, m, d] = s.split('-').map(Number); return 
 export const addDays = (s, n) => { const d = toDate(s); d.setDate(d.getDate() + n); return iso(d); };
 export const daysBetween = (a, b) => Math.round((toDate(b) - toDate(a)) / 864e5);
 
-/* ── 예시 데이터 (오늘 기준 날짜) ── */
+/* ── 이전 버전 예시 목표: 예전 형식 데이터를 옮길 때 이름으로 카테고리를 찾는 데만 쓴다 ── */
 const TEMPLATES = {
   P: {
     cats: ['건강 관리', '자기계발/학습'],
@@ -59,25 +60,8 @@ const TEMPLATES = {
   },
 };
 
-/** 예시: 영역마다 목표 2개를 각각 알맞은 카테고리 보드에 넣는다 */
-export function seedGoals(today = new Date()) {
-  const t = iso(today), boards = {};
-  for (const [area, tpl] of Object.entries(TEMPLATES)) {
-    tpl.goals.forEach((goal, gi) => {
-      const items = [];
-      const walk = (list, parent) => list.forEach(([name, s, e, sub]) => {
-        const id = uid();
-        const leaf = typeof sub === 'number';
-        items.push({ id, parent, name, start: addDays(t, s), end: addDays(t, e), progress: leaf ? sub : 0 });
-        if (!leaf) walk(sub, id);
-      });
-      walk([goal], null);
-      const miles = tpl.miles.filter(m => m[2] === gi).map(([name, d, , done]) => ({ id: uid(), name, date: addDays(t, d), link: items[0].id, done: !!done }));
-      boards[boardKey(area, tpl.cats[gi])] = { items, miles };
-    });
-  }
-  return { v: 2, boards };
-}
+/** 처음 시작할 때: 모든 카테고리에 연간 예시 목표를 넣는다 */
+export const seedGoals = (today = new Date()) => addExampleGoals({ v: 2, boards: {} }, today);
 
 /** 이전 형식(영역별 한 덩어리)을 카테고리 보드로 옮긴다. 예시 목표는 이름으로 원래 카테고리를 찾고, 나머지는 '목표 관리' 보드로 */
 export function migrateGoals(old) {
@@ -92,6 +76,39 @@ export function migrateGoals(old) {
     g.miles.forEach(m => { const k = boardKey(area, m.link ? catOf(rootOf(m.link)) : '목표 관리'); (boards[k] ||= { items: [], miles: [] }).miles.push(m); });
   }
   return { v: 2, boards };
+}
+
+/** 예시 목표 하나를 보드로 만든다. 작업 진행률은 오늘 기준(끝난 작업 100%, 시작 전 0%, 진행 중은 지난 기간 비율)으로 정한다 */
+export function buildExample([name, phases, miles], today = new Date()) {
+  const y = today.getFullYear(), t = iso(today), at = md => `${y}-${md}`;
+  const items = [], root = { id: uid(), parent: null, name, progress: 0 };
+  items.push(root);
+  phases.forEach(([pn, tasks]) => {
+    const ph = { id: uid(), parent: root.id, name: pn, progress: 0 };
+    items.push(ph);
+    tasks.forEach(([tn, s, e]) => {
+      const start = at(s), end = at(e);
+      let progress = 0;
+      if (end < t) progress = 100;
+      else if (start <= t) progress = Math.min(90, Math.round((daysBetween(start, t) + 1) / (daysBetween(start, end) + 1) * 10) * 10);
+      items.push({ id: uid(), parent: ph.id, name: tn, start, end, progress });
+    });
+    const ts = items.filter(i => i.parent === ph.id);
+    ph.start = ts.map(i => i.start).sort()[0]; ph.end = ts.map(i => i.end).sort().pop();
+  });
+  const ps = items.filter(i => i.parent === root.id);
+  root.start = ps.map(i => i.start).sort()[0]; root.end = ps.map(i => i.end).sort().pop();
+  return { items, miles: miles.map(([mn, d]) => ({ id: uid(), name: mn, date: at(d), link: root.id, done: at(d) < t })) };
+}
+
+/** 목표가 없는 카테고리에 예시 목표를 한 번만 채운다 (사용자가 만든 목표는 건드리지 않음) */
+export function addExampleGoals(goals, today = new Date()) {
+  if (!goals || goals.examples) return goals;
+  const boards = { ...goals.boards };
+  for (const [k, tpl] of Object.entries(GOAL_EXAMPLES)) {
+    if (!boards[k] || !boards[k].items.length) boards[k] = buildExample(tpl, today);
+  }
+  return { ...goals, boards, examples: true };
 }
 
 /** 선택한 해에 걸치는 최상위 목표와 그 하위만 남긴 보드 */
