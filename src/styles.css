@@ -440,10 +440,10 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
 .wbs input:hover, .wbs select:hover, .wbs input:focus, .wbs select:focus { border-color: var(--line); background: var(--input); }
 .wbs input[type=date] { width: 124px; padding: 3px 2px; }
 .wbs .c-code { width: 52px; color: var(--ink3); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.wbs .c-name { min-width: 200px; }
+.wbs .c-name { min-width: 230px; }
 .wbs .c-prog { width: 78px; }
 .wbs .c-prog select { width: 72px; }
-.wbs .c-tl { width: 30%; min-width: 240px; }
+.wbs .c-tl { width: 25%; min-width: 220px; }
 .wbs .c-act { white-space: nowrap; text-align: right; width: 104px; }
 .wbs .c-act .tl-del { margin-left: 4px; }
 .wbs tr.lv0 td { background: var(--paper); }
@@ -468,7 +468,6 @@ tr.lv0 .gbar { top: 4px; height: 14px; }
 .mile { position: absolute; top: 5px; width: 11px; height: 11px; margin-left: -5.5px; background: var(--ai); transform: rotate(45deg); border: 2px solid var(--card); box-sizing: content-box; z-index: 1; }
 .mile.done { background: var(--ok); }
 .mile.late { background: var(--over); }
-.mile-row td { background: var(--card); font-size: 12.5px; }
 .mile-tb td, .mile-tb th { padding: 5px 6px; text-align: left; }
 .mile-tb td:nth-child(4) { min-width: 180px; }
 .mile-tb select { min-width: 160px; }

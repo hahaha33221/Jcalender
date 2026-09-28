@@ -89,11 +89,6 @@ export default function GoalView({ area, cat, group }) {
                   <div className="tl-scale">{months.map(m => <span key={m} style={{ left: pos(m) }}>{toDate(m).getMonth() + 1}월</span>)}
                     <i className="tl-today" style={{ left: pos(today) }} title={`오늘 ${md(today)}`} /></div>
                 </th><th /></tr>
-              <tr className="mile-row"><td /><td className="c-name"><b>마일스톤</b></td><td colSpan={4} className="muted">{g.miles.length}개</td>
-                <td className="c-tl"><div className="tl-cell">
-                  <i className="tl-today" style={{ left: pos(today) }} />
-                  {g.miles.map(m => <span key={m.id} className={`mile ${m.done ? 'done' : m.date < today ? 'late' : ''}`} style={{ left: pos(m.date) }} title={`${m.name} · ${mdw(m.date)}`} />)}
-                </div></td><td /></tr>
             </thead>
             <tbody>
               {shown.map(({ item: it, level, code, hasKids }) => {
@@ -130,7 +125,7 @@ export default function GoalView({ area, cat, group }) {
           </table>
         </div>
         {g.items.length === 0 && <p className="muted">목표가 없습니다. "+ 목표 추가"로 시작하세요.</p>}
-        <p className="note">막대의 진한 부분이 진행률입니다. 세로선은 오늘, 마름모는 마일스톤입니다(빨강: 지남, 초록: 완료).</p>
+        <p className="note">막대의 진한 부분이 진행률입니다. 세로선은 오늘, 마름모는 연결된 마일스톤입니다(빨강: 지남, 초록: 완료).</p>
       </section>
 
       <section className="panel">
