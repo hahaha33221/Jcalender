@@ -640,3 +640,46 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .jv-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--mc); flex: none; }
 @media (max-width: 1100px) { .jv-grid, .jv-kpt { grid-template-columns: minmax(0, 1fr); } }
 .tile-done { font-size: 11.5px; font-weight: 700; color: var(--ok); background: var(--oksoft); border: 1px solid var(--ok); border-radius: 10px; padding: 0 8px; line-height: 1.6; flex: none; }
+
+/* 검수 완료 표시 */
+.crumb .review-btn { margin-left: auto; color: var(--ink2); }
+.crumb .review-btn.on { background: var(--aisoft); color: var(--ai); border-color: var(--ai); font-weight: 700; }
+.tile-rev { font-size: 11.5px; font-weight: 700; color: var(--ai); background: var(--aisoft); border: 1px solid var(--ai); border-radius: 10px; padding: 0 8px; line-height: 1.6; flex: none; }
+
+/* 카테고리 상세 엔진 (ToolView) */
+.tv-up { list-style: none; margin: 0; padding: 0; }
+.tv-up li { display: flex; align-items: center; gap: 12px; padding: 7px 0; border-top: 1px solid var(--line2); font-size: 13px; }
+.tv-dd { min-width: 64px; font-size: 15px; color: var(--a3); }
+.tv-up li.hot .tv-dd { color: var(--warn); }
+.tv-up li.late .tv-dd { color: var(--over); }
+.tv-board { display: grid; grid-template-columns: repeat(var(--cols), minmax(170px, 1fr)); gap: 10px; overflow-x: auto; }
+.tv-col { background: var(--paper); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tv-col-h { display: flex; justify-content: space-between; align-items: center; padding: 2px 4px 4px; border-bottom: 2px solid var(--ac); font-size: 13px; }
+.tv-card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.tv-card small { color: var(--ink2); font-size: 12px; }
+.tv-card-b { display: flex; justify-content: space-between; gap: 4px; }
+.tv-empty { color: var(--ink3); font-size: 12px; text-align: center; margin: 6px 0; }
+.tv-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.tv-charts .panel { margin: 0; min-width: 0; }
+.tv-prog { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.tv-prog li { display: grid; grid-template-columns: minmax(90px, 160px) minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 12.5px; }
+.tv-pn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tv-pv { white-space: nowrap; color: var(--ink2); }
+.tv-pv b { color: var(--ink); margin-left: 4px; }
+.tv-table td, .tv-table th { text-align: left; white-space: nowrap; }
+.tv-table td.num { text-align: right; }
+.tv-table .tv-in { padding: 3px 6px; font-size: 12.5px; min-width: 90px; }
+.tv-tel { color: var(--a3); }
+.tv-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.tv-f { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink2); flex: 1 1 130px; }
+.tv-f.wide { flex: 2 1 220px; }
+
+/* 학습 대시보드 */
+.sv-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; align-items: start; }
+.sv-grid .panel { margin: 0; min-width: 0; }
+.sv-goal { width: 60px; padding: 1px 6px; margin: 0 4px; }
+.sv-card { border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; background: var(--paper); }
+.sv-q { font-size: 20px; font-weight: 700; margin: 0; }
+.sv-a { font-size: 16px; margin: 0; color: var(--ok); }
+.sv-done { padding: 20px 0; }
+@media (max-width: 1100px) { .sv-grid { grid-template-columns: minmax(0, 1fr); } .tv-charts { grid-template-columns: minmax(0, 1fr); } }

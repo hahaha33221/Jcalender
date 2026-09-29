@@ -1,0 +1,539 @@
+import { iso } from '../data.js';
+import { num } from '../shared.jsx';
+import { addDays, dayDiff, won } from './ToolView.jsx';
+
+/* 카테고리별 상세 화면 설정 (ToolView 엔진이 그린다). 예시 기록은 오늘 기준 날짜로 만든다 */
+const D = (now, n) => addDays(iso(now), n);
+const M = (now, n) => iso(new Date(now.getFullYear(), now.getMonth() + n, 1)).slice(0, 7);
+const ids = (p, list) => list.map((r, i) => ({ id: `${p}${i}`, ...r }));
+const sum = (rs, k) => rs.reduce((a, r) => a + (Number(r[k]) || 0), 0);
+const inMonth = (s, c) => String(s || '').slice(0, 7) === c.month;
+const hm = (a, b) => { if (!a || !b) return 0; const [h1, m1] = a.split(':').map(Number), [h2, m2] = b.split(':').map(Number); return Math.max(0, h2 * 60 + m2 - (h1 * 60 + m1) - 60); };
+
+export const TOOL_CONFIGS = {
+  /* ───────── 개인 ───────── */
+  'P|개인 목표 관리': {
+    intro: '건강·관계·성장 목표를 매달 점수로 점검하고 다음 달 행동을 정합니다.', noun: '월간 점검', title: 'goal', tick: '진행 점검',
+    fields: [
+      { k: 'month', label: '월', type: 'text', req: true, def: t => t.slice(0, 7) },
+      { k: 'area', label: '분야', type: 'select', options: ['건강', '관계', '성장'] },
+      { k: 'goal', label: '목표', type: 'text', req: true },
+      { k: 'score', label: '달성 점수', type: 'rating', def: 3 },
+      { k: 'next', label: '다음 달 행동', type: 'text' },
+    ],
+    seed: now => ids('pg', [
+      { month: M(now, 0), area: '건강', goal: '주 3회 운동 (예시)', score: 4, next: '주말 등산 추가' },
+      { month: M(now, 0), area: '관계', goal: '가족과 주 1회 식사 (예시)', score: 3, next: '평일 저녁 1회 약속' },
+      { month: M(now, 0), area: '성장', goal: '매일 30분 공부 (예시)', score: 4, next: '주간 복습 시간 확보' },
+      { month: M(now, -1), area: '건강', goal: '주 3회 운동 (예시)', score: 3, next: '' },
+      { month: M(now, -1), area: '관계', goal: '가족과 주 1회 식사 (예시)', score: 4, next: '' },
+      { month: M(now, -1), area: '성장', goal: '매일 30분 공부 (예시)', score: 2, next: '' },
+    ]),
+    sort: (a, b) => b.month.localeCompare(a.month),
+    stats: (rs, c) => {
+      const cur = rs.filter(r => r.month === c.month);
+      const avg = a => { const x = cur.filter(r => r.area === a); return x.length ? (sum(x, 'score') / x.length).toFixed(1) : '-'; };
+      return [{ label: '이번 달 점검', value: `${cur.length}건` , sub: c.month }, { label: '건강', value: avg('건강') + '점' }, { label: '관계', value: avg('관계') + '점' }, { label: '성장', value: avg('성장') + '점' }];
+    },
+    breakdown: { label: '이번 달 분야별 점수 합', by: 'area', value: 'score', filter: (r, c) => r.month === c.month, fmt: v => `${v}점` },
+  },
+
+  /* ───────── 사업 ───────── */
+  'B|매출/매입': {
+    intro: '매출·매입을 기록하고 월별 수지와 받을 돈·줄 돈을 확인합니다.', noun: '거래', title: 'party', tick: '입금 입력',
+    fields: [
+      { k: 'date', label: '날짜', type: 'date' },
+      { k: 'kind', label: '구분', type: 'select', options: ['매출', '매입'] },
+      { k: 'party', label: '거래처', type: 'text', req: true },
+      { k: 'amount', label: '금액', type: 'money', req: true },
+      { k: 'state', label: '상태', type: 'select', options: ['완료', '미수', '미지급'] },
+      { k: 'due', label: '결제 예정일', type: 'date', def: '' },
+    ],
+    seed: now => ids('bs', [
+      { date: D(now, -2), kind: '매출', party: '고객 A (예시)', amount: 2400000, state: '완료', due: '' },
+      { date: D(now, -5), kind: '매입', party: '재료상사 (예시)', amount: 380000, state: '완료', due: '' },
+      { date: D(now, -8), kind: '매출', party: '고객 B (예시)', amount: 1500000, state: '미수', due: D(now, 4) },
+      { date: D(now, -12), kind: '매입', party: '외주 C (예시)', amount: 900000, state: '미지급', due: D(now, 6) },
+      { date: D(now, -35), kind: '매출', party: '고객 A (예시)', amount: 3100000, state: '완료', due: '' },
+      { date: D(now, -40), kind: '매입', party: '재료상사 (예시)', amount: 620000, state: '완료', due: '' },
+      { date: D(now, -70), kind: '매출', party: '고객 D (예시)', amount: 1800000, state: '완료', due: '' },
+      { date: D(now, -100), kind: '매출', party: '고객 B (예시)', amount: 2200000, state: '완료', due: '' },
+    ]),
+    sort: (a, b) => b.date.localeCompare(a.date),
+    stats: (rs, c) => {
+      const cur = rs.filter(r => inMonth(r.date, c));
+      const s = sum(cur.filter(r => r.kind === '매출'), 'amount'), b = sum(cur.filter(r => r.kind === '매입'), 'amount');
+      return [{ label: '이번 달 매출', value: won(s) }, { label: '이번 달 매입', value: won(b) }, { label: '이번 달 수지', value: won(s - b), tone: s - b < 0 ? 'over' : 'ex' },
+        { label: '받을 돈 · 줄 돈', value: `${won(sum(rs.filter(r => r.state === '미수'), 'amount'))}`, sub: `줄 돈 ${won(sum(rs.filter(r => r.state === '미지급'), 'amount'))}` }];
+    },
+    upcoming: { field: 'due', days: 30, past: 30, label: '받을 돈·줄 돈 예정일', filter: r => r.state !== '완료', sub: r => `${r.state} ${won(r.amount)}` },
+    trend: { label: '월별 매출', date: 'date', value: 'amount', filter: r => r.kind === '매출', unit: 'month', span: 6, fmt: 'money', tick: v => `${Math.round(v / 10000)}만` },
+  },
+  'B|고객 관리': {
+    intro: '문의부터 계약까지 고객을 단계별로 관리하고 후속 연락일을 챙깁니다.', noun: '고객', title: 'name', tick: '문의 등록',
+    fields: [
+      { k: 'name', label: '고객', type: 'text', req: true },
+      { k: 'phone', label: '연락처', type: 'phone' },
+      { k: 'stage', label: '단계', type: 'select', options: ['문의', '상담', '제안', '계약', '보류'] },
+      { k: 'value', label: '예상 금액', type: 'money' },
+      { k: 'next', label: '다음 연락일', type: 'date' },
+      { k: 'memo', label: '메모', type: 'text' },
+    ],
+    card: ['value', 'next'],
+    seed: now => ids('bc', [
+      { name: '고객 A사 (예시)', phone: '010-1111-0001', stage: '계약', value: 3000000, next: D(now, 20), memo: '정기 납품' },
+      { name: '고객 B (예시)', phone: '010-1111-0002', stage: '제안', value: 1500000, next: D(now, 2), memo: '견적 재요청' },
+      { name: '고객 C (예시)', phone: '010-1111-0003', stage: '상담', value: 800000, next: D(now, 5), memo: '' },
+      { name: '고객 D (예시)', phone: '010-1111-0004', stage: '문의', value: 500000, next: D(now, 1), memo: '메일 문의' },
+      { name: '고객 E (예시)', phone: '010-1111-0005', stage: '보류', value: 1200000, next: D(now, 30), memo: '예산 확정 후' },
+    ]),
+    kanban: { field: 'stage', stages: ['문의', '상담', '제안', '계약', '보류'], label: '고객 파이프라인' },
+    upcoming: { field: 'next', days: 14, past: 14, label: '후속 연락 예정', filter: r => r.stage !== '계약' },
+    stats: rs => [{ label: '진행 중 고객', value: `${rs.filter(r => !['계약', '보류'].includes(r.stage)).length}명` },
+      { label: '예상 매출 (진행 중)', value: won(sum(rs.filter(r => !['계약', '보류'].includes(r.stage)), 'value')) },
+      { label: '계약', value: `${rs.filter(r => r.stage === '계약').length}건`, tone: 'ex' }],
+  },
+  'B|사업 할일/일정': {
+    intro: '오늘 할일과 일정을 우선순위와 마감일로 관리합니다.', noun: '할일', title: 'task', tick: '완료 체크',
+    fields: [
+      { k: 'task', label: '할일', type: 'text', req: true },
+      { k: 'stage', label: '상태', type: 'select', options: ['할일', '진행', '완료'] },
+      { k: 'prio', label: '우선순위', type: 'select', options: ['높음', '중간', '낮음'] },
+      { k: 'due', label: '마감', type: 'date' },
+    ],
+    card: ['prio', 'due'],
+    seed: now => ids('bt', [
+      { task: '견적서 발송 (예시)', stage: '할일', prio: '높음', due: D(now, 0) },
+      { task: '세금계산서 발행 (예시)', stage: '진행', prio: '높음', due: D(now, 1) },
+      { task: '상세 페이지 수정 (예시)', stage: '할일', prio: '중간', due: D(now, 3) },
+      { task: '재고 실사 (예시)', stage: '할일', prio: '낮음', due: D(now, 6) },
+      { task: '거래처 미팅 자료 (예시)', stage: '완료', prio: '중간', due: D(now, -1) },
+    ]),
+    kanban: { field: 'stage', stages: ['할일', '진행', '완료'], label: '할일 보드' },
+    upcoming: { field: 'due', days: 7, past: 7, label: '마감 임박', filter: r => r.stage !== '완료', sub: r => `${r.prio} · ${r.stage}` },
+    stats: (rs, c) => [{ label: '남은 할일', value: `${rs.filter(r => r.stage !== '완료').length}건` },
+      { label: '오늘 마감', value: `${rs.filter(r => r.stage !== '완료' && r.due === c.today).length}건`, tone: rs.some(r => r.stage !== '완료' && r.due && r.due < c.today) ? 'over' : 'sl' },
+      { label: '완료', value: `${rs.filter(r => r.stage === '완료').length}건`, tone: 'ex' }],
+  },
+  'B|마케팅/영업': {
+    intro: '채널별 활동과 비용, 문의·전환 성과를 기록하고 비교합니다.', noun: '활동', title: 'title', tick: '활동 메모',
+    fields: [
+      { k: 'date', label: '날짜', type: 'date' },
+      { k: 'channel', label: '채널', type: 'select', options: ['검색광고', 'SNS', '블로그', '전시회', '소개', '기타'] },
+      { k: 'title', label: '활동', type: 'text', req: true },
+      { k: 'cost', label: '비용', type: 'money' },
+      { k: 'leads', label: '문의', type: 'number', unit: '건' },
+      { k: 'won', label: '전환', type: 'number', unit: '건' },
+    ],
+    seed: now => ids('bm', [
+      { date: D(now, -1), channel: 'SNS', title: '신상품 소개 게시물 (예시)', cost: 50000, leads: 6, won: 1 },
+      { date: D(now, -4), channel: '검색광고', title: '키워드 광고 1주 (예시)', cost: 180000, leads: 12, won: 2 },
+      { date: D(now, -9), channel: '블로그', title: '사용 후기 글 (예시)', cost: 0, leads: 4, won: 1 },
+      { date: D(now, -15), channel: '소개', title: '기존 고객 소개 (예시)', cost: 0, leads: 3, won: 2 },
+      { date: D(now, -22), channel: '검색광고', title: '키워드 광고 1주 (예시)', cost: 160000, leads: 9, won: 1 },
+    ]),
+    sort: (a, b) => b.date.localeCompare(a.date),
+    stats: (rs, c) => { const cur = rs.filter(r => inMonth(r.date, c)), cost = sum(cur, 'cost'), leads = sum(cur, 'leads'), w = sum(cur, 'won');
+      return [{ label: '이번 달 문의', value: `${leads}건` }, { label: '전환', value: `${w}건`, sub: leads ? `전환율 ${Math.round(w / leads * 100)}%` : '' }, { label: '마케팅 비용', value: won(cost), sub: leads ? `문의당 ${won(cost / leads)}` : '' }]; },
+    breakdown: { label: '채널별 문의 (전체)', by: 'channel', value: 'leads', fmt: 'count' },
+  },
+  'B|프로젝트/외주': {
+    intro: '외주·프로젝트를 요청부터 정산까지 단계별로 관리하고 마감과 금액을 챙깁니다.', noun: '프로젝트', title: 'name', tick: '신규 요청 접수',
+    fields: [
+      { k: 'name', label: '프로젝트', type: 'text', req: true },
+      { k: 'client', label: '의뢰처', type: 'text' },
+      { k: 'stage', label: '단계', type: 'select', options: ['요청', '진행', '검수', '정산', '완료'] },
+      { k: 'amount', label: '금액', type: 'money' },
+      { k: 'due', label: '마감', type: 'date' },
+    ],
+    card: ['client', 'due'],
+    seed: now => ids('bp', [
+      { name: '홈페이지 리뉴얼 (예시)', client: '고객 A사', stage: '진행', amount: 4500000, due: D(now, 12) },
+      { name: '카탈로그 디자인 (예시)', client: '고객 B', stage: '검수', amount: 1200000, due: D(now, 3) },
+      { name: '영상 편집 (예시)', client: '고객 C', stage: '요청', amount: 800000, due: D(now, 25) },
+      { name: '로고 제작 (예시)', client: '고객 D', stage: '정산', amount: 600000, due: D(now, -3) },
+    ]),
+    kanban: { field: 'stage', stages: ['요청', '진행', '검수', '정산', '완료'], label: '프로젝트 보드' },
+    upcoming: { field: 'due', days: 30, past: 14, label: '마감 일정', filter: r => r.stage !== '완료', sub: r => `${r.stage} · ${won(r.amount)}` },
+    stats: (rs, c) => [{ label: '진행 중', value: `${rs.filter(r => !['정산', '완료'].includes(r.stage)).length}건` },
+      { label: '정산 대기 금액', value: won(sum(rs.filter(r => r.stage === '정산'), 'amount')), tone: 'ex' },
+      { label: '마감 지남', value: `${rs.filter(r => r.due && r.due < c.today && !['정산', '완료'].includes(r.stage)).length}건`, tone: rs.some(r => r.due && r.due < c.today && !['정산', '완료'].includes(r.stage)) ? 'over' : 'sl' }],
+  },
+  'B|재고/상품': {
+    intro: '상품별 재고와 안전재고를 비교해 발주가 필요한 상품을 먼저 보여줍니다.', noun: '상품', title: 'name', tick: '입고 수량 갱신',
+    fields: [
+      { k: 'sku', label: 'SKU', type: 'text' },
+      { k: 'name', label: '상품', type: 'text', req: true },
+      { k: 'stock', label: '재고', type: 'number', unit: '개' },
+      { k: 'safe', label: '안전재고', type: 'number', unit: '개' },
+      { k: 'price', label: '단가', type: 'money' },
+    ],
+    seed: () => ids('bi', [
+      { sku: 'BOX-M', name: '포장 박스 M (예시)', stock: 34, safe: 100, price: 450 },
+      { sku: 'BOX-L', name: '포장 박스 L (예시)', stock: 160, safe: 80, price: 650 },
+      { sku: 'P-001', name: '상품 A (예시)', stock: 12, safe: 20, price: 18000 },
+      { sku: 'P-002', name: '상품 B (예시)', stock: 48, safe: 20, price: 24000 },
+      { sku: 'P-003', name: '상품 C (예시)', stock: 5, safe: 10, price: 32000 },
+    ]),
+    sort: (a, b) => (a.stock / (a.safe || 1)) - (b.stock / (b.safe || 1)),
+    progress: { label: '안전재고 대비 재고 (부족한 순)', name: 'name', cur: 'stock', target: 'safe', fmt: (c, t) => `${num(c)} / ${num(t)}개` },
+    stats: rs => [{ label: '상품 수', value: `${rs.length}종` }, { label: '발주 필요', value: `${rs.filter(r => Number(r.stock) < Number(r.safe)).length}종`, tone: rs.some(r => Number(r.stock) < Number(r.safe)) ? 'over' : 'ex', sub: rs.filter(r => Number(r.stock) < Number(r.safe)).map(r => r.name).slice(0, 2).join(', ') },
+      { label: '재고 금액', value: won(rs.reduce((a, r) => a + (Number(r.stock) || 0) * (Number(r.price) || 0), 0)) }],
+  },
+  'B|계약서/문서': {
+    intro: '계약·인허가·보험 문서를 모아 만료일이 다가오는 것부터 보여줍니다.', noun: '문서', title: 'name', tick: '문서 등록',
+    fields: [
+      { k: 'name', label: '문서', type: 'text', req: true },
+      { k: 'kind', label: '종류', type: 'select', options: ['계약서', '인허가', '보험', '기타'] },
+      { k: 'party', label: '상대방', type: 'text' },
+      { k: 'start', label: '시작일', type: 'date' },
+      { k: 'end', label: '만료일', type: 'date' },
+      { k: 'amount', label: '금액', type: 'money' },
+    ],
+    seed: now => ids('bd', [
+      { name: '사무실 임대차 계약 (예시)', kind: '계약서', party: '건물주', start: D(now, -330), end: D(now, 35), amount: 12000000 },
+      { name: '납품 기본 계약 (예시)', kind: '계약서', party: '고객 A사', start: D(now, -200), end: D(now, 165), amount: 0 },
+      { name: '영업배상 책임보험 (예시)', kind: '보험', party: '보험사', start: D(now, -350), end: D(now, 15), amount: 480000 },
+      { name: '통신판매업 신고증 (예시)', kind: '인허가', party: '구청', start: D(now, -700), end: '', amount: 0 },
+    ]),
+    upcoming: { field: 'end', days: 60, past: 30, label: '만료 예정', sub: r => `${r.kind}${r.party ? ` · ${r.party}` : ''}` },
+    breakdown: { label: '종류별 문서 수', by: 'kind', fmt: 'count' },
+    stats: (rs, c) => [{ label: '문서', value: `${rs.length}건` }, { label: '60일 이내 만료', value: `${rs.filter(r => r.end && r.end >= c.today && dayDiff(c.today, r.end) <= 60).length}건`, tone: 'over' },
+      { label: '계약 금액 합', value: won(sum(rs.filter(r => r.kind === '계약서'), 'amount')) }],
+  },
+  'B|파트너/거래처': {
+    intro: '거래처 연락처와 거래 규모, 평가를 관리하고 바로 전화합니다.', noun: '거래처', title: 'name', tick: '연락처 등록',
+    fields: [
+      { k: 'name', label: '거래처', type: 'text', req: true },
+      { k: 'kind', label: '분류', type: 'select', options: ['공급처', '외주', '고객사', '물류', '기타'] },
+      { k: 'person', label: '담당자', type: 'text' },
+      { k: 'phone', label: '전화', type: 'phone' },
+      { k: 'volume', label: '연간 거래액', type: 'money' },
+      { k: 'rating', label: '평가', type: 'rating', def: 3 },
+    ],
+    seed: () => ids('bpn', [
+      { name: '재료상사 (예시)', kind: '공급처', person: '김과장', phone: '02-000-0001', volume: 8400000, rating: 4 },
+      { name: '외주 C (예시)', kind: '외주', person: '박대표', phone: '010-2222-0003', volume: 5400000, rating: 3 },
+      { name: '빠른물류 (예시)', kind: '물류', person: '이팀장', phone: '1588-0000', volume: 2600000, rating: 5 },
+      { name: '고객 A사 (예시)', kind: '고객사', person: '최부장', phone: '02-000-0004', volume: 32000000, rating: 5 },
+    ]),
+    sort: (a, b) => (Number(b.volume) || 0) - (Number(a.volume) || 0),
+    breakdown: { label: '분류별 연간 거래액', by: 'kind', value: 'volume', fmt: 'money' },
+    stats: rs => [{ label: '거래처', value: `${rs.length}곳` }, { label: '연간 거래액 합', value: won(sum(rs, 'volume')) }, { label: '평가 3점 이하', value: `${rs.filter(r => Number(r.rating) <= 3).length}곳`, sub: '재협상 검토' }],
+  },
+  'B|사업 자금/투자': {
+    intro: '사업 계좌 입출금과 투자·대출을 기록하고 잔액과 현금 흐름을 확인합니다.', noun: '자금 기록', title: 'memo', tick: '입출금 기록',
+    fields: [
+      { k: 'date', label: '날짜', type: 'date' },
+      { k: 'kind', label: '구분', type: 'select', options: ['입금', '출금', '투자', '대출'] },
+      { k: 'amount', label: '금액', type: 'money', req: true },
+      { k: 'memo', label: '내용', type: 'text', req: true },
+    ],
+    seed: now => ids('bf', [
+      { date: D(now, -60), kind: '입금', amount: 10000000, memo: '초기 자금 (예시)' },
+      { date: D(now, -30), kind: '입금', amount: 4200000, memo: '매출 정산 (예시)' },
+      { date: D(now, -28), kind: '출금', amount: 1850000, memo: '임대료·관리비 (예시)' },
+      { date: D(now, -10), kind: '투자', amount: 2000000, memo: '장비 구입 (예시)' },
+      { date: D(now, -3), kind: '입금', amount: 2400000, memo: '고객 A 입금 (예시)' },
+      { date: D(now, -2), kind: '출금', amount: 380000, memo: '재료비 (예시)' },
+    ]),
+    sort: (a, b) => b.date.localeCompare(a.date),
+    trend: { label: '월별 순 현금 흐름', date: 'date', value: r => (['입금', '대출'].includes(r.kind) ? 1 : -1) * (Number(r.amount) || 0), unit: 'month', span: 6, fmt: 'money', tick: v => `${Math.round(v / 10000)}만` },
+    stats: (rs, c) => { const bal = rs.reduce((a, r) => a + (['입금', '대출'].includes(r.kind) ? 1 : -1) * (Number(r.amount) || 0), 0);
+      const cur = rs.filter(r => inMonth(r.date, c));
+      return [{ label: '현재 잔액', value: won(bal), tone: bal < 0 ? 'over' : 'ex' }, { label: '이번 달 입금', value: won(sum(cur.filter(r => r.kind === '입금'), 'amount')) }, { label: '이번 달 출금·투자', value: won(sum(cur.filter(r => ['출금', '투자'].includes(r.kind)), 'amount')) }]; },
+  },
+  'B|사업 일정/캘린더': {
+    intro: '미팅과 행사 일정을 등록하고 다가오는 일정과 준비 사항을 확인합니다.', noun: '일정', title: 'title', tick: '일정 등록',
+    fields: [
+      { k: 'date', label: '날짜', type: 'date' },
+      { k: 'time', label: '시간', type: 'time' },
+      { k: 'title', label: '일정', type: 'text', req: true },
+      { k: 'with', label: '상대', type: 'text' },
+      { k: 'place', label: '장소', type: 'text' },
+      { k: 'prep', label: '준비', type: 'text' },
+    ],
+    seed: now => ids('be', [
+      { date: D(now, 1), time: '10:00', title: '고객 B 견적 미팅 (예시)', with: '고객 B', place: '온라인', prep: '수정 견적서' },
+      { date: D(now, 4), time: '14:00', title: '재료상사 단가 협의 (예시)', with: '김과장', place: '거래처 사무실', prep: '작년 거래량' },
+      { date: D(now, 11), time: '09:30', title: '업계 박람회 (예시)', with: '', place: '코엑스', prep: '명함·카탈로그' },
+      { date: D(now, -2), time: '16:00', title: '고객 A 정기 미팅 (예시)', with: '최부장', place: '고객사', prep: '' },
+    ]),
+    sort: (a, b) => a.date.localeCompare(b.date),
+    upcoming: { field: 'date', days: 30, label: '다가오는 일정', sub: r => `${r.time || ''} ${r.place || ''}${r.prep ? ` · 준비: ${r.prep}` : ''}` },
+    stats: (rs, c) => [{ label: '이번 주 일정', value: `${rs.filter(r => r.date >= c.today && dayDiff(c.today, r.date) < 7).length}건` }, { label: '이번 달 일정', value: `${rs.filter(r => inMonth(r.date, c)).length}건` }],
+  },
+  'B|콘텐츠/브랜드': {
+    intro: '콘텐츠를 아이디어부터 발행까지 단계별로 관리하고 발행 일정을 챙깁니다.', noun: '콘텐츠', title: 'title', tick: '예약 발행',
+    fields: [
+      { k: 'title', label: '콘텐츠', type: 'text', req: true },
+      { k: 'channel', label: '채널', type: 'select', options: ['인스타그램', '블로그', '유튜브', '뉴스레터'] },
+      { k: 'stage', label: '단계', type: 'select', options: ['아이디어', '작성', '예약', '발행'] },
+      { k: 'date', label: '발행일', type: 'date' },
+    ],
+    card: ['channel', 'date'],
+    seed: now => ids('bb', [
+      { title: '고객 후기 모음 (예시)', channel: '인스타그램', stage: '예약', date: D(now, 2) },
+      { title: '제품 사용법 영상 (예시)', channel: '유튜브', stage: '작성', date: D(now, 9) },
+      { title: '10월 뉴스레터 (예시)', channel: '뉴스레터', stage: '아이디어', date: D(now, 16) },
+      { title: '브랜드 이야기 (예시)', channel: '블로그', stage: '발행', date: D(now, -5) },
+      { title: '신상품 티저 (예시)', channel: '인스타그램', stage: '발행', date: D(now, -12) },
+    ]),
+    kanban: { field: 'stage', stages: ['아이디어', '작성', '예약', '발행'], label: '콘텐츠 보드' },
+    upcoming: { field: 'date', days: 21, label: '발행 예정', filter: r => r.stage !== '발행', sub: r => `${r.channel} · ${r.stage}` },
+    stats: (rs, c) => [{ label: '이번 달 발행', value: `${rs.filter(r => r.stage === '발행' && inMonth(r.date, c)).length}건` }, { label: '준비 중', value: `${rs.filter(r => r.stage !== '발행').length}건` }],
+  },
+  'B|리뷰/회고': {
+    intro: '한 주 사업을 매출·잘한 것·개선할 것으로 돌아보고 다음 주 행동을 정합니다.', noun: '주간 회고', title: 'week', tick: '한 주 돌아보기',
+    fields: [
+      { k: 'week', label: '주', type: 'date', req: true },
+      { k: 'sales', label: '주 매출', type: 'money' },
+      { k: 'good', label: '잘한 것', type: 'text' },
+      { k: 'fix', label: '개선할 것', type: 'text' },
+      { k: 'next', label: '다음 주 행동', type: 'text' },
+      { k: 'score', label: '만족도', type: 'rating', def: 3 },
+    ],
+    seed: now => ids('br', [
+      { week: D(now, -7), sales: 3900000, good: '신규 고객 1곳 계약 (예시)', fix: '견적 응답이 늦었다', next: '문의 24시간 내 응답', score: 4 },
+      { week: D(now, -14), sales: 2600000, good: '재고 정리 (예시)', fix: '광고비 대비 문의 적음', next: '광고 키워드 교체', score: 3 },
+      { week: D(now, -21), sales: 3100000, good: '박람회 준비 (예시)', fix: '', next: '', score: 3 },
+    ]),
+    sort: (a, b) => b.week.localeCompare(a.week),
+    trend: { label: '주간 매출 (회고 기준)', date: 'week', value: 'sales', unit: 'month', span: 3, fmt: 'money', tick: v => `${Math.round(v / 10000)}만` },
+    stats: rs => [{ label: '쌓인 회고', value: `${rs.length}주` }, { label: '평균 만족도', value: rs.length ? `${(sum(rs, 'score') / rs.length).toFixed(1)}점` : '-' }],
+  },
+  'B|사업 목표 관리': {
+    intro: '매출·고객·재구매 같은 핵심 지표의 목표와 현재 값을 비교합니다.', noun: '지표', title: 'name', tick: '지표 갱신',
+    fields: [
+      { k: 'name', label: '지표', type: 'text', req: true },
+      { k: 'cur', label: '현재', type: 'number' },
+      { k: 'target', label: '목표', type: 'number' },
+      { k: 'unit', label: '단위', type: 'text', def: '' },
+      { k: 'period', label: '기간', type: 'select', options: ['월', '분기', '연'] },
+    ],
+    seed: () => ids('bk', [
+      { name: '연 매출 (만원) (예시)', cur: 21400, target: 36000, unit: '만원', period: '연' },
+      { name: '신규 고객 (예시)', cur: 7, target: 12, unit: '곳', period: '연' },
+      { name: '재구매율 (예시)', cur: 24, target: 30, unit: '%', period: '분기' },
+      { name: '월 문의 (예시)', cur: 25, target: 30, unit: '건', period: '월' },
+    ]),
+    progress: { label: '목표 대비 현재', name: 'name', cur: 'cur', target: 'target', fmt: (c, t, r) => `${num(c)} / ${num(t)}${r.unit || ''}` },
+    stats: rs => [{ label: '지표', value: `${rs.length}개` }, { label: '목표 달성', value: `${rs.filter(r => Number(r.cur) >= Number(r.target)).length}개`, tone: 'ex' },
+      { label: '평균 달성률', value: rs.length ? `${Math.round(rs.reduce((a, r) => a + Math.min(100, (Number(r.cur) || 0) / (Number(r.target) || 1) * 100), 0) / rs.length)}%` : '-' }],
+  },
+  'B|세금/정산': {
+    intro: '세금계산서 발행·수취와 신고 일정을 기한 순으로 관리합니다.', noun: '세금 일정', title: 'name', tick: '신고 일정 알림',
+    fields: [
+      { k: 'name', label: '항목', type: 'text', req: true },
+      { k: 'kind', label: '구분', type: 'select', options: ['부가세', '종합소득세', '원천세', '세금계산서', '기타'] },
+      { k: 'due', label: '기한', type: 'date' },
+      { k: 'amount', label: '예상 금액', type: 'money' },
+      { k: 'state', label: '상태', type: 'select', options: ['준비', '완료'] },
+    ],
+    seed: now => { const y = now.getFullYear(); return ids('bx', [
+      { name: '9월분 원천세 신고 (예시)', kind: '원천세', due: `${y}-10-10`, amount: 120000, state: '준비' },
+      { name: '9월 세금계산서 발행 마감 (예시)', kind: '세금계산서', due: `${y}-10-10`, amount: 0, state: '준비' },
+      { name: '2기 부가세 예정고지 (예시)', kind: '부가세', due: `${y}-10-25`, amount: 850000, state: '준비' },
+      { name: '1기 부가세 확정신고 (예시)', kind: '부가세', due: `${y}-07-25`, amount: 1620000, state: '완료' },
+      { name: '종합소득세 신고 (예시)', kind: '종합소득세', due: `${y}-05-31`, amount: 2300000, state: '완료' },
+    ]); },
+    sort: (a, b) => a.due.localeCompare(b.due),
+    upcoming: { field: 'due', days: 45, past: 30, label: '다가오는 신고·기한', filter: r => r.state !== '완료', sub: r => `${r.kind}${r.amount ? ` · ${won(r.amount)}` : ''}` },
+    breakdown: { label: '올해 구분별 세액', by: 'kind', value: 'amount', filter: (r, c) => String(r.due).slice(0, 4) === c.year, fmt: 'money' },
+    stats: (rs, c) => [{ label: '남은 신고', value: `${rs.filter(r => r.state !== '완료').length}건`, tone: rs.some(r => r.state !== '완료' && r.due < c.today) ? 'over' : 'sl' },
+      { label: '예상 납부액', value: won(sum(rs.filter(r => r.state !== '완료'), 'amount')) }, { label: '올해 완료', value: `${rs.filter(r => r.state === '완료' && String(r.due).startsWith(c.year)).length}건`, tone: 'ex' }],
+  },
+
+  /* ───────── 근로 ───────── */
+  'W|업무 할일/프로젝트': {
+    intro: '업무 요청을 단계별로 관리하고 기한이 가까운 일부터 처리합니다.', noun: '업무', title: 'task', tick: '새 요청 등록',
+    fields: [
+      { k: 'task', label: '업무', type: 'text', req: true },
+      { k: 'from', label: '요청자', type: 'text' },
+      { k: 'stage', label: '단계', type: 'select', options: ['요청', '진행', '검토', '완료'] },
+      { k: 'prio', label: '우선순위', type: 'select', options: ['높음', '중간', '낮음'] },
+      { k: 'due', label: '기한', type: 'date' },
+    ],
+    card: ['prio', 'due'],
+    seed: now => ids('wt', [
+      { task: '주간 보고서 작성 (예시)', from: '팀장', stage: '진행', prio: '높음', due: D(now, 1) },
+      { task: '고객 요구사항 정리 (예시)', from: '기획팀', stage: '요청', prio: '중간', due: D(now, 4) },
+      { task: '기능 1차 개발 (예시)', from: '프로젝트 A', stage: '진행', prio: '높음', due: D(now, 9) },
+      { task: '테스트 케이스 검토 (예시)', from: 'QA', stage: '검토', prio: '중간', due: D(now, 2) },
+      { task: '회의록 공유 (예시)', from: '본인', stage: '완료', prio: '낮음', due: D(now, -1) },
+    ]),
+    kanban: { field: 'stage', stages: ['요청', '진행', '검토', '완료'], label: '업무 보드' },
+    upcoming: { field: 'due', days: 14, past: 7, label: '기한 임박', filter: r => r.stage !== '완료', sub: r => `${r.prio} · ${r.stage}` },
+    stats: (rs, c) => [{ label: '진행 중 업무', value: `${rs.filter(r => r.stage !== '완료').length}건` },
+      { label: '기한 지남', value: `${rs.filter(r => r.stage !== '완료' && r.due && r.due < c.today).length}건`, tone: rs.some(r => r.stage !== '완료' && r.due && r.due < c.today) ? 'over' : 'sl' },
+      { label: '높은 우선순위', value: `${rs.filter(r => r.stage !== '완료' && r.prio === '높음').length}건` }],
+  },
+  'W|회의/업무 일정': {
+    intro: '회의 일정과 안건, 결정 사항을 한 곳에 기록합니다.', noun: '회의', title: 'title', tick: '결정 사항 메모',
+    fields: [
+      { k: 'date', label: '날짜', type: 'date' },
+      { k: 'time', label: '시간', type: 'time' },
+      { k: 'title', label: '회의', type: 'text', req: true },
+      { k: 'agenda', label: '안건', type: 'text' },
+      { k: 'decision', label: '결정 사항', type: 'text' },
+      { k: 'mins', label: '소요(분)', type: 'number', unit: '분', def: 60 },
+    ],
+    seed: now => ids('wm', [
+      { date: D(now, 0), time: '10:00', title: '주간 팀 회의 (예시)', agenda: '진행 현황 공유', decision: '', mins: 60 },
+      { date: D(now, 1), time: '14:00', title: '프로젝트 A 점검 (예시)', agenda: '일정 재조정', decision: '', mins: 45 },
+      { date: D(now, -2), time: '11:00', title: '고객 요구사항 회의 (예시)', agenda: '범위 확정', decision: '2차 범위에서 제외 2건', mins: 90 },
+      { date: D(now, -6), time: '10:00', title: '주간 팀 회의 (예시)', agenda: '', decision: '보고서 양식 통일', mins: 60 },
+    ]),
+    sort: (a, b) => b.date.localeCompare(a.date),
+    upcoming: { field: 'date', days: 7, label: '이번 주 회의', sub: r => `${r.time || ''} · ${r.agenda || '안건 미정'}` },
+    trend: { label: '일별 회의 시간', date: 'date', value: 'mins', unit: 'day', span: 14, fmt: 'minutes', tick: v => `${v}` },
+    stats: (rs, c) => { const w = rs.filter(r => Math.abs(dayDiff(c.today, r.date)) < 7);
+      return [{ label: '최근 7일 회의', value: `${w.length}건`, sub: `총 ${num(sum(w, 'mins'))}분` }, { label: '결정 사항 미기록', value: `${rs.filter(r => r.date < c.today && !r.decision).length}건`, tone: rs.some(r => r.date < c.today && !r.decision) ? 'over' : 'sl' }]; },
+  },
+  'W|근태': {
+    intro: '출퇴근 시각으로 근무시간을 계산하고 초과근무와 휴가를 관리합니다.', noun: '근무 기록', title: 'date', tick: '출근 기록',
+    fields: [
+      { k: 'date', label: '날짜', type: 'date', req: true },
+      { k: 'in', label: '출근', type: 'time', def: '09:00' },
+      { k: 'out', label: '퇴근', type: 'time', def: '18:00' },
+      { k: 'kind', label: '구분', type: 'select', options: ['근무', '연차', '반차', '재택'] },
+      { k: 'memo', label: '메모', type: 'text' },
+    ],
+    seed: now => { const out = []; for (let i = 13; i >= 0; i--) { const d = D(now, -i), wd = new Date(d + 'T00:00:00').getDay(); if (wd === 0 || wd === 6) continue;
+      const late = [0, 15, 40, 0, 70, 20, 0, 90, 10, 0][i % 10]; out.push({ date: d, in: `08:${50 + (i % 3) * 3}`, out: `${18 + Math.floor(late / 60)}:${String(10 + (late % 60)).slice(-2).padStart(2, '0')}`, kind: i === 8 ? '연차' : i === 3 ? '재택' : '근무', memo: '' }); }
+      return ids('wa', out.map(r => (r.kind === '연차' ? { ...r, in: '', out: '' } : r)).map(r => ({ ...r, memo: r.kind !== '근무' ? `${r.kind} (예시)` : '' }))); },
+    sort: (a, b) => b.date.localeCompare(a.date),
+    trend: { label: '일별 근무시간', date: 'date', value: r => hm(r.in, r.out), unit: 'day', span: 14, fmt: 'hours', tick: v => `${v / 60}`, steps: [120, 180, 240], goal: 480, goalLabel: '8h' },
+    stats: (rs, c) => { const cur = rs.filter(r => inMonth(r.date, c)), mins = cur.reduce((a, r) => a + hm(r.in, r.out), 0), over = cur.reduce((a, r) => a + Math.max(0, hm(r.in, r.out) - 480), 0);
+      return [{ label: '이번 달 근무', value: `${Math.round(mins / 60)}시간`, sub: `${cur.filter(r => r.kind !== '연차').length}일` }, { label: '초과근무', value: `${Math.round(over / 6) / 10}시간`, tone: over > 600 ? 'over' : 'sl', sub: '월 10시간 이하 목표' },
+        { label: '올해 연차 사용', value: `${rs.filter(r => r.kind === '연차' && r.date.startsWith(c.year)).length + rs.filter(r => r.kind === '반차' && r.date.startsWith(c.year)).length * 0.5}일` }]; },
+  },
+  'W|성과 기록': {
+    intro: '매일 한 줄 성과를 남기고, 평가 때 쓸 수 있게 영향과 태그로 모아 둡니다.', noun: '성과', title: 'what', tick: '성과 한 줄 기록',
+    fields: [
+      { k: 'date', label: '날짜', type: 'date' },
+      { k: 'what', label: '성과', type: 'text', req: true },
+      { k: 'impact', label: '영향', type: 'select', options: ['높음', '중간', '낮음'] },
+      { k: 'tag', label: '분류', type: 'select', options: ['개발', '협업', '개선', '고객', '학습'] },
+    ],
+    seed: now => ids('wp', [
+      { date: D(now, -1), what: '배포 스크립트 자동화로 배포 시간 30분 단축 (예시)', impact: '높음', tag: '개선' },
+      { date: D(now, -3), what: '고객 문의 3건 당일 해결 (예시)', impact: '중간', tag: '고객' },
+      { date: D(now, -6), what: '신규 입사자 온보딩 자료 작성 (예시)', impact: '중간', tag: '협업' },
+      { date: D(now, -9), what: '기능 1차 개발 완료 (예시)', impact: '높음', tag: '개발' },
+      { date: D(now, -15), what: '사내 스터디 발표 (예시)', impact: '낮음', tag: '학습' },
+    ]),
+    sort: (a, b) => b.date.localeCompare(a.date),
+    breakdown: { label: '분류별 성과 수', by: 'tag', fmt: 'count' },
+    stats: (rs, c) => [{ label: '이번 달 성과', value: `${rs.filter(r => inMonth(r.date, c)).length}건` }, { label: '높은 영향', value: `${rs.filter(r => r.impact === '높음').length}건`, tone: 'ex' }],
+  },
+  'W|업무 문서': {
+    intro: '보고서·회의록 등 업무 문서의 최신 버전과 위치를 관리합니다.', noun: '문서', title: 'name', tick: '보고서 등록',
+    fields: [
+      { k: 'name', label: '문서', type: 'text', req: true },
+      { k: 'kind', label: '종류', type: 'select', options: ['보고서', '회의록', '기획서', '매뉴얼', '기타'] },
+      { k: 'ver', label: '버전', type: 'text', def: 'v1' },
+      { k: 'date', label: '수정일', type: 'date' },
+      { k: 'where', label: '위치', type: 'text' },
+    ],
+    seed: now => ids('wd', [
+      { name: '주간 보고서 (예시)', kind: '보고서', ver: 'v12', date: D(now, -1), where: '공유드라이브/보고' },
+      { name: '프로젝트 A 요구사항 (예시)', kind: '기획서', ver: 'v3', date: D(now, -4), where: '공유드라이브/프로젝트A' },
+      { name: '9월 팀 회의록 (예시)', kind: '회의록', ver: 'v1', date: D(now, -2), where: '위키' },
+      { name: '배포 매뉴얼 (예시)', kind: '매뉴얼', ver: 'v2', date: D(now, -40), where: '위키/운영' },
+    ]),
+    sort: (a, b) => b.date.localeCompare(a.date),
+    breakdown: { label: '종류별 문서 수', by: 'kind', fmt: 'count' },
+    stats: (rs, c) => [{ label: '문서', value: `${rs.length}건` }, { label: '30일 넘게 수정 안 됨', value: `${rs.filter(r => dayDiff(r.date, c.today) > 30).length}건`, sub: '정리 대상' }],
+  },
+  'W|업무 연락처': {
+    intro: '업무 연락처를 회사·부서별로 모으고 바로 전화합니다.', noun: '연락처', title: 'name', tick: '연락처 등록',
+    fields: [
+      { k: 'name', label: '이름', type: 'text', req: true },
+      { k: 'company', label: '회사', type: 'text' },
+      { k: 'dept', label: '부서·직함', type: 'text' },
+      { k: 'phone', label: '전화', type: 'phone' },
+      { k: 'email', label: '메일', type: 'text' },
+      { k: 'last', label: '마지막 연락', type: 'date' },
+    ],
+    seed: now => ids('wc', [
+      { name: '김지훈 (예시)', company: '고객사 A', dept: '구매팀 과장', phone: '010-3333-0001', email: 'kim@example.com', last: D(now, -3) },
+      { name: '이서연 (예시)', company: '협력사 B', dept: '개발팀 팀장', phone: '010-3333-0002', email: 'lee@example.com', last: D(now, -12) },
+      { name: '박준호 (예시)', company: '사내', dept: '인사팀', phone: '02-000-1234', email: 'park@example.com', last: D(now, -30) },
+    ]),
+    sort: (a, b) => String(b.last).localeCompare(String(a.last)),
+    breakdown: { label: '회사별 연락처', by: 'company', fmt: 'count' },
+    stats: rs => [{ label: '연락처', value: `${rs.length}명` }, { label: '회사', value: `${new Set(rs.map(r => r.company)).size}곳` }],
+  },
+  'W|업무 인맥/네트워킹': {
+    intro: '행사·모임에서 만난 사람과 후속 연락 계획을 관리합니다.', noun: '만남', title: 'name', tick: '만남 후 메모',
+    fields: [
+      { k: 'name', label: '이름', type: 'text', req: true },
+      { k: 'where', label: '만난 곳', type: 'text' },
+      { k: 'date', label: '만난 날', type: 'date' },
+      { k: 'follow', label: '후속 연락일', type: 'date', def: '' },
+      { k: 'phone', label: '전화', type: 'phone' },
+      { k: 'memo', label: '메모', type: 'text' },
+    ],
+    seed: now => ids('wn', [
+      { name: '정민재 (예시)', where: '업계 세미나', date: D(now, -10), follow: D(now, 3), phone: '010-4444-0001', memo: '데이터 분석 관심' },
+      { name: '한수진 (예시)', where: '스터디 모임', date: D(now, -25), follow: D(now, 10), phone: '010-4444-0002', memo: '이직 정보 공유' },
+      { name: '오태경 (예시)', where: '컨퍼런스', date: D(now, -60), follow: D(now, -5), phone: '010-4444-0003', memo: '' },
+    ]),
+    sort: (a, b) => String(b.date).localeCompare(String(a.date)),
+    upcoming: { field: 'follow', days: 30, past: 30, label: '후속 연락 예정', sub: r => r.where || '' },
+    stats: (rs, c) => [{ label: '올해 만난 사람', value: `${rs.filter(r => String(r.date).startsWith(c.year)).length}명` }, { label: '후속 연락 지남', value: `${rs.filter(r => r.follow && r.follow < c.today).length}명`, tone: rs.some(r => r.follow && r.follow < c.today) ? 'over' : 'sl' }],
+  },
+  'W|성과 기록·회고': {
+    intro: '주간·분기 회고로 목표 대비 결과를 정리하고 평가 자료를 준비합니다.', noun: '회고', title: 'period', tick: '한 주 돌아보기',
+    fields: [
+      { k: 'period', label: '기간', type: 'text', req: true, def: t => `${t.slice(0, 7)} 주간` },
+      { k: 'kind', label: '구분', type: 'select', options: ['주간', '분기', '연간'] },
+      { k: 'goal', label: '목표', type: 'text' },
+      { k: 'result', label: '결과', type: 'text' },
+      { k: 'score', label: '자기 평가', type: 'rating', def: 3 },
+    ],
+    seed: now => { const q = Math.floor(now.getMonth() / 3); return ids('wr', [
+      { period: `${now.getFullYear()} ${q}분기 (예시)`, kind: '분기', goal: '프로젝트 A 설계 완료', result: '설계 완료, 일정 1주 지연', score: 4 },
+      { period: '지난주 (예시)', kind: '주간', goal: '보고서 자동화', result: '70% 진행', score: 3 },
+      { period: '2주 전 (예시)', kind: '주간', goal: '요구사항 확정', result: '확정 완료', score: 5 },
+    ]); },
+    breakdown: { label: '구분별 평균 자기 평가', by: 'kind', value: 'score', fmt: v => `${v}점` },
+    stats: rs => [{ label: '회고', value: `${rs.length}건` }, { label: '평균 자기 평가', value: rs.length ? `${(sum(rs, 'score') / rs.length).toFixed(1)}점` : '-' }],
+  },
+  'W|커리어 목표 관리': {
+    intro: '필요한 역량의 현재 수준과 목표 수준을 비교하고 준비 계획을 세웁니다.', noun: '역량', title: 'skill', tick: '진행률 갱신',
+    fields: [
+      { k: 'skill', label: '역량', type: 'text', req: true },
+      { k: 'cur', label: '현재 수준', type: 'rating', def: 2 },
+      { k: 'target', label: '목표 수준', type: 'rating', def: 4 },
+      { k: 'plan', label: '준비 방법', type: 'text' },
+      { k: 'due', label: '목표 시점', type: 'date' },
+    ],
+    seed: now => ids('wk', [
+      { skill: '데이터 분석 (예시)', cur: 3, target: 5, plan: '온라인 강의 + 사내 프로젝트', due: D(now, 180) },
+      { skill: '리더십 (예시)', cur: 2, target: 4, plan: '파트 리드 맡기', due: D(now, 365) },
+      { skill: '영어 커뮤니케이션 (예시)', cur: 3, target: 4, plan: '주 2회 회화', due: D(now, 120) },
+      { skill: '프로젝트 관리 (예시)', cur: 4, target: 4, plan: '자격증 유지', due: '' },
+    ]),
+    progress: { label: '목표 수준 대비 현재', name: 'skill', cur: 'cur', target: 'target', fmt: (c, t) => `${c} / ${t}단계` },
+    upcoming: { field: 'due', days: 200, label: '목표 시점', sub: r => r.plan || '' },
+    stats: rs => [{ label: '역량', value: `${rs.length}개` }, { label: '목표 도달', value: `${rs.filter(r => Number(r.cur) >= Number(r.target)).length}개`, tone: 'ex' }, { label: '남은 격차', value: `${rs.reduce((a, r) => a + Math.max(0, Number(r.target) - Number(r.cur)), 0)}단계` }],
+  },
+  'W|급여/복지': {
+    intro: '월별 급여 명세와 복지 포인트를 기록하고 추이를 봅니다.', noun: '급여 명세', title: 'month', tick: '급여 명세 확인',
+    fields: [
+      { k: 'month', label: '지급일', type: 'date', req: true },
+      { k: 'gross', label: '세전', type: 'money' },
+      { k: 'deduct', label: '공제', type: 'money' },
+      { k: 'net', label: '실수령', type: 'money' },
+      { k: 'point', label: '복지 포인트 잔액', type: 'money' },
+    ],
+    seed: now => ids('wy', Array.from({ length: 6 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - i, 25); const gross = 4200000 + (i === 2 ? 600000 : 0);
+      return { month: iso(d) <= iso(now) ? iso(d) : iso(new Date(now.getFullYear(), now.getMonth() - i - 1, 25)), gross, deduct: Math.round(gross * 0.16), net: Math.round(gross * 0.84), point: 800000 - i * 60000 }; }).filter((r, i, a) => a.findIndex(x => x.month === r.month) === i)),
+    sort: (a, b) => b.month.localeCompare(a.month),
+    trend: { label: '월별 실수령액', date: 'month', value: 'net', unit: 'month', span: 6, fmt: 'money', tick: v => `${Math.round(v / 10000)}만` },
+    stats: (rs, c) => { const last = [...rs].sort((a, b) => b.month.localeCompare(a.month))[0] || {};
+      return [{ label: '최근 실수령', value: won(last.net), sub: last.month || '' }, { label: '올해 실수령 합', value: won(sum(rs.filter(r => r.month.startsWith(c.year)), 'net')) }, { label: '복지 포인트 잔액', value: won(last.point), sub: '연말 소멸 전 사용' }]; },
+  },
+};

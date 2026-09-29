@@ -672,7 +672,7 @@ function AreaPage({ area }) {
       <div className="tiles" style={{ '--ac': areaVar(area) }}>
         {shown.map(g => (
           <button key={g.cat} className="tile" onClick={() => openCat(area, g.cat)}>
-            <span className="tile-h"><b>{g.cat}</b>{hasCustomView(area, g.cat) && <span className="tile-done" title="전용 상세 화면 완료">완료</span>}<span className="tile-go" aria-hidden="true">›</span></span>
+            <span className="tile-h"><b>{g.cat}</b>{hasCustomView(area, g.cat) && <span className="tile-done" title="전용 상세 화면 완료">완료</span>}{store.reviewed?.[`${area}|${g.cat}`] && <span className="tile-rev" title="검수 완료">검수 완료</span>}<span className="tile-go" aria-hidden="true">›</span></span>
             <span className="tile-items">{g.items.slice(0, 5).map(it => <span key={it} className="tile-item">{it}</span>)}{g.items.length > 5 && <span className="tile-item more">외 {g.items.length - 5}</span>}</span>
             <span className="tile-cyc">{Object.keys(CYCLES).filter(c => g.cyc[c]).map(c => <span key={c} className={`cyc c-${c}`}>{CYCLES[c].slice(0, 2)} {g.cyc[c]}</span>)}
               {goalsOf(g.cat) > 0 && <span className="cyc goal">{now.getFullYear()}년 목표 {goalsOf(g.cat)}</span>}</span>
@@ -691,8 +691,10 @@ function AreaPage({ area }) {
 
 /* ───────────────────────── 상세: 카테고리 페이지 ───────────────────────── */
 function CategoryPage({ area, cat }) {
-  const { now, isDone, openCat, go } = useCtx();
+  const { now, isDone, openCat, go, store, setStore } = useCtx();
   const cats = categoriesOf(area, now, isDone);
+  const rkey = `${area}|${cat}`, reviewed = !!store.reviewed?.[rkey];
+  const toggleReviewed = () => setStore(s => { const r = { ...(s.reviewed || {}) }; if (r[rkey]) delete r[rkey]; else r[rkey] = iso(new Date()); return { ...s, reviewed: r }; });
   const g = cats.find(x => x.cat === cat);
   if (!g) return <div className="empty">카테고리를 찾을 수 없습니다. <button className="btn sm" onClick={() => go(area)}>{AREAS[area].n}로 돌아가기</button></div>;
   const View = viewFor(area, cat);
@@ -700,6 +702,8 @@ function CategoryPage({ area, cat }) {
     <>
       <nav className="crumb" aria-label="위치">
         <button onClick={() => go(area)}>{AREAS[area].n}</button><span aria-hidden="true">›</span><b>{cat}</b>
+        <button className={`btn sm review-btn ${reviewed ? 'on' : ''}`} onClick={toggleReviewed} aria-pressed={reviewed}
+          title={reviewed ? `검수 완료 (${store.reviewed[rkey]}) · 누르면 취소` : '마음에 들면 검수 완료로 표시'}>{reviewed ? '검수 완료됨' : '검수 완료로 표시'}</button>
       </nav>
       <View area={area} cat={cat} group={g} />
       {cat !== '목표 관리' && <GoalBoard area={area} cat={cat} title={`${cat} 목표`} />}
