@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { AREAS, iso } from '../data.js';
-import { ANNIV_KINDS, nextAnniv } from '../anniv.js';
+import { ANNIV_HEAD, ANNIV_KINDS, mergeAnniv, nextAnniv, parseAnnivRows } from '../anniv.js';
 import { WEEK, areaVar, useCtx } from '../shared.jsx';
+import { download, excelDate, readXlsx, writeXlsx } from '../xlsx.js';
+import { parseCsv } from './samsungHealth.js';
 
 /* 개인 › 기념일 관리 전용 화면: 다가오는 기념일, 월별 달력형 목록, 기념일 편집 */
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -46,9 +48,57 @@ export default function AnnivView({ area, cat, group }) {
           </div>))}</div>
       </section>
 
+      <AnnivExcel />
+
       <AnnivManager />
 
     </div>
+  );
+}
+
+/* 엑셀 양식 다운로드 · 업로드 */
+function templateFile() {
+  return writeXlsx([
+    { name: '기념일', cols: [28, 20, 18, 16], rows: [ANNIV_HEAD, ['홍길동 생일 (예시)', '1990-09-30', '생일', 'O'], ['결혼기념일 (예시)', '2016-10-07', '기념일', 'O']] },
+    { name: '작성 안내', cols: [18, 70], rows: [
+      ['항목', '작성 방법'],
+      ['이름', '표시할 이름 (예: 어머니 생신). 이름이 "(예시)" 로 끝나는 줄은 올리지 않습니다.'],
+      ['날짜', '처음 날짜. 1990-09-30, 1990.9.30, 1990/9/30 또는 엑셀 날짜 모두 됩니다.'],
+      ['종류', '생일 또는 기념일 (비우면 생일). 기념일은 처음 연도로 몇 주년인지 계산합니다.'],
+      ['매년 반복', 'O = 매년 반복, X = 그 날짜 한 번만 (비우면 O)'],
+      ['올리기', '기념일 관리 › 엑셀 업로드. 이름과 날짜가 같은 기념일은 새 값으로 바뀌고, 예시 기념일은 지워집니다.'],
+    ] },
+  ]);
+}
+
+function AnnivExcel() {
+  const { store, setStore } = useCtx();
+  const ref = useRef(null);
+  const [msg, setMsg] = useState(null);
+  const upload = async file => {
+    if (!file) return;
+    try {
+      const rows = /\.csv$/i.test(file.name) ? parseCsv((await file.text()).replace(/^\uFEFF/, '')) : readXlsx(new Uint8Array(await file.arrayBuffer()));
+      const { items, skipped } = parseAnnivRows(rows, excelDate);
+      if (!items.length) throw new Error(skipped.length ? `올릴 수 있는 줄이 없습니다 (${skipped.map(x => `${x.row}행 ${x.why}`).join(', ')})` : '기념일이 없습니다. 양식의 "이름" 머리글 아래에 입력해 주세요');
+      const res = mergeAnniv(store.anniv, items, uid);
+      setStore(s => ({ ...s, anniv: res.list }));
+      setMsg({ t: `${file.name}: 추가 ${res.added}건${res.updated ? `, 갱신 ${res.updated}건` : ''}${res.removedExamples ? `, 예시 ${res.removedExamples}건 삭제` : ''}${skipped.length ? ` · 건너뜀 ${skipped.length}건 (${skipped.map(x => `${x.row}행 ${x.why}`).join(', ')})` : ''}` });
+    } catch (e) {
+      setMsg({ err: true, t: `파일을 읽지 못했습니다: ${e.message}` });
+    }
+    if (ref.current) ref.current.value = '';
+  };
+  return (
+    <section className="panel">
+      <div className="csum-h"><h2>엑셀로 올리기</h2><span className="muted">양식을 내려받아 작성한 뒤 업로드합니다 (.xlsx, .csv)</span></div>
+      <div className="btns">
+        <button className="btn" onClick={() => download(templateFile(), 'anniversary_template.xlsx')}>양식 다운로드</button>
+        <label className="btn primary">엑셀 업로드<input ref={ref} type="file" accept=".xlsx,.csv" hidden onChange={e => upload(e.target.files[0])} /></label>
+      </div>
+      {msg && <p className={`sh-msg ${msg.err ? 'err' : ''}`} role="status">{msg.t}</p>}
+      <p className="note">열: 이름 · 날짜 · 종류(생일/기념일) · 매년 반복(O/X). 이름과 날짜가 같으면 새 값으로 바뀌고, 예시 기념일은 지워집니다.</p>
+    </section>
   );
 }
 

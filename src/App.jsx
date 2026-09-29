@@ -631,6 +631,7 @@ function Checklist({ init }) {
 
 
 /* ───────────────────────── 상세: 영역 페이지 (카테고리 버튼) ───────────────────────── */
+const SWAP_CATS = [['P', '개인 재무', '기념일 관리']];
 /** 영역의 카테고리 목록. 카테고리마다 세부 항목, 주기별 개수, 오늘 남은 개수를 모은다 */
 function categoriesOf(area, now, isDone) {
   const m = new Map();
@@ -641,7 +642,13 @@ function categoriesOf(area, now, isDone) {
     if (!g.items.includes(r.item)) g.items.push(r.item);
     g.cyc[r.c] = (g.cyc[r.c] || 0) + 1;
   });
-  return [...m.values()].map(g => {
+  const list = [...m.values()];
+  // 화면 순서 바꾸기 (액션 id 가 원본 순서에 묶여 있어 표시 순서만 바꾼다)
+  SWAP_CATS.filter(([x]) => x === area).forEach(([, c1, c2]) => {
+    const i = list.findIndex(g => g.cat === c1), j = list.findIndex(g => g.cat === c2);
+    if (i >= 0 && j >= 0) [list[i], list[j]] = [list[j], list[i]];
+  });
+  return list.map(g => {
     const due = g.rows.filter(r => isDue(r.c, now));
     return { ...g, due: due.length, left: due.filter(r => !isDone(r)).length, done: g.rows.filter(isDone).length };
   });

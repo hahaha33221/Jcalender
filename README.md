@@ -32,7 +32,7 @@ src/
     DefaultView.jsx 등록하지 않은 카테고리의 기본 화면
     HealthView.jsx  개인 › 건강 관리 대시보드 (삼성 헬스 가져오기, 운동·수면·식단·병원 진찰)
     samsungHealth.js 삼성 헬스 "개인 데이터 다운로드" CSV·ZIP 읽기와 합치기
-    AnnivView.jsx   개인 › 기념일 관리 전용 화면 (표시 기간, 기념일 추가·수정·삭제)
+    AnnivView.jsx   개인 › 기념일 관리 전용 화면 (표시 기간, 기념일 추가·수정·삭제, 엑셀 양식 다운로드·업로드)
     FinanceView.jsx 개인 › 개인 재무 전용 화면 (지출 입력·내역, 분류별 지출, 예산)
     RelationView.jsx 개인 › 인맥/관계 관리 전용 화면
     LeisureView.jsx 개인 › 여가 관리 전용 화면
