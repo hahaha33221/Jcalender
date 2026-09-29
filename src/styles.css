@@ -273,6 +273,7 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
 .anniv-days input { width: 80px; }
 .anniv-tb td { padding: 5px 6px; }
 .anniv-tb td:first-child { min-width: 160px; }
+.anniv-tb td:nth-child(2) { min-width: 130px; }
 .anniv-tb input[type=date] { min-width: 140px; }
 .nowrap { white-space: nowrap; }
 .anniv-months { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
@@ -284,6 +285,7 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
 .anniv-month small { color: var(--ink3); }
 .anniv-add { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
 .anniv-add > input:first-child { flex: 2 1 200px; width: auto; }
+.anniv-add > .anniv-person { flex: 1.5 1 160px; width: auto; }
 .anniv-add > input[type=date], .anniv-add > select { flex: 1 1 130px; width: auto; }
 .chk { display: flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap; }
 .rules td { text-align: left !important; }

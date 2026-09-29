@@ -32,7 +32,7 @@ export default function AnnivView({ area, cat, group }) {
             <div key={a.id} className={`anniv-card ${n.dday === 0 ? 'hot' : n.dday <= 3 ? 'soon' : ''}`}>
               <b className="anniv-d">{n.dday === 0 ? '오늘' : `D-${n.dday}`}</b>
               <span className="anniv-n">{a.name}</span>
-              <span className="anniv-m">{a.kind} · {fmtMD(n.date)}{a.kind === '기념일' && n.years > 0 ? ` · ${n.years}주년` : ''}</span>
+              <span className="anniv-m">{a.kind} · {fmtMD(n.date)}{a.kind === '기념일' && n.years > 0 ? ` · ${n.years}주년` : ''}{a.person ? ` · ${a.person}` : ''}</span>
             </div>))}</div>
         ) : <p className="muted anniv-empty">{store.annivDays}일 이내에 다가오는 기념일이 없습니다.</p>}
       </section>
@@ -43,7 +43,7 @@ export default function AnnivView({ area, cat, group }) {
           <div key={m.getMonth()} className={`anniv-month ${list.length ? '' : 'none'}`}>
             <b>{m.getFullYear() !== now.getFullYear() ? `${m.getFullYear()}년 ` : ''}{m.getMonth() + 1}월</b>
             {list.length ? list.map(({ a, n }) => (
-              <span key={a.id}><em>{n.date.getDate()}일</em> {a.name}<small> · D-{n.dday}</small></span>
+              <span key={a.id}><em>{n.date.getDate()}일</em> {a.name}<small>{a.person ? ` · ${a.person}` : ''} · D-{n.dday}</small></span>
             )) : <span className="muted">없음</span>}
           </div>))}</div>
       </section>
@@ -60,14 +60,15 @@ export default function AnnivView({ area, cat, group }) {
 function templateFile() {
   const desc = [
     '[이름] 글자\n표시할 이름 (예: 어머니 생신)\n"(예시)"로 끝나면 올리지 않음',
+    '[관련 인물] 글자 (자유 입력)\n누구와 관련된 날인지 (예: 어머니)\n여러 명은 쉼표로 (예: 아내, 딸)',
     '[날짜] YYYY-MM-DD\n처음 날짜 (예: 1990-09-30)\n1990.9.30, 1990/9/30도 가능',
     '[종류] 생일 또는 기념일\n비우면 생일\n기념일은 처음 연도로 주년 계산',
     '[매년 반복] O 또는 X\nO = 매년 반복, X = 한 번만\n비우면 O',
   ];
   return writeXlsx([{
-    name: '기념일', cols: [30, 30, 30, 26], grid: false, header: 1, blank: 30,
+    name: '기념일', cols: [30, 30, 30, 30, 26], grid: false, header: 1, blank: 30,
     rowStyle: { 0: 2 }, heights: { 0: 54, 1: 22 },
-    rows: [desc, ANNIV_HEAD, ['홍길동 생일 (예시)', '1990-09-30', '생일', 'O'], ['결혼기념일 (예시)', '2016-10-07', '기념일', 'O']],
+    rows: [desc, ANNIV_HEAD, ['홍길동 생일 (예시)', '홍길동 (대학 동기)', '1990-09-30', '생일', 'O'], ['결혼기념일 (예시)', '배우자', '2016-10-07', '기념일', 'O']],
   }]);
 }
 
@@ -97,7 +98,7 @@ function AnnivExcel() {
         <label className="btn primary">엑셀 업로드<input ref={ref} type="file" accept=".xlsx,.csv" hidden onChange={e => upload(e.target.files[0])} /></label>
       </div>
       {msg && <p className={`sh-msg ${msg.err ? 'err' : ''}`} role="status">{msg.t}</p>}
-      <p className="note">열: 이름 · 날짜 · 종류(생일/기념일) · 매년 반복(O/X). 이름과 날짜가 같으면 새 값으로 바뀌고, 예시 기념일은 지워집니다.</p>
+      <p className="note">열: 이름 · 관련 인물 · 날짜 · 종류(생일/기념일) · 매년 반복(O/X). 이름과 날짜가 같으면 새 값으로 바뀌고, 예시 기념일은 지워집니다.</p>
     </section>
   );
 }
@@ -105,7 +106,7 @@ function AnnivExcel() {
 /* 기념일 목록 편집 (표시 기간, 수정, 삭제, 추가) */
 function AnnivManager() {
   const { store, setStore, now } = useCtx();
-  const blank = { name: '', date: iso(now), kind: '생일', yearly: true };
+  const blank = { name: '', person: '', date: iso(now), kind: '생일', yearly: true };
   const [f, setF] = useState(blank);
   const setDays = v => setStore(s => ({ ...s, annivDays: Math.max(0, Math.min(365, Number(v) || 0)) }));
   const upd = (id, patch) => setStore(s => ({ ...s, anniv: s.anniv.map(a => (a.id === id ? { ...a, ...patch } : a)) }));
@@ -113,7 +114,7 @@ function AnnivManager() {
   const add = e => {
     e.preventDefault();
     if (!f.name.trim() || !f.date) return;
-    setStore(s => ({ ...s, anniv: [...s.anniv, { id: uid(), ...f, name: f.name.trim() }] }));
+    setStore(s => ({ ...s, anniv: [...s.anniv, { id: uid(), ...f, name: f.name.trim(), person: f.person.trim() }] }));
     setF(blank);
   };
   const sorted = [...store.anniv].sort((x, y) => (nextAnniv(x, now)?.dday ?? 9999) - (nextAnniv(y, now)?.dday ?? 9999));
@@ -124,12 +125,13 @@ function AnnivManager() {
         <span><b>D-</b><input type="number" min="0" max="365" value={store.annivDays} onChange={e => setDays(e.target.value)} aria-label="며칠 전부터 표시" />일 전부터 표시</span></label>
       <div className="tablewrap">
         <table className="prog anniv-tb">
-          <thead><tr><th>이름</th><th>날짜</th><th>종류</th><th>매년</th><th>다음</th><th /></tr></thead>
+          <thead><tr><th>이름</th><th>관련 인물</th><th>날짜</th><th>종류</th><th>매년</th><th>다음</th><th /></tr></thead>
           <tbody>{sorted.map(a => {
             const n = nextAnniv(a, now);
             return (
               <tr key={a.id}>
                 <td><input value={a.name} onChange={e => upd(a.id, { name: e.target.value })} aria-label="이름" /></td>
+                <td><input value={a.person || ''} onChange={e => upd(a.id, { person: e.target.value })} placeholder="관련 인물" aria-label="관련 인물" /></td>
                 <td><input type="date" value={a.date} onChange={e => e.target.value && upd(a.id, { date: e.target.value })} aria-label="날짜" /></td>
                 <td><select value={a.kind} onChange={e => upd(a.id, { kind: e.target.value })} aria-label="종류">{ANNIV_KINDS.map(k => <option key={k}>{k}</option>)}</select></td>
                 <td><input type="checkbox" checked={a.yearly} onChange={e => upd(a.id, { yearly: e.target.checked })} aria-label="매년 반복" /></td>
@@ -142,6 +144,7 @@ function AnnivManager() {
       </div>
       <form className="anniv-add" onSubmit={add}>
         <input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="기념일 이름 (예: 아버지 생신)" aria-label="새 기념일 이름" />
+        <input value={f.person} onChange={e => setF({ ...f, person: e.target.value })} placeholder="관련 인물 (예: 어머니)" aria-label="새 기념일 관련 인물" className="anniv-person" />
         <input type="date" value={f.date} onChange={e => setF({ ...f, date: e.target.value })} aria-label="새 기념일 날짜" />
         <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} aria-label="새 기념일 종류">{ANNIV_KINDS.map(k => <option key={k}>{k}</option>)}</select>
         <label className="chk"><input type="checkbox" checked={f.yearly} onChange={e => setF({ ...f, yearly: e.target.checked })} />매년</label>

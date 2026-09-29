@@ -1,13 +1,13 @@
 import { iso } from './data.js';
 
-/* 기념일: { id, name, date: 'YYYY-MM-DD'(처음 날짜), kind: '생일' | '기념일', yearly: 매년 반복 여부 } */
+/* 기념일: { id, name, person(관련 인물, 자유 입력), date: 'YYYY-MM-DD'(처음 날짜), kind: '생일' | '기념일', yearly: 매년 반복 여부 } */
 export const ANNIV_KINDS = ['생일', '기념일'];
 
 export const seedAnniv = () => [
-  { id: 'an1', name: '친구 생일 (예시)', date: '1990-09-30', kind: '생일', yearly: true },
-  { id: 'an2', name: '어머니 생신 (예시)', date: '1965-10-03', kind: '생일', yearly: true },
-  { id: 'an3', name: '결혼기념일 (예시)', date: '2016-10-07', kind: '기념일', yearly: true },
-  { id: 'an4', name: '입사 기념일 (예시)', date: '2021-11-02', kind: '기념일', yearly: true },
+  { id: 'an1', name: '친구 생일 (예시)', person: '김민수 (고등학교 친구)', date: '1990-09-30', kind: '생일', yearly: true },
+  { id: 'an2', name: '어머니 생신 (예시)', person: '어머니', date: '1965-10-03', kind: '생일', yearly: true },
+  { id: 'an3', name: '결혼기념일 (예시)', person: '배우자', date: '2016-10-07', kind: '기념일', yearly: true },
+  { id: 'an4', name: '입사 기념일 (예시)', person: '본인', date: '2021-11-02', kind: '기념일', yearly: true },
 ];
 
 const day0 = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -31,9 +31,10 @@ export function annivOn(list, key) {
 }
 
 /* ── 엑셀 양식 · 업로드 ──
-   열: 이름 | 날짜 | 종류(생일/기념일) | 매년 반복(O/X)
+   열: 이름 | 관련 인물 | 날짜 | 종류(생일/기념일) | 매년 반복(O/X)
+   열은 머리글 이름으로 찾으므로 예전 양식(관련 인물 없음)도 올릴 수 있다
    이름이 "(예시)" 로 끝나는 줄은 건너뛴다 */
-export const ANNIV_HEAD = ['이름', '날짜 (YYYY-MM-DD)', '종류 (생일/기념일)', '매년 반복 (O/X)'];
+export const ANNIV_HEAD = ['이름', '관련 인물', '날짜 (YYYY-MM-DD)', '종류 (생일/기념일)', '매년 반복 (O/X)'];
 
 /** 날짜 칸 → 'YYYY-MM-DD' (엑셀 날짜 숫자, 2024-3-5, 2024.03.05, 2024/3/5, 20240305) */
 export function normDate(v, excelDate) {
@@ -51,19 +52,23 @@ export function normDate(v, excelDate) {
 export function parseAnnivRows(rows, excelDate) {
   const items = [], skipped = [];
   const start = rows.findIndex(r => String(r[0] ?? '').trim() === '이름');   // 맨 위 설명 줄 아래의 머리글
+  const head = (rows[start] || []).map(h => String(h ?? '').replace(/\s/g, ''));
+  const col = (re, def) => { const i = head.findIndex(h => re.test(h)); return i >= 0 ? i : def; };
+  const C = { name: 0, person: col(/^관련|인물/, -1), date: col(/^날짜/, 1), kind: col(/^종류/, 2), yearly: col(/^매년|반복/, 3) };
+  const cell = (r, k) => (C[k] >= 0 ? r[C[k]] ?? '' : '');
   rows.slice(start + 1).forEach((r, i) => {
     const row = start + 2 + i;
-    const name = String(r[0] ?? '').trim();
+    const name = String(cell(r, 'name')).trim();
     if (!name && !r.some(x => String(x ?? '').trim())) return;          // 빈 줄
     if (/\(예시\)$/.test(name)) return;
     if (!name) { skipped.push({ row, why: '이름 없음' }); return; }
-    const date = normDate(r[1] ?? '', excelDate);
-    if (!date) { skipped.push({ row, why: `날짜 형식 오류 (${r[1] ?? ''})` }); return; }
-    const k = String(r[2] ?? '').trim();
+    const date = normDate(cell(r, 'date'), excelDate);
+    if (!date) { skipped.push({ row, why: `날짜 형식 오류 (${cell(r, 'date')})` }); return; }
+    const k = String(cell(r, 'kind')).trim();
     const kind = !k ? '생일' : /생/.test(k) ? '생일' : '기념일';
-    const y = String(r[3] ?? '').trim().toUpperCase();
+    const y = String(cell(r, 'yearly')).trim().toUpperCase();
     const yearly = !/^(X|N|NO|0|FALSE|아니|아니오|1회)/.test(y);
-    items.push({ name, date, kind, yearly });
+    items.push({ name, person: String(cell(r, 'person')).trim(), date, kind, yearly });
   });
   return { items, skipped };
 }

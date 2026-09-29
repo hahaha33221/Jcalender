@@ -231,7 +231,7 @@ function AnnivStrip() {
           <div key={a.id} className={`anniv-card ${n.dday === 0 ? 'hot' : n.dday <= 3 ? 'soon' : ''}`}>
             <b className="anniv-d">{n.dday === 0 ? '오늘' : `D-${n.dday}`}</b>
             <span className="anniv-n">{a.name}</span>
-            <span className="anniv-m">{a.kind} · {fmtMD(n.date)}{a.kind === '기념일' && n.years > 0 ? ` · ${n.years}주년` : ''}</span>
+            <span className="anniv-m">{a.kind} · {fmtMD(n.date)}{a.kind === '기념일' && n.years > 0 ? ` · ${n.years}주년` : ''}{a.person ? ` · ${a.person}` : ''}</span>
           </div>))}</div>
       ) : <p className="muted anniv-empty">{days}일 이내에 다가오는 기념일이 없습니다.</p>}
     </section>
