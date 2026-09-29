@@ -83,3 +83,15 @@ export function mergeAnniv(list, items, uid) {
   });
   return { list: out, added, updated, removedExamples: list.length - list.filter(a => !/\(예시\)$/.test(a.name)).length };
 }
+
+/** 엑셀 내용으로 목록 전체 바꾸기: 엑셀에 없는 기념일은 지운다 (이름+날짜가 같으면 기존 id 유지) */
+export function replaceAnniv(list, items, uid) {
+  const seen = new Map();
+  items.forEach(it => seen.set(`${it.name}|${it.date}`, it));          // 엑셀 안 중복은 마지막 줄
+  const out = [...seen.values()].map(it => {
+    const old = list.find(a => a.name === it.name && a.date === it.date);
+    return old ? { ...old, ...it } : { id: uid(), ...it };
+  });
+  const kept = out.filter(a => list.some(b => b.id === a.id)).length;
+  return { list: out, added: out.length - kept, updated: kept, removed: list.length - kept };
+}

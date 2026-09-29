@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { AREAS, iso } from '../data.js';
-import { ANNIV_HEAD, ANNIV_KINDS, mergeAnniv, nextAnniv, parseAnnivRows } from '../anniv.js';
+import { ANNIV_HEAD, ANNIV_KINDS, mergeAnniv, nextAnniv, parseAnnivRows, replaceAnniv } from '../anniv.js';
 import { WEEK, areaVar, useCtx } from '../shared.jsx';
 import { download, excelDate, readXlsx, writeXlsx } from '../xlsx.js';
 import { parseCsv } from './samsungHealth.js';
@@ -57,7 +57,8 @@ export default function AnnivView({ area, cat, group }) {
 }
 
 /* 엑셀 양식 다운로드 · 업로드 */
-function templateFile() {
+/** 양식: 설명 · 머리글 · 예시 2줄 · 지금 등록된 기념일 (고쳐서 다시 올리면 전체가 바뀜) */
+function templateFile(list = []) {
   const desc = [
     '[이름] 글자\n표시할 이름 (예: 어머니 생신)\n"(예시)"로 끝나면 올리지 않음',
     '[관련 인물] 글자 (자유 입력)\n누구와 관련된 날인지 (예: 어머니)\n여러 명은 쉼표로 (예: 아내, 딸)',
@@ -68,7 +69,8 @@ function templateFile() {
   return writeXlsx([{
     name: '기념일', cols: [30, 30, 30, 30, 26], grid: false, header: 1, blank: 30,
     rowStyle: { 0: 2 }, heights: { 0: 54, 1: 22 },
-    rows: [desc, ANNIV_HEAD, ['홍길동 생일 (예시)', '홍길동 (대학 동기)', '1990-09-30', '생일', 'O'], ['결혼기념일 (예시)', '배우자', '2016-10-07', '기념일', 'O']],
+    rows: [desc, ANNIV_HEAD, ['홍길동 생일 (예시)', '홍길동 (대학 동기)', '1990-09-30', '생일', 'O'], ['결혼기념일 (예시)', '배우자', '2016-10-07', '기념일', 'O'],
+      ...list.filter(a => !/\(예시\)$/.test(a.name)).sort((a, b) => a.date.slice(5).localeCompare(b.date.slice(5))).map(a => [a.name, a.person || '', a.date, a.kind, a.yearly ? 'O' : 'X'])],
   }]);
 }
 
@@ -76,29 +78,52 @@ function AnnivExcel() {
   const { store, setStore } = useCtx();
   const ref = useRef(null);
   const [msg, setMsg] = useState(null);
+  const [mode, setMode] = useState('replace');           // replace 전체 바꾸기 | merge 추가·수정만
+  const [undo, setUndo] = useState(null);                // 올리기 전 목록 (되돌리기용)
+  const skipTxt = sk => (sk.length ? ` · 건너뜀 ${sk.length}건 (${sk.map(x => `${x.row}행 ${x.why}`).join(', ')})` : '');
   const upload = async file => {
     if (!file) return;
     try {
       const rows = /\.csv$/i.test(file.name) ? parseCsv((await file.text()).replace(/^\uFEFF/, '')) : readXlsx(new Uint8Array(await file.arrayBuffer()));
       const { items, skipped } = parseAnnivRows(rows, excelDate);
       if (!items.length) throw new Error(skipped.length ? `올릴 수 있는 줄이 없습니다 (${skipped.map(x => `${x.row}행 ${x.why}`).join(', ')})` : '기념일이 없습니다. 양식의 "이름" 머리글 아래에 입력해 주세요');
-      const res = mergeAnniv(store.anniv, items, uid);
-      setStore(s => ({ ...s, anniv: res.list }));
-      setMsg({ t: `${file.name}: 추가 ${res.added}건${res.updated ? `, 갱신 ${res.updated}건` : ''}${res.removedExamples ? `, 예시 ${res.removedExamples}건 삭제` : ''}${skipped.length ? ` · 건너뜀 ${skipped.length}건 (${skipped.map(x => `${x.row}행 ${x.why}`).join(', ')})` : ''}` });
+      const before = store.anniv;
+      if (mode === 'replace') {
+        const res = replaceAnniv(before, items, uid);
+        if (res.removed && !window.confirm(`엑셀의 ${res.list.length}건으로 기념일 목록 전체를 바꿉니다.\n엑셀에 없는 기존 기념일 ${res.removed}건은 삭제됩니다.${skipped.length ? `\n(오류 ${skipped.length}줄은 건너뜀)` : ''}\n\n진행할까요?`)) { setMsg({ t: '올리기를 취소했습니다.' }); return; }
+        setStore(s => ({ ...s, anniv: res.list }));
+        setMsg({ t: `${file.name}: 전체 바꾸기 완료 · 총 ${res.list.length}건 (새로 ${res.added}, 수정 ${res.updated}, 삭제 ${res.removed})${skipTxt(skipped)}` });
+      } else {
+        const res = mergeAnniv(before, items, uid);
+        setStore(s => ({ ...s, anniv: res.list }));
+        setMsg({ t: `${file.name}: 추가 ${res.added}건${res.updated ? `, 수정 ${res.updated}건` : ''}${res.removedExamples ? `, 예시 ${res.removedExamples}건 삭제` : ''}${skipTxt(skipped)}` });
+      }
+      setUndo(before);
     } catch (e) {
       setMsg({ err: true, t: `파일을 읽지 못했습니다: ${e.message}` });
+    } finally {
+      if (ref.current) ref.current.value = '';            // 같은 파일을 다시 골라도 올라가도록
     }
-    if (ref.current) ref.current.value = '';
   };
   return (
     <section className="panel">
-      <div className="csum-h"><h2>엑셀로 올리기</h2><span className="muted">양식을 내려받아 작성한 뒤 업로드합니다 (.xlsx, .csv)</span></div>
-      <div className="btns">
-        <button className="btn" onClick={() => download(templateFile(), 'anniversary_template.xlsx')}>양식 다운로드</button>
-        <label className="btn primary">엑셀 업로드<input ref={ref} type="file" accept=".xlsx,.csv" hidden onChange={e => upload(e.target.files[0])} /></label>
+      <div className="csum-h"><h2>엑셀로 올리기</h2><span className="muted">양식을 내려받아 고친 뒤 업로드합니다 (.xlsx, .csv)</span></div>
+      <div className="an-x">
+        <div className="chips" role="radiogroup" aria-label="올리기 방식">
+          <button role="radio" aria-checked={mode === 'replace'} aria-pressed={mode === 'replace'} onClick={() => setMode('replace')}>전체 바꾸기</button>
+          <button role="radio" aria-checked={mode === 'merge'} aria-pressed={mode === 'merge'} onClick={() => setMode('merge')}>추가·수정만</button>
+        </div>
+        <div className="btns">
+          <button className="btn" onClick={() => download(templateFile(store.anniv), 'anniversary_template.xlsx')}>양식 다운로드</button>
+          <label className="btn primary">엑셀 업로드<input ref={ref} type="file" accept=".xlsx,.csv" hidden onChange={e => upload(e.target.files[0])} /></label>
+          {undo && <button className="btn" onClick={() => { setStore(s => ({ ...s, anniv: undo })); setUndo(null); setMsg({ t: '올리기 전 목록으로 되돌렸습니다.' }); }}>되돌리기</button>}
+        </div>
       </div>
       {msg && <p className={`sh-msg ${msg.err ? 'err' : ''}`} role="status">{msg.t}</p>}
-      <p className="note">열: 이름 · 관련 인물 · 날짜 · 종류(생일/기념일) · 매년 반복(O/X). 이름과 날짜가 같으면 새 값으로 바뀌고, 예시 기념일은 지워집니다.</p>
+      <p className="note">{mode === 'replace'
+        ? '전체 바꾸기: 기념일 목록이 엑셀 내용과 똑같아집니다. 엑셀에 없는 기념일은 삭제되고(확인 후), 이름과 날짜가 같은 기념일은 엑셀 값으로 수정됩니다.'
+        : '추가·수정만: 엑셀에 있는 기념일만 추가하거나 수정하고, 엑셀에 없는 기념일은 그대로 둡니다. 예시 기념일은 지워집니다.'}
+        {' '}양식에는 지금 등록된 기념일이 들어 있으니 고쳐서 그대로 올리면 됩니다. 열: 이름 · 관련 인물 · 날짜 · 종류(생일/기념일) · 매년 반복(O/X).</p>
     </section>
   );
 }

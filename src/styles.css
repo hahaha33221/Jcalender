@@ -283,6 +283,7 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
 .anniv-month span { line-height: 1.45; }
 .anniv-month em { font-style: normal; color: var(--ai); font-weight: 700; }
 .anniv-month small { color: var(--ink3); }
+.an-x { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
 .anniv-add { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
 .anniv-add > input:first-child { flex: 2 1 200px; width: auto; }
 .anniv-add > .anniv-person { flex: 1.5 1 160px; width: auto; }
