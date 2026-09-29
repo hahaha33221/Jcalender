@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActionRow, Ctx, WEEK, areaVar, num, useCtx } from './shared.jsx';
+import NeedsPanel from './Needs.jsx';
 import { hasCustomView, isFirstReviewed, viewFor } from './categories/index.js';
 import { seedHealth } from './categories/health.js';
 import { seedFinance } from './categories/finance.js';
@@ -729,10 +730,13 @@ function Progress() {
       </div>
       <CycleSummary c="D" title="일일체크 요약" note="카테고리별 진행과 남은 항목 (우선순위순)" />
       <CycleSummary c="S" title="수시체크 요약" note="필요할 때 체크하는 항목 · 오늘 기준" />
+      <div className="prog-2">
       <div className="panel">
         <h2>실행 로그</h2>
         {store.log.length ? <ul className="log">{store.log.slice(0, 20).map((l, i) => <li key={i}><time>{l.at}</time><span>{AREAS[l.a].n} · {l.item} · {l.action} <b>{l.ty}</b></span></li>)}</ul> : <p className="muted">아직 실행한 항목이 없습니다.</p>}
         {store.log.length > 0 && <button className="btn sm" onClick={() => setStore(s => ({ ...s, log: [] }))}>로그 지우기</button>}
+      </div>
+      <NeedsPanel />
       </div>
     </>
   );

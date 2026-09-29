@@ -822,3 +822,22 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 @media (max-width: 600px) { .lsv-trips li { grid-template-columns: 56px minmax(0, 1fr); } .lsv-cost { grid-column: 1 / -1; text-align: left; } }
 .lsv .fv-bars li { grid-template-columns: 80px minmax(0, 1fr) auto; }
 .lsv .fv-bv { white-space: nowrap; width: auto; }
+
+/* 진행 현황: 실행 로그 | 필요한 API · 기능 */
+.prog-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.prog-2 > .panel { margin: 0; min-width: 0; }
+@media (max-width: 1100px) { .prog-2 { grid-template-columns: minmax(0, 1fr); } }
+.needs h3 small { font-weight: 400; margin-left: 6px; }
+.nd-list { list-style: none; margin: 0; padding: 0; }
+.nd-list li { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--line2); font-size: 13px; }
+.nd-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.nd-state { color: var(--ink2); }
+.nd-go { margin-left: auto; border: 0; background: none; color: var(--ai); font-size: 12px; cursor: pointer; padding: 0; }
+.nd-go:hover { text-decoration: underline; }
+.nd-area { border-top: 1px solid var(--line2); padding: 8px 0; }
+.nd-area summary { cursor: pointer; font-size: 13.5px; }
+.nd-cat { margin: 8px 0 0 12px; }
+.nd-cat .nd-go { margin: 0; font-weight: 700; font-size: 13px; color: var(--ink); }
+.nd-cat ul { list-style: none; margin: 4px 0 0; padding: 0; font-size: 12.5px; }
+.nd-cat li { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; }
+.nd-cat li > span:last-child { min-width: 0; }
