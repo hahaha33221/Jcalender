@@ -64,7 +64,6 @@ export default function LeisureView({ area, cat }) {
 
   // 여행
   const trips = [...L.trips].sort((a, b) => a.start.localeCompare(b.start));
-  const nextTrip = trips.find(t => t.end >= today);
   const [tf, setTf] = useState({ name: '', start: today, end: today, budget: '' });
   const addTrip = e => {
     e.preventDefault();
@@ -98,7 +97,6 @@ export default function LeisureView({ area, cat }) {
   const monthMin = monthLogs.reduce((a, l) => a + l.minutes, 0);
   const kinds = [...new Set([...HOBBIES, ...monthLogs.map(l => l.kind)])];
   const byKind = kinds.map(k => ({ k, v: monthLogs.filter(l => l.kind === k).reduce((a, l) => a + l.minutes, 0) })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
-  const kindMin = k => monthLogs.filter(l => l.kind === k).reduce((a, l) => a + l.minutes, 0);
   const chart = Array.from({ length: 14 }, (_, i) => addDays(today, i - 13)).map(d => ({
     key: d, label: md(d), title: `${md(d)} (${WEEK[new Date(d + 'T00:00:00').getDay()]})`,
     value: L.logs.filter(l => l.date === d).reduce((a, l) => a + l.minutes, 0),
@@ -122,16 +120,6 @@ export default function LeisureView({ area, cat }) {
       </header>
 
       <AppCards apps={LEISURE_APPS} />
-
-      <div className="hv-stats">
-        <div className="hv-stat sl"><span className="muted">다음 여행</span>
-          <b>{nextTrip ? (nextTrip.start <= today ? '여행 중' : `D-${dayDiff(today, nextTrip.start)}`) : '-'}</b>
-          <span className="hv-sub">{nextTrip ? `${nextTrip.name} · ${md(nextTrip.start)}~${md(nextTrip.end)}` : '예정된 여행 없음'}</span></div>
-        <div className="hv-stat ex"><span className="muted">{y}년 완독</span><b>{doneThisYear.length} / {L.bookGoal}권</b>
-          <span className="pbar"><i style={{ width: `${Math.min(100, doneThisYear.length / L.bookGoal * 100)}%`, background: 'var(--viz-ex)' }} /></span></div>
-        <div className="hv-stat ex"><span className="muted">이번 달 기타 연습</span><b>{hm(kindMin('기타 연습'))}</b><span className="hv-sub">{monthLogs.filter(l => l.kind === '기타 연습').length}회</span></div>
-        <div className="hv-stat sl"><span className="muted">이번 달 밴드 합주</span><b>{hm(kindMin('밴드 합주'))}</b><span className="hv-sub">{monthLogs.filter(l => l.kind === '밴드 합주').length}회</span></div>
-      </div>
 
       <div className="sv-grid">
         <section className="panel">

@@ -747,21 +747,21 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 /* 자기계발/학습: 영어 · 독서 · 기타 앱 연동 카드 */
 .lh-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; align-items: start; }
 .lh-grid.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.lh-grid.n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-@media (max-width: 1400px) { .lh-grid.n4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.lh-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.lh-grid.n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.lh-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .lh-card.has { border-top: 4px solid var(--ac); }
-.lh-icon { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 0 6px; color: var(--ink); text-decoration: none; border-radius: 10px; }
+.lh-icon { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 0; color: var(--ink); text-decoration: none; border-radius: 8px; }
 .lh-icon:hover { background: var(--paper); }
-.lh-icon svg { width: 72px; height: 72px; fill: none; stroke: var(--ac); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
-.lh-icon b { font-size: 18px; }
+.lh-icon svg { width: 30px; height: 30px; flex: none; fill: none; stroke: var(--ac); stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
+.lh-icon b { font-size: 15px; white-space: nowrap; }
 .lh-state { margin: 0; text-align: center; font-size: 12.5px; color: var(--ink3); }
 .lh-data { display: flex; flex-direction: column; gap: 10px; }
 .lh-kpi { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.lh-kpi li { background: var(--paper); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; align-items: center; font-size: 12px; }
-.lh-kpi b { font-size: 15px; color: var(--ink); }
+.lh-kpi li { background: var(--paper); border-radius: 8px; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; font-size: 11.5px; min-width: 0; text-align: center; }
+.lh-kpi b { font-size: 13.5px; color: var(--ink); overflow-wrap: anywhere; }
 .lh-prog { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12.5px; }
-.lh-sess { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.lh-sess { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+.lh-sess .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lh-sess li { display: flex; gap: 8px; padding: 4px 0; border-top: 1px dashed var(--line); }
 .lh-sess time { color: var(--ink3); min-width: 36px; }
 .lh-btns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
@@ -769,4 +769,5 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .lh-set > label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink3); }
 .lh-set input { width: 100%; box-sizing: border-box; }
 .lh-set .note { margin: 0; font-size: 12px; color: var(--ink3); }
-@media (max-width: 900px) { .lh-grid, .lh-grid.n2, .lh-grid.n4 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) { .lh-grid, .lh-grid.n2 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) { .lh-grid.n4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

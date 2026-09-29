@@ -54,6 +54,8 @@ const ICONS = {
 };
 
 const dday = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5);
+/** 금액을 짧게: 1,950,000 → 195만원 (좁은 카드용) */
+const man = v => (v >= 10000 ? `${num(Math.round(v / 10000))}만원` : `${num(v)}원`);
 /** 여행 앱 카드: 예정 여행 수 · 다음 여행 D-day · 예산 합계 */
 function TripKpi({ trips }) {
   const { now } = useCtx();
@@ -62,7 +64,7 @@ function TripKpi({ trips }) {
     <ul className="lh-kpi">
       <li><span>예정</span><b>{next.length}건</b></li>
       <li><span>다음 여행</span><b>{next[0] ? (next[0].start <= t0 ? '여행 중' : `D-${dday(t0, next[0].start)}`) : '-'}</b></li>
-      <li><span>예산 합계</span><b>{num(next.reduce((a, t) => a + t.budget, 0))}원</b></li>
+      <li><span>예산 합계</span><b>{man(next.reduce((a, t) => a + t.budget, 0))}</b></li>
     </ul>
   );
 }
@@ -157,7 +159,7 @@ export function AppCards({ apps }) {
                     <li><span>연속</span><b>{num(d.summary.streakDays)}일</b></li>
                   </ul>}
                   {d.summary.progress != null && <div className="lh-prog"><span>{d.summary.progressLabel || '진행률'}</span><span className="pbar"><i style={{ width: `${d.summary.progress}%`, background: 'var(--ac)' }} /></span><b>{d.summary.progress}%</b></div>}
-                  {d.trips?.length > 0 && <ul className="lh-sess">{[...d.trips].sort((a, b) => a.start.localeCompare(b.start)).filter(t => t.end >= iso(new Date())).slice(0, 4).map((t, i) => <li key={`t${i}`}><time>{Number(t.start.slice(5, 7))}/{Number(t.start.slice(8, 10))}</time><span className="grow">{t.name}</span><span className="muted">{num(t.budget)}원</span></li>)}</ul>}
+                  {d.trips?.length > 0 && <ul className="lh-sess">{[...d.trips].sort((a, b) => a.start.localeCompare(b.start)).filter(t => t.end >= iso(new Date())).slice(0, 4).map((t, i) => <li key={`t${i}`}><time>{Number(t.start.slice(5, 7))}/{Number(t.start.slice(8, 10))}</time><span className="grow">{t.name}</span><span className="muted">{man(t.budget)}</span></li>)}</ul>}
                   {d.sessions.length > 0 && <ul className="lh-sess">{d.sessions.slice(0, 4).map((x, i) => <li key={i}><time>{Number(x.date.slice(5, 7))}/{Number(x.date.slice(8, 10))}</time><span className="grow">{x.title || '학습'}</span><span className="muted">{hm(x.minutes)}</span></li>)}</ul>}
                 </div>
               )}
