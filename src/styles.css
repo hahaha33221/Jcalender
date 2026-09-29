@@ -432,6 +432,38 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
 .fv-track i { display: block; height: 100%; background: var(--viz-sl); border-radius: 0 4px 4px 0; }
 .fv-bv { text-align: right; font-weight: 500; }
 .fv-month { width: auto; padding: 2px 8px; }
+/* 개인 재무 › 카테고리 예산 표시 · 지출 분류 바로 바꾸기 */
+.fv-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.fv-head .btn { margin-left: auto; }
+.fv-cbars li { grid-template-columns: 64px minmax(0, 1fr) auto; }
+.fv-cbars .fv-track { position: relative; overflow: visible; }
+.fv-cbars .fv-bv small { color: var(--ink3); font-weight: 400; }
+.fv-cap { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); margin-left: -1px; }
+.fv-cat { width: auto; padding: 2px 6px; font-size: 12.5px; }
+/* 지출 카테고리 설정 페이지 */
+.fc-top { display: inline-flex; gap: 6px; }
+.fc-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.fc-item { border-top: 1px solid var(--line2); padding: 12px 0; display: flex; flex-direction: column; gap: 8px; }
+.fc-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fc-ord { display: inline-flex; gap: 2px; }
+.fc-ord .btn { padding: 2px 7px; }
+.fc-name { font-weight: 700; font-size: 15px; width: 150px; }
+b.fc-name { padding: 0 6px; }
+.fc-budget { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink2); }
+.fc-budget input { width: 120px; text-align: right; }
+.fc-use { display: flex; flex-direction: column; gap: 2px; flex: 1 1 200px; min-width: 160px; }
+.fc-use .pbar { margin: 0; }
+.fc-use small { color: var(--ink3); font-size: 12px; }
+.fc-kw { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-left: 64px; font-size: 12.5px; }
+.fc-kl { color: var(--ink3); margin-right: 2px; }
+.fc-chip { display: inline-flex; align-items: center; gap: 2px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 1px 4px 1px 9px; }
+.fc-chip button { border: 0; background: none; cursor: pointer; color: var(--ink3); font-size: 14px; line-height: 1; padding: 0 3px; }
+.fc-chip button:hover { color: var(--over); }
+.fc-add { display: inline-flex; gap: 4px; }
+.fc-add input { width: 170px; padding: 2px 8px; }
+.fc-new { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.fc-new > input { flex: 1 1 180px; width: auto; }
+@media (max-width: 700px) { .fc-kw { padding-left: 0; } .fc-name { width: 120px; } }
 .fv-table td.num { text-align: right; white-space: nowrap; }
 .fv-table td:nth-child(3) { text-align: left; }
 .fv-table .tag { margin-left: 6px; }

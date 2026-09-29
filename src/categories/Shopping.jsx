@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { iso } from '../data.js';
 import { MoneyInput, useCtx } from '../shared.jsx';
-import { ACT_EXPENSE, EXP_CATS, addShop, buyShop, delShop, seedFinance, unbuyShop, won } from './finance.js';
+import { ACT_EXPENSE, addShop, catsOf, buyShop, delShop, seedFinance, unbuyShop, won } from './finance.js';
 
 /** 재무 데이터와 변경 함수 */
 export function useFinance() {
@@ -22,7 +22,9 @@ export default function ShoppingList({ compact }) {
   const done = f.shopping.filter(s => s.bought).sort((a, b) => b.bought.localeCompare(a.bought));
   const expect = todo.reduce((a, s) => a + s.price * s.qty, 0);
   const monthPaid = done.filter(s => s.bought.slice(0, 7) === today.slice(0, 7)).reduce((a, s) => a + s.paid, 0);
-  const [form, setForm] = useState({ name: '', price: '', cat: '생활용품', qty: 1 });
+  const [form0, setForm] = useState({ name: '', price: '', cat: '생활용품', qty: 1 });
+  const names = catsOf(f).map(c => c.name);
+  const form = names.includes(form0.cat) ? form0 : { ...form0, cat: names[0] };   // 카테고리를 바꾸거나 지웠을 때
   const [paid, setPaid] = useState({});          // 물품별 실제 결제 금액 입력값
 
   const add = e => {
@@ -48,7 +50,7 @@ export default function ShoppingList({ compact }) {
         <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="물품 이름 (예: 샴푸)" aria-label="물품 이름" />
         {!compact && <label className="shop-qty">수량<input type="number" min="1" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} /></label>}
         <MoneyInput value={form.price} onChange={v => setForm({ ...form, price: v })} placeholder="예상 금액(원)" aria-label="예상 금액" />
-        <select value={form.cat} onChange={e => setForm({ ...form, cat: e.target.value })} aria-label="지출 분류">{EXP_CATS.map(c => <option key={c}>{c}</option>)}</select>
+        <select value={form.cat} onChange={e => setForm({ ...form, cat: e.target.value })} aria-label="지출 분류">{catsOf(f).map(c => <option key={c.name}>{c.name}</option>)}</select>
         <button className="btn primary" disabled={!form.name.trim()}>추가</button>
       </form>
       {shown.length ? (

@@ -34,6 +34,7 @@ src/
     samsungHealth.js 삼성 헬스 "개인 데이터 다운로드" CSV·ZIP 읽기와 합치기
     AnnivView.jsx   개인 › 기념일 관리 전용 화면 (표시 기간, 기념일·관련 인물 추가·수정·삭제, 엑셀 양식 다운로드·업로드)
     FinanceView.jsx 개인 › 개인 재무 전용 화면 (지출 입력·내역, 분류별 지출, 예산, 롯데카드·KB국민카드 이용내역 파일 가져오기: src/cardImport.js · src/xls.js)
+    FinanceCats.jsx 개인 재무 › 지출 카테고리 설정 (이름·순서·삭제·추가, 월 예산, 포함 범위 키워드 → 카드 지출 자동 분류)
     RelationView.jsx 개인 › 인맥 관리 전용 화면
     LeisureView.jsx 개인 › 여가 관리 전용 화면
     ReviewView.jsx  개인 › 리뷰/회고, 저널링 전용 화면 (일기, 기분 달력, 주간 회고 초안)
