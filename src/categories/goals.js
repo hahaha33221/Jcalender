@@ -1,5 +1,5 @@
 import { iso } from '../data.js';
-import { GOAL_EXAMPLES } from './goalExamples.js';
+import { EXTRA_MILES, GOAL_EXAMPLES } from './goalExamples.js';
 
 /* 목표 관리 (WBS + 마일스톤). 카테고리마다 따로 저장하고 연 단위로 본다
    goals = { v: 2, boards: { '영역|카테고리': {
@@ -103,12 +103,27 @@ export function buildExample([name, phases, miles], today = new Date()) {
 
 /** 목표가 없는 카테고리에 예시 목표를 한 번만 채운다 (사용자가 만든 목표는 건드리지 않음) */
 export function addExampleGoals(goals, today = new Date()) {
-  if (!goals || goals.examples) return goals;
+  if (!goals) return goals;
+  if (goals.examples) return addExtraMiles(goals, today);
   const boards = { ...goals.boards };
   for (const [k, tpl] of Object.entries(GOAL_EXAMPLES)) {
     if (!boards[k] || !boards[k].items.length) boards[k] = buildExample(tpl, today);
   }
-  return { ...goals, boards, examples: true };
+  return addExtraMiles({ ...goals, boards, examples: true }, today);
+}
+
+/** 예시 목표에 가까운 달 마일스톤을 한 번만 붙인다 (예시 목표가 남아 있을 때만) */
+export function addExtraMiles(goals, today = new Date()) {
+  if (!goals || goals.miles2) return goals;
+  const y = today.getFullYear(), t = iso(today), boards = { ...goals.boards };
+  for (const [k, list] of Object.entries(EXTRA_MILES)) {
+    const b = boards[k], name = GOAL_EXAMPLES[k]?.[0];
+    const root = b?.items.find(i => !i.parent && i.name === name);
+    if (!root) continue;
+    const add = list.filter(([n]) => !b.miles.some(m => m.name === n)).map(([n, md]) => ({ id: uid(), name: n, date: `${y}-${md}`, link: root.id, done: `${y}-${md}` < t }));
+    if (add.length) boards[k] = { ...b, miles: [...b.miles, ...add] };
+  }
+  return { ...goals, boards, miles2: true };
 }
 
 /** 선택한 해에 걸치는 최상위 목표와 그 하위만 남긴 보드 */

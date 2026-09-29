@@ -95,7 +95,7 @@ export function GoalBoard({ area, cat, title = '목표 관리', year: yearProp, 
           <div className="tablewrap">
             <table className="wbs">
               <thead>
-                <tr><th className="c-code">WBS</th><th className="c-name">항목</th><th>시작</th><th>종료</th><th className="c-prog">진행률</th><th>상태</th><th /></tr>
+                <tr><th className="c-code">WBS</th><th className="c-name">항목</th><th className="c-mid">시작</th><th className="c-mid">종료</th><th className="c-prog c-mid">진행률</th><th className="c-mid">상태</th><th /></tr>
               </thead>
               <tbody>
                 {shown.map(({ item: it, level, code, hasKids }) => {
@@ -110,12 +110,12 @@ export function GoalBoard({ area, cat, title = '목표 관리', year: yearProp, 
                           <input value={it.name} onChange={e => update(x => updItem(x, it.id, { name: e.target.value }))} aria-label={`${code} 이름`} />
                         </div>
                       </td>
-                      <td><input type="date" value={it.start} onChange={e => setDate(it, 'start', e.target.value)} aria-label={`${code} 시작일`} /></td>
-                      <td><input type="date" value={it.end} onChange={e => setDate(it, 'end', e.target.value)} aria-label={`${code} 종료일`} /></td>
-                      <td className="c-prog">{hasKids ? <b>{p}%</b> : (
+                      <td className="c-mid"><input type="date" value={it.start} onChange={e => setDate(it, 'start', e.target.value)} aria-label={`${code} 시작일`} /></td>
+                      <td className="c-mid"><input type="date" value={it.end} onChange={e => setDate(it, 'end', e.target.value)} aria-label={`${code} 종료일`} /></td>
+                      <td className="c-prog c-mid">{hasKids ? <b>{p}%</b> : (
                         <select value={p} onChange={e => update(x => updItem(x, it.id, { progress: Number(e.target.value) }))} aria-label={`${code} 진행률`}>
                           {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(v => <option key={v} value={v}>{v}%</option>)}</select>)}</td>
-                      <td><span className={`st ${st.k}`}>{st.t}</span></td>
+                      <td className="c-mid"><span className={`st ${st.k}`}>{st.t}</span></td>
                       <td className="c-act">
                         {level < 2 && <button className="btn sm" onClick={() => { update(x => addItem(x, it.id, today, year)); setFold({ ...fold, [it.id]: false }); }}>+ 하위</button>}
                         <button className="tl-del" onClick={() => update(x => delItem(x, it.id))} aria-label={`${code} 삭제`}>삭제</button>
@@ -231,6 +231,9 @@ export default function GoalView({ area, cat, group }) {
   const avg = W ? Math.round(S / W) : 0;
   const miles = groups.flatMap(g => g.yb.miles.map(m => ({ g, m, link: g.rows.find(r => r.item.id === m.link) }))).sort((a, b) => a.m.date.localeCompare(b.m.date));
   const nextMile = miles.find(x => !x.m.done && x.m.date >= today);
+  const mm = today.slice(5, 7), monthKey = `${year}-${mm}`;
+  const monthMiles = miles.filter(x => x.m.date.slice(0, 7) === monthKey);
+  const soonMiles = miles.filter(x => !x.m.done && x.m.date.slice(0, 7) !== monthKey && x.m.date > today && daysBetween(today, x.m.date) <= 30);
   const setMile = (key, id, patch) => setStore(s => {
     const cur = s.goals?.v === 2 ? s.goals : seedGoals(now);
     const b = cur.boards[key] || EMPTY;
@@ -247,6 +250,18 @@ export default function GoalView({ area, cat, group }) {
   };
   const items = group.items.map(it => ({ it, rows: group.rows.filter(r => r.item === it) }));
   const catLabel = c => (c === '목표 관리' ? '영역 공통' : c);
+  const MileList = ({ list }) => (
+    <ul className="gv-miles">{list.map(({ g, m }) => {
+      const d = daysBetween(today, m.date);
+      return (
+        <li key={m.id} className={m.done ? 'done' : d < 0 ? 'late' : d <= 7 ? 'soon' : ''}>
+          <b className="gv-dd">{m.done ? '완료' : d === 0 ? '오늘' : d > 0 ? `D-${d}` : `${-d}일 지남`}</b>
+          <span className="gv-mn">{m.name}<small className="muted"> · {md(m.date)}</small></span>
+          <button className="gv-cat" onClick={() => openCat(area, g.c)}>{catLabel(g.c)}</button>
+        </li>
+      );
+    })}</ul>
+  );
 
   return (
     <div className="catv gv" style={{ '--ac': areaVar(area) }}>
@@ -257,6 +272,28 @@ export default function GoalView({ area, cat, group }) {
 
       <div className="bar"><YearPicker year={year} setYear={setYear} />
         <div className="chips grow-r" role="group" aria-label="보기"><button aria-pressed={tasks} onClick={() => setTasks(!tasks)}>작업까지 보기</button></div></div>
+
+      <div className="gv-top">
+        <section className="panel">
+          <div className="csum-h"><h2>{year}년 목표</h2><span className="muted">{allRoots.length}개 · 전체 진행률 {avg}%</span></div>
+          {allRoots.length ? (
+            <ul className="gv-goals">{allRoots.map(({ g, r, p }) => (
+              <li key={r.item.id}>
+                <button className="gv-cat" onClick={() => openCat(area, g.c)}>{catLabel(g.c)}</button>
+                <span className="gv-gn">{r.item.name}</span>
+                <span className="gv-mini"><i style={{ width: `${p}%` }} /></span><b className="gv-p">{p}%</b>
+              </li>))}</ul>
+          ) : <p className="muted">{year}년 목표가 없습니다.</p>}
+        </section>
+        <section className="panel">
+          <div className="csum-h"><h2>{year !== now.getFullYear() ? `${year}년 ` : '이번 달 '}{Number(mm)}월 주요 마일스톤</h2><span className="muted">이번 달 {monthMiles.length}건 · 다음 30일 {soonMiles.length}건</span></div>
+          {monthMiles.length ? <MileList list={monthMiles} /> : <p className="muted gv-none">{Number(mm)}월에 남은 마일스톤이 없습니다.</p>}
+          {soonMiles.length > 0 && <>
+            <h3 className="lv-h3">다음 30일</h3>
+            <MileList list={soonMiles} />
+          </>}
+        </section>
+      </div>
 
       <div className="hv-stats">
         <div className="hv-stat sl"><span className="muted">{year}년 목표</span><b>{allRoots.length}</b><span className="hv-sub">{groups.length}개 카테고리 · 작업 {allLeaves.length}</span></div>
@@ -271,16 +308,16 @@ export default function GoalView({ area, cat, group }) {
         <div className="csum-h"><h2>통합 WBS</h2><span className="muted">카테고리 › 목표 › 단계{tasks ? ' › 작업' : ''}</span></div>
         {groups.length ? (
           <div className="tablewrap"><table className="wbs agg">
-            <thead><tr><th className="c-code">WBS</th><th className="c-name">항목</th><th>기간</th><th className="c-pbar">진행률</th><th>상태</th></tr></thead>
+            <thead><tr><th className="c-code">WBS</th><th className="c-name">항목</th><th className="c-mid">기간</th><th className="c-pbar c-mid">진행률</th><th className="c-mid">상태</th></tr></thead>
             <tbody>{groups.map(g => [
               <tr key={g.key} className="cat-row">
                 <td className="c-code">{g.n}</td>
                 <td className="c-name"><div className="wbs-name">
                   <button className="fold" onClick={() => setFold({ ...fold, [g.key]: !fold[g.key] })} aria-label={fold[g.key] ? '펼치기' : '접기'}>{fold[g.key] ? '▸' : '▾'}</button>
                   <button className="linkish" onClick={() => openCat(area, g.c)}>{catLabel(g.c)}</button><small className="muted">목표 {g.roots.length}</small></div></td>
-                <td className="nowrap">{g.start ? `${md(g.start)} ~ ${md(g.end)}` : '-'}</td>
-                <td><div className="goal-ov-p"><span className="pbar"><i style={{ width: `${g.p}%`, background: 'var(--ac)' }} /></span><b>{g.p}%</b></div></td>
-                <td />
+                <td className="nowrap c-mid">{g.start ? `${md(g.start)} ~ ${md(g.end)}` : '-'}</td>
+                <td className="c-mid"><div className="goal-ov-p"><span className="pbar"><i style={{ width: `${g.p}%`, background: 'var(--ac)' }} /></span><b>{g.p}%</b></div></td>
+                <td className="c-mid" />
               </tr>,
               ...(fold[g.key] ? [] : g.rows.filter(r => tasks || r.level < 2).map(r => {
                 const p = progressOf(g.yb.items, r.item.id), st = statusOf(r.item, p, today);
@@ -288,9 +325,9 @@ export default function GoalView({ area, cat, group }) {
                   <tr key={r.item.id} className={`lv${Math.min(r.level, 2)}`}>
                     <td className="c-code">{g.n}.{r.code}</td>
                     <td className="c-name"><div className="wbs-name" style={{ paddingLeft: 20 + r.level * 18 }}><span className="agg-n">{r.item.name}</span></div></td>
-                    <td className="nowrap">{md(r.item.start)} ~ {md(r.item.end)}</td>
-                    <td><div className="goal-ov-p"><span className="pbar"><i style={{ width: `${p}%`, background: 'var(--ac)' }} /></span><b>{p}%</b></div></td>
-                    <td><span className={`st ${st.k}`}>{st.t}</span></td>
+                    <td className="nowrap c-mid">{md(r.item.start)} ~ {md(r.item.end)}</td>
+                    <td className="c-mid"><div className="goal-ov-p"><span className="pbar"><i style={{ width: `${p}%`, background: 'var(--ac)' }} /></span><b>{p}%</b></div></td>
+                    <td className="c-mid"><span className={`st ${st.k}`}>{st.t}</span></td>
                   </tr>
                 );
               })),

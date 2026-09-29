@@ -683,3 +683,27 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .sv-a { font-size: 16px; margin: 0; color: var(--ok); }
 .sv-done { padding: 20px 0; }
 @media (max-width: 1100px) { .sv-grid { grid-template-columns: minmax(0, 1fr); } .tv-charts { grid-template-columns: minmax(0, 1fr); } }
+
+/* 목표 관리: 가운데 정렬 · 맨 위 요약 */
+.wbs th.c-mid, .wbs td.c-mid { text-align: center; }
+.wbs td.c-mid .goal-ov-p { justify-content: center; }
+.wbs td.c-mid input, .wbs td.c-mid select { text-align: center; text-align-last: center; }
+.gv-top { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
+.gv-top .panel { margin: 0; min-width: 0; }
+.gv-goals, .gv-miles { list-style: none; margin: 0; padding: 0; }
+.gv-goals li, .gv-miles li { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line2); font-size: 13px; }
+.gv-cat { border: 1px solid var(--line); background: var(--paper); border-radius: 10px; padding: 1px 9px; font-size: 12px; color: var(--ink2); cursor: pointer; flex: none; white-space: nowrap; }
+.gv-cat:hover { border-color: var(--ac); color: var(--ink); }
+.gv-gn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.gv-mini { width: 90px; height: 6px; background: var(--line2); border-radius: 3px; overflow: hidden; flex: none; }
+.gv-mini i { display: block; height: 100%; background: var(--ac); }
+.gv-p { width: 40px; text-align: right; font-size: 12.5px; flex: none; }
+.gv-dd { min-width: 64px; font-size: 15px; color: var(--ai); flex: none; }
+.gv-miles li.soon .gv-dd { color: var(--warn); }
+.gv-miles li.late .gv-dd { color: var(--over); }
+.gv-miles li.done .gv-dd { color: var(--ok); }
+.gv-miles li.done .gv-mn { color: var(--ink3); text-decoration: line-through; }
+.gv-mn { flex: 1; min-width: 0; }
+@media (max-width: 1100px) { .gv-top { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .gv-mini { width: 50px; } }
+.gv-none { margin: 4px 0 0; }
