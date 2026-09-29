@@ -4,7 +4,7 @@ import { hasCustomView, viewFor } from './categories/index.js';
 import { seedHealth } from './categories/health.js';
 import { seedFinance } from './categories/finance.js';
 import { addExampleGoals, boardForYear, boardKey, migrateGoals, seedGoals } from './categories/goals.js';
-import { GoalBoard } from './categories/GoalView.jsx';
+import { DashYearGantt, GoalBoard } from './categories/GoalView.jsx';
 import ShoppingList from './categories/Shopping.jsx';
 import { migratePeople, seedPeople } from './categories/RelationView.jsx';
 import { seedLeisure } from './categories/LeisureView.jsx';
@@ -212,8 +212,8 @@ function Home() {
       <AnnivStrip />
       <ShoppingList compact />
       {dueToday.map(c => <CycleSummary key={c} c={c} hot title={`오늘은 ${CYCLES[c]}일입니다`} note={`${dueRule(c)} 도래 · 기간 ${periodKey(c, now)}`} />)}
-      <CycleSummary c="D" title="일일체크 요약" note="카테고리별 진행과 남은 항목 (우선순위순)" />
       <CycleSummary c="S" title="수시체크 요약" note="필요할 때 체크하는 항목 · 오늘 기준" />
+      <DashYearGantt />
     </>
   );
 }
@@ -728,6 +728,7 @@ function Progress() {
               })}</tr>))}</tbody>
         </table>
       </div>
+      <CycleSummary c="D" title="일일체크 요약" note="카테고리별 진행과 남은 항목 (우선순위순)" />
       <div className="panel">
         <h2>실행 로그</h2>
         {store.log.length ? <ul className="log">{store.log.slice(0, 20).map((l, i) => <li key={i}><time>{l.at}</time><span>{AREAS[l.a].n} · {l.item} · {l.action} <b>{l.ty}</b></span></li>)}</ul> : <p className="muted">아직 실행한 항목이 없습니다.</p>}

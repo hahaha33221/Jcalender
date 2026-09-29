@@ -395,3 +395,59 @@ export default function GoalView({ area, cat, group }) {
     </div>
   );
 }
+
+/* 대시보드용 통합 연간 일정표: 개인·사업·근로의 모든 목표를 영역 › 목표 순으로 한 일정표에 */
+export function DashYearGantt() {
+  const { now, store, openCat } = useCtx();
+  const today = iso(now);
+  const [year, setYear] = useState(now.getFullYear());
+  const [fold, setFold] = useState({});
+  const boards = (store.goals?.v === 2 ? store.goals : seedGoals(now)).boards;
+  const y0 = `${year}-01-01`, y1 = `${year}-12-31`, span = daysBetween(y0, y1) + 1;
+  const pct = d => clampPct((daysBetween(y0, d) / span) * 100);
+  const showToday = today >= y0 && today <= y1;
+  const months = Array.from({ length: 12 }, (_, m) => `${year}-${String(m + 1).padStart(2, '0')}-01`);
+  const grid = () => <>{months.map(m => <i key={m} className="gantt-grid" style={{ left: `${pct(m)}%` }} />)}{showToday && <i className="tl-today" style={{ left: `${pct(today)}%` }} />}</>;
+  const bar = (it, p, st, cls = '') => { const l = pct(it.start), r = pct(nextDay(it.end));
+    return r > l ? <span className={`gbar ${st} ${cls}`} style={{ left: `${l}%`, width: `${r - l}%` }} title={`${it.name} · ${md(it.start)} ~ ${md(it.end)} · ${p}%`}><i style={{ width: `${p}%` }} /></span> : null; };
+
+  const areas = Object.keys(AREAS).map(a => {
+    const order = ['목표 관리', ...new Set(ROWS.filter(r => r.a === a && r.cat !== '목표 관리').map(r => r.cat))];
+    const goals = order.flatMap(c => {
+      const b = boards[boardKey(a, c)];
+      if (!b) return [];
+      const leaf = leafFor(a, c, store.done), yb = boardForYear(b, year);
+      return yb.items.filter(i => !i.parent).map(it => { const p = progressOf(yb.items, it.id, leaf); return { c, it, p, st: statusOf(it, p, today) }; });
+    });
+    let w = 0, sum = 0;
+    goals.forEach(g => { const d = Math.max(1, daysBetween(g.it.start, g.it.end) + 1); w += d; sum += d * g.p; });
+    const starts = goals.map(g => g.it.start).sort(), ends = goals.map(g => g.it.end).sort();
+    return { a, goals, p: w ? Math.round(sum / w) : 0, start: starts[0], end: ends[ends.length - 1] };
+  }).filter(x => x.goals.length);
+
+  return (
+    <section className="panel dash-gantt" aria-label="통합 연간 일정표">
+      <div className="csum-h"><h2>통합 연간 일정표</h2><span className="muted">개인 · 사업 · 근로 목표 · 진행률은 체크리스트 기준</span>
+        <div className="grow-r"><YearPicker year={year} setYear={setYear} /></div></div>
+      {areas.length ? (
+        <div className="tablewrap"><div className="gantt">
+          <div className="gantt-row gantt-head"><span className="gantt-label" />
+            <div className="gantt-track">{months.map((m, i) => <span key={m} className="gantt-month" style={{ left: `${pct(m)}%` }}>{i + 1}월</span>)}
+              {showToday && <i className="tl-today" style={{ left: `${pct(today)}%` }} />}</div></div>
+          {areas.map(A => [
+            <div key={A.a} className="gantt-row cat-row" style={{ '--ac': areaVar(A.a) }}>
+              <span className="gantt-label"><button className="fold" onClick={() => setFold({ ...fold, [A.a]: !fold[A.a] })} aria-label={fold[A.a] ? '펼치기' : '접기'}>{fold[A.a] ? '▸' : '▾'}</button>
+                {AREAS[A.a].n} <em>목표 {A.goals.length} · {A.p}%</em></span>
+              <div className="gantt-track">{grid()}{A.start && bar({ name: AREAS[A.a].n, start: A.start, end: A.end }, A.p, 'run', 'cat')}</div></div>,
+            ...(fold[A.a] ? [] : A.goals.map(g => (
+              <div key={g.it.id} className="gantt-row lv1" style={{ '--ac': areaVar(A.a) }}>
+                <span className="gantt-label" style={{ paddingLeft: 26 }} title={`${g.c === '목표 관리' ? '영역 공통' : g.c} · ${g.it.name} · ${g.p}%`}>
+                  <button className="linkish dg-cat" onClick={() => openCat(A.a, g.c)}>{g.c === '목표 관리' ? '공통' : g.c}</button> {g.it.name}</span>
+                <div className="gantt-track">{grid()}{bar(g.it, g.p, g.st.k)}</div></div>))),
+          ])}
+        </div></div>
+      ) : <p className="muted">{year}년 목표가 없습니다.</p>}
+      <p className="note">진한 부분이 진행률, 빨간 세로선은 오늘입니다. 카테고리 이름을 누르면 그 카테고리로 이동합니다.</p>
+    </section>
+  );
+}
