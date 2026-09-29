@@ -3,7 +3,7 @@ import { ActionRow, Ctx, WEEK, areaVar, num, useCtx } from './shared.jsx';
 import { hasCustomView, viewFor } from './categories/index.js';
 import { seedHealth } from './categories/health.js';
 import { seedFinance } from './categories/finance.js';
-import { addExampleGoals, boardForYear, boardKey, migrateGoals, seedGoals } from './categories/goals.js';
+import { addExampleGoals, boardForYear, boardKey, dropNoGoal, hasGoals, migrateGoals, seedGoals } from './categories/goals.js';
 import { DashYearGantt, GoalBoard } from './categories/GoalView.jsx';
 import ShoppingList from './categories/Shopping.jsx';
 import { migratePeople, seedPeople } from './categories/RelationView.jsx';
@@ -44,7 +44,7 @@ function useStore() {
     let v = null;
     try { v = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* 저장소 사용 불가 또는 손상 */ }
     const merged = { ...INIT, ...(v || {}) };
-    return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: merged.goals ? addExampleGoals(migrateGoals(merged.goals)) : seedGoals(), people: merged.people ? migratePeople(merged.people, new Date()) : seedPeople(), leisure: merged.leisure ?? seedLeisure(), journal: merged.journal ?? seedJournal() };
+    return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: dropNoGoal(merged.goals ? addExampleGoals(migrateGoals(merged.goals)) : seedGoals()), people: merged.people ? migratePeople(merged.people, new Date()) : seedPeople(), leisure: merged.leisure ?? seedLeisure(), journal: merged.journal ?? seedJournal() };
   });
   const [persist, setPersist] = useState(true);
   useEffect(() => {
@@ -650,7 +650,7 @@ function categoriesOf(area, now, isDone) {
 function AreaPage({ area }) {
   const { store, isDone, now, go, openCat } = useCtx();
   const boards = store.goals?.boards || {};
-  const goalsOf = c => (boards[boardKey(area, c)] ? boardForYear(boards[boardKey(area, c)], now.getFullYear()).items.filter(i => !i.parent).length : 0);
+  const goalsOf = c => (hasGoals(area, c) && boards[boardKey(area, c)] ? boardForYear(boards[boardKey(area, c)], now.getFullYear()).items.filter(i => !i.parent).length : 0);
   const [cyc, setCyc] = useState('ALL');
   const cats = categoriesOf(area, now, isDone);
   const shown = cats.filter(g => cyc === 'ALL' || g.cyc[cyc]);
@@ -705,7 +705,7 @@ function CategoryPage({ area, cat }) {
           title={reviewed ? `검수 완료 (${store.reviewed[rkey]}) · 누르면 취소` : '마음에 들면 검수 완료로 표시'}>{reviewed ? '검수 완료됨' : '검수 완료로 표시'}</button>
       </nav>
       <View area={area} cat={cat} group={g} />
-      {cat !== '목표 관리' && <GoalBoard area={area} cat={cat} title={`${cat} 목표`} />}
+      {cat !== '목표 관리' && hasGoals(area, cat) && <GoalBoard area={area} cat={cat} title={`${cat} 목표`} />}
     </>
   );
 }
