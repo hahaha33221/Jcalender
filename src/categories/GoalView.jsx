@@ -295,14 +295,6 @@ export default function GoalView({ area, cat, group }) {
         </section>
       </div>
 
-      <div className="hv-stats">
-        <div className="hv-stat sl"><span className="muted">{year}년 목표</span><b>{allRoots.length}</b><span className="hv-sub">{groups.length}개 카테고리 · 작업 {allLeaves.length}</span></div>
-        <div className="hv-stat sl"><span className="muted">전체 진행률</span><b>{avg}%</b><span className="pbar"><i style={{ width: `${avg}%`, background: 'var(--ac)' }} /></span></div>
-        <div className={`hv-stat ${allLeaves.some(x => x.st.k === 'late') ? 'over' : 'sl'}`}><span className="muted">완료 목표 · 지연 작업</span>
-          <b>{allRoots.filter(x => x.p >= 100).length} · {allLeaves.filter(x => x.st.k === 'late').length}</b><span className="hv-sub">지연 작업은 종료일이 지난 미완료 작업</span></div>
-        <div className="hv-stat ex"><span className="muted">다음 마일스톤</span><b>{nextMile ? (nextMile.m.date === today ? '오늘' : `D-${daysBetween(today, nextMile.m.date)}`) : '-'}</b>
-          <span className="hv-sub">{nextMile ? `${nextMile.m.name} · ${catLabel(nextMile.g.c)}` : '없음'}</span></div>
-      </div>
 
       <section className="panel">
         <div className="csum-h"><h2>통합 WBS</h2><span className="muted">카테고리 › 목표 › 단계{tasks ? ' › 작업' : ''}</span></div>
