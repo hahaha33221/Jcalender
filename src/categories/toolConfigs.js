@@ -11,33 +11,6 @@ const inMonth = (s, c) => String(s || '').slice(0, 7) === c.month;
 const hm = (a, b) => { if (!a || !b) return 0; const [h1, m1] = a.split(':').map(Number), [h2, m2] = b.split(':').map(Number); return Math.max(0, h2 * 60 + m2 - (h1 * 60 + m1) - 60); };
 
 export const TOOL_CONFIGS = {
-  /* ───────── 개인 ───────── */
-  'P|개인 목표 관리': {
-    intro: '건강·관계·성장 목표를 매달 점수로 점검하고 다음 달 행동을 정합니다.', noun: '월간 점검', title: 'goal', tick: '진행 점검',
-    fields: [
-      { k: 'month', label: '월', type: 'text', req: true, def: t => t.slice(0, 7) },
-      { k: 'area', label: '분야', type: 'select', options: ['건강', '관계', '성장'] },
-      { k: 'goal', label: '목표', type: 'text', req: true },
-      { k: 'score', label: '달성 점수', type: 'rating', def: 3 },
-      { k: 'next', label: '다음 달 행동', type: 'text' },
-    ],
-    seed: now => ids('pg', [
-      { month: M(now, 0), area: '건강', goal: '주 3회 운동 (예시)', score: 4, next: '주말 등산 추가' },
-      { month: M(now, 0), area: '관계', goal: '가족과 주 1회 식사 (예시)', score: 3, next: '평일 저녁 1회 약속' },
-      { month: M(now, 0), area: '성장', goal: '매일 30분 공부 (예시)', score: 4, next: '주간 복습 시간 확보' },
-      { month: M(now, -1), area: '건강', goal: '주 3회 운동 (예시)', score: 3, next: '' },
-      { month: M(now, -1), area: '관계', goal: '가족과 주 1회 식사 (예시)', score: 4, next: '' },
-      { month: M(now, -1), area: '성장', goal: '매일 30분 공부 (예시)', score: 2, next: '' },
-    ]),
-    sort: (a, b) => b.month.localeCompare(a.month),
-    stats: (rs, c) => {
-      const cur = rs.filter(r => r.month === c.month);
-      const avg = a => { const x = cur.filter(r => r.area === a); return x.length ? (sum(x, 'score') / x.length).toFixed(1) : '-'; };
-      return [{ label: '이번 달 점검', value: `${cur.length}건` , sub: c.month }, { label: '건강', value: avg('건강') + '점' }, { label: '관계', value: avg('관계') + '점' }, { label: '성장', value: avg('성장') + '점' }];
-    },
-    breakdown: { label: '이번 달 분야별 점수 합', by: 'area', value: 'score', filter: (r, c) => r.month === c.month, fmt: v => `${v}점` },
-  },
-
   /* ───────── 사업 ───────── */
   'B|매출/매입': {
     intro: '매출·매입을 기록하고 월별 수지와 받을 돈·줄 돈을 확인합니다.', noun: '거래', title: 'party', tick: '입금 입력',

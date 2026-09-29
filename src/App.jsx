@@ -631,7 +631,8 @@ function Checklist({ init }) {
 
 
 /* ───────────────────────── 상세: 영역 페이지 (카테고리 버튼) ───────────────────────── */
-const SWAP_CATS = [['P', '개인 재무', '기념일 관리']];
+/** 상세 내용 화면 순서: 앞으로 올릴 카테고리(FIRST 앞에서부터), 맨 뒤로 보낼 카테고리 */
+const CAT_ORDER = { P: { last: ['개인 재무'] } };
 /** 영역의 카테고리 목록. 카테고리마다 세부 항목, 주기별 개수, 오늘 남은 개수를 모은다 */
 function categoriesOf(area, now, isDone) {
   const m = new Map();
@@ -644,10 +645,8 @@ function categoriesOf(area, now, isDone) {
   });
   const list = [...m.values()];
   // 화면 순서 바꾸기 (액션 id 가 원본 순서에 묶여 있어 표시 순서만 바꾼다)
-  SWAP_CATS.filter(([x]) => x === area).forEach(([, c1, c2]) => {
-    const i = list.findIndex(g => g.cat === c1), j = list.findIndex(g => g.cat === c2);
-    if (i >= 0 && j >= 0) [list[i], list[j]] = [list[j], list[i]];
-  });
+  const last = CAT_ORDER[area]?.last || [];
+  list.sort((x, y) => last.indexOf(x.cat) - last.indexOf(y.cat));   // 목록에 없는 카테고리(-1)는 원래 순서 유지
   return list.map(g => {
     const due = g.rows.filter(r => isDue(r.c, now));
     return { ...g, due: due.length, left: due.filter(r => !isDone(r)).length, done: g.rows.filter(isDone).length };
@@ -702,7 +701,7 @@ function CategoryPage({ area, cat }) {
   const rkey = `${area}|${cat}`, reviewed = !!store.reviewed?.[rkey];
   const toggleReviewed = () => setStore(s => { const r = { ...(s.reviewed || {}) }; if (r[rkey]) delete r[rkey]; else r[rkey] = iso(new Date()); return { ...s, reviewed: r }; });
   const g = cats.find(x => x.cat === cat);
-  if (!g) return <div className="empty">카테고리를 찾을 수 없습니다. <button className="btn sm" onClick={() => go(area)}>{AREAS[area].n}로 돌아가기</button></div>;
+  if (!g) return <div className="empty">카테고리를 찾을 수 없습니다. <button className="btn sm" onClick={() => go(area)}>{AREAS[area].n} 화면으로 돌아가기</button></div>;
   const View = viewFor(area, cat);
   return (
     <>
