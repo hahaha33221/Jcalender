@@ -521,24 +521,52 @@ tr.lv0 .gbar { top: 4px; height: 14px; }
 .gantt .gbar.cat { background: color-mix(in srgb, var(--ac) 20%, transparent); }
 
 /* 인맥/관계 관리 */
-.rv-due-list { list-style: none; margin: 0; padding: 0; }
-.rv-due-list li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line2); flex-wrap: wrap; }
-.rv-av { width: 34px; height: 34px; border-radius: 50%; background: color-mix(in srgb, var(--ac) 18%, var(--card)); color: var(--ac); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; flex: none; }
+.rv-av { width: 36px; height: 36px; border-radius: 50%; background: color-mix(in srgb, var(--ac) 18%, var(--card)); color: var(--ac); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; flex: none; }
 .rv-dn { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .rv-dn small { color: var(--ink3); font-size: 12px; }
-.rv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin: 6px 0 4px; }
-.rv-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.rv-card.due { border-color: var(--over); box-shadow: inset 3px 0 0 var(--over); }
-.rv-top { display: flex; align-items: center; gap: 8px; }
-.rv-meter { height: 6px; background: var(--line2); border-radius: 3px; overflow: hidden; }
-.rv-meter i { display: block; height: 100%; background: var(--ac); }
-.rv-card.due .rv-meter i { background: var(--over); }
-.rv-meta { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; color: var(--ink2); gap: 8px; }
-.rv-meta select { width: auto; padding: 2px 6px; font-size: 12.5px; }
-.rv-btns { display: flex; gap: 6px; }
-.rv-notes ul { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12.5px; }
-.rv-notes li { padding: 4px 0; border-top: 1px solid var(--line2); display: flex; gap: 8px; }
+.rv-ev { list-style: none; margin: 0; padding: 0; }
+.rv-ev li { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line2); }
+.rv-dd { font-size: 18px; min-width: 56px; color: var(--ai); }
+.rv-ev li.hot .rv-dd { color: var(--over); }
+.rv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin: 6px 0 4px; }
+.rv-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; background: var(--card); }
+.rv-top { display: flex; align-items: center; gap: 10px; }
+.rv-call { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rv-tel { font-weight: 700; padding: 7px 16px; }
+.rv-num { font-size: 12.5px; color: var(--ink2); margin-left: 4px; }
+.rv-call.big { margin: 8px 0 4px; }
+.rv-days { list-style: none; margin: 0; padding: 8px 10px; background: var(--paper); border-radius: 6px; font-size: 12.5px; display: flex; flex-direction: column; gap: 3px; }
+.rv-days li { display: flex; align-items: center; gap: 8px; }
+.rv-days span { color: var(--ink3); width: 76px; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-days b { font-weight: 500; flex: 1; }
+.rv-days em { font-style: normal; font-weight: 700; color: var(--ai); }
+.rv-days em.soon { color: var(--over); }
+.rv-thumb { border: 1px solid var(--line2); border-radius: 6px; padding: 6px; background: var(--paper); cursor: zoom-in; height: 104px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.rv-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+.rv-thumb.empty { cursor: pointer; font-size: 12px; color: var(--ink3); border-style: dashed; height: 44px; }
+.rv-thumb:hover { border-color: var(--ac); }
+.rv-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.rv-add > input, .rv-add > select { flex: 1 1 140px; width: auto; }
+.rv-lbl { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink2); flex: 1 1 170px; }
+.rv-lbl input { flex: 1; }
+.rv-file { cursor: pointer; }
+.rv-modal { width: min(640px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
+.rv-mh { display: flex; align-items: center; gap: 8px; }
+.rv-mh h2 { margin: 0; flex: 0 1 auto; }
+.rv-mh .btn { margin-left: auto; }
+.rv-big { border: 1px solid var(--line); border-radius: 8px; padding: 0; background: var(--paper); cursor: zoom-in; overflow: hidden; }
+.rv-big img { width: 100%; display: block; }
+.rv-big.empty { padding: 40px; text-align: center; color: var(--ink3); cursor: default; border-style: dashed; }
+.rv-cardbtns { display: flex; gap: 6px; }
+.rv-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.rv-fields label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink2); }
+.rv-notes { list-style: none; margin: 6px 0 0; padding: 0; font-size: 13px; }
+.rv-notes li { padding: 5px 0; border-top: 1px solid var(--line2); display: flex; gap: 8px; }
 .rv-notes time { color: var(--ink3); flex: none; }
+.rv-mf { display: flex; justify-content: flex-end; margin-top: 6px; }
+.rv-zoom { position: fixed; inset: 0; background: rgba(0,0,0,.8); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; cursor: zoom-out; }
+.rv-zoom img { max-width: 100%; max-height: 100%; border-radius: 8px; background: #fff; }
+@media (max-width: 560px) { .rv-fields { grid-template-columns: minmax(0, 1fr); } }
 
 /* 여가 관리 */
 .lv-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
@@ -568,8 +596,6 @@ tr.lv0 .gbar { top: 4px; height: 14px; }
 .lv-min { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--ink2); }
 .lv-min input { width: 70px; }
 @media (max-width: 1100px) { .lv-grid, .lv-hobby { grid-template-columns: minmax(0, 1fr); } }
-.rv .anniv-add > input, .rv .anniv-add > select { flex: 1 1 140px; width: auto; }
-.rv .anniv-add > input:first-child { flex: 2 1 180px; }
 a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items: center; }
 
 /* 리뷰/회고, 저널링 (기분: 한 가지 색의 5단계, 진할수록 좋음) */
