@@ -50,7 +50,7 @@ export function normDate(v, excelDate) {
 /** 표 → { items, skipped: [{ row, why }] } */
 export function parseAnnivRows(rows, excelDate) {
   const items = [], skipped = [];
-  const start = rows.findIndex(r => String(r[0] ?? '').trim() === '이름');
+  const start = rows.findIndex(r => String(r[0] ?? '').trim() === '이름');   // 맨 위 설명 줄 아래의 머리글
   rows.slice(start + 1).forEach((r, i) => {
     const row = start + 2 + i;
     const name = String(r[0] ?? '').trim();
