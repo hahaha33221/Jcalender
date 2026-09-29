@@ -5,18 +5,20 @@ import StudyView from './StudyView.jsx';
 
 /* 직접 개발하는 앱과 연동하는 아이콘 카드
    - 개인 › 자기계발/학습: 영어 · IT · 자격증 (LEARN_APPS)
-   - 개인 › 여가 관리: 독서 · 기타 (LEISURE_APPS, LeisureView 에서 AppCards 로 사용)
+   - 개인 › 여가 관리: 여행 · 독서 · 기타 · 밴드 합주 (LEISURE_APPS, LeisureView 에서 AppCards 로 사용)
    카드마다 앱 주소(열기)와 데이터 주소(동기화)를 저장하고,
    데이터 주소는 docs/learning-app-integration.md 의 JSON 형식을 돌려주면 된다.
-   learn = { english|it|cert|reading|guitar: { appName, openUrl, dataUrl, data, syncedAt } } */
+   learn = { english|it|cert|trip|reading|guitar|band: { appName, openUrl, dataUrl, data, syncedAt } } */
 export const LEARN_APPS = [
   { key: 'english', name: '영어' },
   { key: 'it', name: 'IT' },
   { key: 'cert', name: '자격증' },
 ];
 export const LEISURE_APPS = [
+  { key: 'trip', name: '여행' },
   { key: 'reading', name: '독서' },
   { key: 'guitar', name: '기타' },
+  { key: 'band', name: '밴드 합주' },
 ];
 
 /* 아이콘 (선으로 그린 SVG) */
@@ -33,6 +35,14 @@ const ICONS = {
     <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="10" width="48" height="34" rx="3" /><path d="M16 20h24M16 27h18M16 34h12" />
       <circle cx="44" cy="36" r="7" /><path d="M40 42l-3 12 7-4 7 4-3-12" /></svg>
   ),
+  trip: (
+    <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="12" y="22" width="40" height="30" rx="4" /><path d="M24 22v-6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v6" />
+      <path d="M22 22v30M42 22v30" /><circle cx="20" cy="56" r="2" /><circle cx="44" cy="56" r="2" /></svg>
+  ),
+  band: (
+    <svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="40" rx="20" ry="7" /><path d="M12 40v8c0 4 9 7 20 7s20-3 20-7v-8" />
+      <path d="M22 26l-8-14M42 26l8-14" /><path d="M44 8v14a3 3 0 1 1-3-3M50 6v12a3 3 0 1 1-3-3M44 8l6-2" /></svg>
+  ),
   reading: (
     <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 18c-6-5-15-6-24-4v34c9-2 18-1 24 4 6-5 15-6 24-4V14c-9-2-18-1-24 4z" /><path d="M32 18v34" />
       <path d="M14 23c4-1 8-1 12 1M14 30c4-1 8-1 12 1M38 24c4-2 8-2 12-1M38 31c4-2 8-2 12-1" /></svg>
@@ -43,13 +53,27 @@ const ICONS = {
   ),
 };
 
+const dday = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5);
+/** 여행 앱 카드: 예정 여행 수 · 다음 여행 D-day · 예산 합계 */
+function TripKpi({ trips }) {
+  const { now } = useCtx();
+  const t0 = iso(now), next = [...trips].filter(t => t.end >= t0).sort((a, b) => a.start.localeCompare(b.start));
+  return (
+    <ul className="lh-kpi">
+      <li><span>예정</span><b>{next.length}건</b></li>
+      <li><span>다음 여행</span><b>{next[0] ? (next[0].start <= t0 ? '여행 중' : `D-${dday(t0, next[0].start)}`) : '-'}</b></li>
+      <li><span>예산 합계</span><b>{num(next.reduce((a, t) => a + t.budget, 0))}원</b></li>
+    </ul>
+  );
+}
+
 const emptyCard = { appName: '', openUrl: '', dataUrl: '', data: null, syncedAt: '' };
 const hm = m => (m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ''}` : `${m}분`);
 
 /** 연동 앱이 보낸 JSON 확인 (필수: summary 또는 sessions 중 하나) */
 export function validateFeed(j) {
   if (!j || typeof j !== 'object') throw new Error('JSON 객체가 아닙니다');
-  if (!j.summary && !Array.isArray(j.sessions)) throw new Error('summary 나 sessions 가 없습니다');
+  if (!j.summary && !Array.isArray(j.sessions) && !Array.isArray(j.trips)) throw new Error('summary, sessions, trips 중 하나가 있어야 합니다');
   const s = j.summary || {};
   const sessions = (Array.isArray(j.sessions) ? j.sessions : []).filter(x => x && x.date).map(x => ({ date: String(x.date).slice(0, 10), minutes: Number(x.minutes) || 0, title: String(x.title || '') }));
   return {
@@ -57,6 +81,10 @@ export function validateFeed(j) {
     summary: { todayMinutes: Number(s.todayMinutes) || 0, weekMinutes: Number(s.weekMinutes) || 0, streakDays: Number(s.streakDays) || 0,
       progress: s.progress == null ? null : Math.max(0, Math.min(100, Number(s.progress) || 0)), progressLabel: String(s.progressLabel || '') },
     sessions: sessions.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 50),
+    // 여행 앱: trips = [{ name, start, end, budget, spent }]
+    trips: (Array.isArray(j.trips) ? j.trips : []).filter(t => t && t.name && t.start).map(t => ({
+      name: String(t.name), start: String(t.start).slice(0, 10), end: String(t.end || t.start).slice(0, 10), budget: Number(t.budget) || 0, spent: Number(t.spent) || 0,
+    })).slice(0, 50),
   };
 }
 
@@ -95,7 +123,7 @@ export function AppCards({ apps }) {
       if (!r.ok) throw new Error(`응답 ${r.status}`);
       const data = validateFeed(await r.json());
       save(k, { data, syncedAt: stamp() });
-      setMsg({ ...msg, [k]: { t: `동기화했습니다 (기록 ${data.sessions.length}건).` } });
+      setMsg({ ...msg, [k]: { t: `동기화했습니다 (기록 ${data.sessions.length + data.trips.length}건).` } });
     } catch (e) {
       setMsg({ ...msg, [k]: { err: true, t: `동기화하지 못했습니다: ${e.message}. 앱 서버가 이 주소에서의 요청을 허용(CORS)하는지 확인하거나 JSON 파일로 불러오세요.` } });
     }
@@ -105,7 +133,7 @@ export function AppCards({ apps }) {
     try {
       const data = validateFeed(JSON.parse(await file.text()));
       save(k, { data, syncedAt: stamp() });
-      setMsg({ ...msg, [k]: { t: `파일에서 불러왔습니다 (기록 ${data.sessions.length}건).` } });
+      setMsg({ ...msg, [k]: { t: `파일에서 불러왔습니다 (기록 ${data.sessions.length + data.trips.length}건).` } });
     } catch (e) { setMsg({ ...msg, [k]: { err: true, t: `파일을 읽지 못했습니다: ${e.message}` } }); }
     if (fileRef.current[k]) fileRef.current[k].value = '';
   };
@@ -123,12 +151,13 @@ export function AppCards({ apps }) {
               <p className="lh-state">{d ? `${c.appName || d.app || name} · 마지막 동기화 ${c.syncedAt}` : linked ? `${c.appName || '앱'} 연결됨 · 아직 동기화 전` : '연동 전'}</p>
               {d && (
                 <div className="lh-data">
-                  <ul className="lh-kpi">
+                  {d.trips?.length ? <TripKpi trips={d.trips} /> : <ul className="lh-kpi">
                     <li><span>오늘</span><b>{hm(d.summary.todayMinutes)}</b></li>
                     <li><span>이번 주</span><b>{hm(d.summary.weekMinutes)}</b></li>
                     <li><span>연속</span><b>{num(d.summary.streakDays)}일</b></li>
-                  </ul>
+                  </ul>}
                   {d.summary.progress != null && <div className="lh-prog"><span>{d.summary.progressLabel || '진행률'}</span><span className="pbar"><i style={{ width: `${d.summary.progress}%`, background: 'var(--ac)' }} /></span><b>{d.summary.progress}%</b></div>}
+                  {d.trips?.length > 0 && <ul className="lh-sess">{[...d.trips].sort((a, b) => a.start.localeCompare(b.start)).filter(t => t.end >= iso(new Date())).slice(0, 4).map((t, i) => <li key={`t${i}`}><time>{Number(t.start.slice(5, 7))}/{Number(t.start.slice(8, 10))}</time><span className="grow">{t.name}</span><span className="muted">{num(t.budget)}원</span></li>)}</ul>}
                   {d.sessions.length > 0 && <ul className="lh-sess">{d.sessions.slice(0, 4).map((x, i) => <li key={i}><time>{Number(x.date.slice(5, 7))}/{Number(x.date.slice(8, 10))}</time><span className="grow">{x.title || '학습'}</span><span className="muted">{hm(x.minutes)}</span></li>)}</ul>}
                 </div>
               )}

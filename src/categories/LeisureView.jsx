@@ -1,21 +1,26 @@
 import React, { useState } from 'react';
-import { AREAS, ROWS, iso } from '../data.js';
-import { MoneyInput, areaVar, num, useCtx } from '../shared.jsx';
+import { AREAS, iso } from '../data.js';
+import { MoneyInput, WEEK, areaVar, num, useCtx } from '../shared.jsx';
+import BarChart from './BarChart.jsx';
 import { AppCards, LEISURE_APPS } from './LearnHubView.jsx';
 
-/* 개인 › 여가 관리 전용 화면: 여행 · 독서 · 취미 활동 기록
+/* 개인 › 여가 관리 대시보드: 여행 · 독서 · 기타 · 밴드 합주
+   - 맨 위 4개 카드는 직접 만든 앱과 연동 (LearnHubView 의 AppCards, store.learn.trip|reading|guitar|band)
+   - 연동 앱 기록은 아래 대시보드에 합쳐서 계산한다: 여행 앱 trips → 여행 목록, 독서·기타·밴드 앱 sessions → 활동 기록
    leisure = {
      trips: [{ id, name, start, end, budget, spent }],
      books: [{ id, title, author, pages, read, want?(읽을 책), done?(완독일) }], bookGoal,
      logs:  [{ id, date, kind, minutes, memo }],
    } */
-export const HOBBIES = ['기타 연습', '밴드 합주', '그림', '요리', '기타 취미'];
+export const HOBBIES = ['기타 연습', '밴드 합주', '독서', '기타 취미'];
+/** 연동 앱 → 활동 이름 */
+const APP_KIND = { reading: '독서', guitar: '기타 연습', band: '밴드 합주' };
+const KIND_COLOR = { '기타 연습': 'var(--viz-ex)', '밴드 합주': 'var(--viz-sl)', '독서': 'var(--a3)', '기타 취미': 'var(--ink3)' };
 const uid = () => Math.random().toString(36).slice(2, 10);
 const dayDiff = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5);
 const md = s => `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
 const won = n => `${num(n)}원`;
-const act = name => ROWS.find(r => r.a === 'P' && r.action === name);
-const ACT = { trip: act('여행 일정 연동'), cost: act('여행 비용 연동'), book: act('독서 기록 연동'), guitar: act('악보 연동'), band: act('합주 연동') };
+const addDays = (s, n) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return iso(d); };
 
 export function seedLeisure(today = new Date()) {
   const d = n => iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + n));
@@ -38,15 +43,23 @@ export function seedLeisure(today = new Date()) {
       { id: 'l2', date: d(-3), kind: '밴드 합주', minutes: 120, memo: '공연곡 2곡 합주' },
       { id: 'l3', date: d(-6), kind: '기타 연습', minutes: 30, memo: '' },
       { id: 'l4', date: d(-10), kind: '밴드 합주', minutes: 120, memo: '' },
-      { id: 'l5', date: d(-13), kind: '그림', minutes: 60, memo: '수채화' },
+      { id: 'l5', date: d(-4), kind: '독서', minutes: 40, memo: '불편한 편의점 60쪽' },
+      { id: 'l6', date: d(-8), kind: '기타 연습', minutes: 30, memo: '스트로크 연습' },
     ],
   };
 }
 
-export default function LeisureView({ area, cat, group }) {
-  const { store, setStore, now, isDone, finish } = useCtx();
+export default function LeisureView({ area, cat }) {
+  const { store, setStore, now } = useCtx();
   const today = iso(now), y = String(now.getFullYear());
-  const L = store.leisure || seedLeisure(now);
+  const raw = store.leisure || seedLeisure(now);
+  // 연동 앱 기록 합치기 (앱 기록은 화면에서 지울 수 없고 "앱 연동" 표시)
+  const learn = store.learn || {};
+  const appTrips = (learn.trip?.data?.trips || []).map((t, i) => ({ id: `app-trip-${i}`, ...t, app: true }));
+  const appLogs = Object.entries(APP_KIND).flatMap(([k, kind]) => (learn[k]?.data?.sessions || []).map((x, i) => ({ id: `app-${k}-${i}`, date: x.date, kind, minutes: x.minutes, memo: x.title, app: true })));
+  // 연동 기록이 들어오면 예시 여행(이름 끝 "(예시)")·예시 활동 기록(처음 넣은 l1~l9)은 빼고 계산
+  const exTrip = t => /\(예시\)$/.test(t.name), exLog = l => /^l\d$/.test(l.id);
+  const L = { ...raw, trips: [...(appTrips.length ? raw.trips.filter(t => !exTrip(t)) : raw.trips), ...appTrips], logs: [...(appLogs.length ? raw.logs.filter(l => !exLog(l)) : raw.logs), ...appLogs] };
   const set = fn => setStore(s => ({ ...s, leisure: fn(s.leisure || seedLeisure(now)) }));
 
   // 여행
@@ -83,7 +96,14 @@ export default function LeisureView({ area, cat, group }) {
   const month = today.slice(0, 7);
   const monthLogs = L.logs.filter(l => l.date.slice(0, 7) === month);
   const monthMin = monthLogs.reduce((a, l) => a + l.minutes, 0);
-  const byKind = HOBBIES.map(k => ({ k, v: monthLogs.filter(l => l.kind === k).reduce((a, l) => a + l.minutes, 0) })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
+  const kinds = [...new Set([...HOBBIES, ...monthLogs.map(l => l.kind)])];
+  const byKind = kinds.map(k => ({ k, v: monthLogs.filter(l => l.kind === k).reduce((a, l) => a + l.minutes, 0) })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
+  const kindMin = k => monthLogs.filter(l => l.kind === k).reduce((a, l) => a + l.minutes, 0);
+  const chart = Array.from({ length: 14 }, (_, i) => addDays(today, i - 13)).map(d => ({
+    key: d, label: md(d), title: `${md(d)} (${WEEK[new Date(d + 'T00:00:00').getDay()]})`,
+    value: L.logs.filter(l => l.date === d).reduce((a, l) => a + l.minutes, 0),
+    tip: L.logs.filter(l => l.date === d).map(l => `${l.kind} ${l.minutes}분`),
+  }));
   const maxKind = Math.max(1, ...byKind.map(x => x.v));
   const [lf, setLf] = useState({ date: today, kind: '기타 연습', minutes: 30, memo: '' });
   const addLog = e => {
@@ -93,13 +113,12 @@ export default function LeisureView({ area, cat, group }) {
     setLf({ ...lf, memo: '' });
   };
   const hm = m => (m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ''}` : `${m}분`);
-  const items = group.items.map(it => ({ it, rows: group.rows.filter(r => r.item === it) }));
 
   return (
     <div className="catv lsv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 여행 계획과 비용, 올해 읽은 책, 취미 활동 시간을 한 곳에서 관리합니다. 독서 · 기타 카드는 직접 만든 앱과 연동합니다.</p>
+        <p>{AREAS[area].n} · 여행 · 독서 · 기타 · 밴드 합주를 직접 만든 앱과 연동하고, 아래에서 한 번에 관리합니다. 연동 앱 기록은 여행 목록과 활동 기록에 함께 들어갑니다.</p>
       </header>
 
       <AppCards apps={LEISURE_APPS} />
@@ -110,7 +129,22 @@ export default function LeisureView({ area, cat, group }) {
           <span className="hv-sub">{nextTrip ? `${nextTrip.name} · ${md(nextTrip.start)}~${md(nextTrip.end)}` : '예정된 여행 없음'}</span></div>
         <div className="hv-stat ex"><span className="muted">{y}년 완독</span><b>{doneThisYear.length} / {L.bookGoal}권</b>
           <span className="pbar"><i style={{ width: `${Math.min(100, doneThisYear.length / L.bookGoal * 100)}%`, background: 'var(--viz-ex)' }} /></span></div>
-        <div className="hv-stat sl"><span className="muted">이번 달 취미 시간</span><b>{hm(monthMin)}</b><span className="hv-sub">{monthLogs.length}회 기록</span></div>
+        <div className="hv-stat ex"><span className="muted">이번 달 기타 연습</span><b>{hm(kindMin('기타 연습'))}</b><span className="hv-sub">{monthLogs.filter(l => l.kind === '기타 연습').length}회</span></div>
+        <div className="hv-stat sl"><span className="muted">이번 달 밴드 합주</span><b>{hm(kindMin('밴드 합주'))}</b><span className="hv-sub">{monthLogs.filter(l => l.kind === '밴드 합주').length}회</span></div>
+      </div>
+
+      <div className="sv-grid">
+        <section className="panel">
+          <div className="hv-ch"><h2>여가 시간</h2><span className="muted">최근 14일 · 독서 · 기타 · 합주 합계</span></div>
+          <BarChart data={chart} color="var(--viz-ex)" fmt={v => hm(v)} tickFmt={v => `${v}`} label="최근 14일 여가 시간" height={210} />
+        </section>
+        <section className="panel">
+          <div className="hv-ch"><h2>이번 달 활동별 시간</h2><span className="muted">{hm(monthMin)} · {monthLogs.length}회</span></div>
+          {byKind.length ? (
+            <ul className="fv-bars">{byKind.map(x => (
+              <li key={x.k}><span className="fv-bl">{x.k}</span><span className="fv-track"><i style={{ width: `${x.v / maxKind * 100}%`, background: KIND_COLOR[x.k] || 'var(--ink3)' }} /></span><span className="fv-bv">{hm(x.v)}</span></li>))}</ul>
+          ) : <p className="muted">이번 달 기록이 없습니다.</p>}
+        </section>
       </div>
 
       <div className="lv-grid">
@@ -123,11 +157,11 @@ export default function LeisureView({ area, cat, group }) {
             return (
               <li key={t.id}>
                 <div className="lv-trip-h"><b>{t.name}</b><span className={`st ${st[1]}`}>{st[0]}</span>
-                  <button className="tl-del" onClick={() => set(x => ({ ...x, trips: x.trips.filter(k => k.id !== t.id) }))}>삭제</button></div>
+                  {t.app ? <span className="muted sv-app">앱 연동</span> : <button className="tl-del" onClick={() => set(x => ({ ...x, trips: x.trips.filter(k => k.id !== t.id) }))}>삭제</button>}</div>
                 <div className="muted">{md(t.start)} ~ {md(t.end)} · {dayDiff(t.start, t.end)}박 {dayDiff(t.start, t.end) + 1}일</div>
                 <div className="lv-cost">
                   <span>예산 {won(t.budget)}</span>
-                  <label>사용 <MoneyInput value={t.spent} onChange={v => { updTrip(t.id, { spent: Number(v) || 0 }); }} aria-label={`${t.name} 사용 금액`} />원</label>
+                  {t.app ? <span>사용 {won(t.spent)}</span> : <label>사용 <MoneyInput value={t.spent} onChange={v => { updTrip(t.id, { spent: Number(v) || 0 }); }} aria-label={`${t.name} 사용 금액`} />원</label>}
                 </div>
                 <span className="pbar"><i style={{ width: `${Math.min(100, ratio * 100)}%`, background: ratio > 1 ? 'var(--over)' : 'var(--viz-sl)' }} /></span>
               </li>
@@ -172,30 +206,19 @@ export default function LeisureView({ area, cat, group }) {
         </section>
       </div>
 
-      {/* 취미 활동 */}
+      {/* 활동 기록 (기타 · 밴드 합주 · 독서) */}
       <section className="panel">
-        <div className="csum-h"><h2>취미 활동 기록</h2><span className="muted">이번 달 {hm(monthMin)}</span></div>
-        <div className="lv-hobby">
-          <div>
-            <form className="lv-form" onSubmit={addLog}>
-              <input type="date" value={lf.date} max={today} onChange={e => setLf({ ...lf, date: e.target.value })} aria-label="날짜" />
-              <select value={lf.kind} onChange={e => setLf({ ...lf, kind: e.target.value })} aria-label="활동">{HOBBIES.map(h => <option key={h}>{h}</option>)}</select>
-              <label className="lv-min"><input type="number" min="1" value={lf.minutes} onChange={e => setLf({ ...lf, minutes: e.target.value })} aria-label="시간(분)" />분</label>
-              <input value={lf.memo} onChange={e => setLf({ ...lf, memo: e.target.value })} placeholder="메모 (예: 공연곡 연습)" aria-label="메모" className="wide" />
-              <button className="btn primary">기록</button>
-            </form>
-            <ul className="lv-simple">{[...L.logs].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8).map(l => (
-              <li key={l.id}><time>{md(l.date)}</time><span className="tag">{l.kind}</span><span className="grow">{hm(l.minutes)}{l.memo ? ` · ${l.memo}` : ''}</span>
-                <button className="tl-del" onClick={() => set(x => ({ ...x, logs: x.logs.filter(k => k.id !== l.id) }))}>삭제</button></li>))}</ul>
-          </div>
-          <div>
-            <h3 className="lv-h3">이번 달 활동별 시간</h3>
-            {byKind.length ? (
-              <ul className="fv-bars">{byKind.map(x => (
-                <li key={x.k}><span className="fv-bl">{x.k}</span><span className="fv-track"><i style={{ width: `${x.v / maxKind * 100}%` }} /></span><span className="fv-bv">{hm(x.v)}</span></li>))}</ul>
-            ) : <p className="muted">이번 달 기록이 없습니다.</p>}
-          </div>
-        </div>
+        <div className="csum-h"><h2>활동 기록</h2><span className="muted">기타 연습 · 밴드 합주 · 독서 · 연동 앱 기록 포함</span></div>
+        <form className="lv-form" onSubmit={addLog}>
+          <input type="date" value={lf.date} max={today} onChange={e => setLf({ ...lf, date: e.target.value })} aria-label="날짜" />
+          <select value={lf.kind} onChange={e => setLf({ ...lf, kind: e.target.value })} aria-label="활동">{HOBBIES.map(h => <option key={h}>{h}</option>)}</select>
+          <label className="lv-min"><input type="number" min="1" value={lf.minutes} onChange={e => setLf({ ...lf, minutes: e.target.value })} aria-label="시간(분)" />분</label>
+          <input value={lf.memo} onChange={e => setLf({ ...lf, memo: e.target.value })} placeholder="메모 (예: 공연곡 연습)" aria-label="메모" className="wide" />
+          <button className="btn primary">기록</button>
+        </form>
+        <ul className="lv-simple">{[...L.logs].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10).map(l => (
+          <li key={l.id}><time>{md(l.date)}</time><span className="tag">{l.kind}</span><span className="grow">{hm(l.minutes)}{l.memo ? ` · ${l.memo}` : ''}</span>
+            {l.app ? <span className="muted sv-app">앱 연동</span> : <button className="tl-del" onClick={() => set(x => ({ ...x, logs: x.logs.filter(k => k.id !== l.id) }))}>삭제</button>}</li>))}</ul>
       </section>
 
     </div>
