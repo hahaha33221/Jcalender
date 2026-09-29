@@ -707,3 +707,7 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 @media (max-width: 1100px) { .gv-top { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 560px) { .gv-mini { width: 50px; } }
 .gv-none { margin: 4px 0 0; }
+.wbs .c-link { min-width: 170px; }
+.wbs .c-link select { max-width: 220px; font-size: 12.5px; }
+.wbs .c-link .muted { font-size: 12px; }
+.dv-row { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 5px; background: var(--card); font-size: 13px; }

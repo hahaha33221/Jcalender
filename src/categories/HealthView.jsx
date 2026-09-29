@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AREAS, ROWS, iso } from '../data.js';
-import { ActionRow, WEEK, areaVar, num, useCtx } from '../shared.jsx';
+import { WEEK, areaVar, num, useCtx } from '../shared.jsx';
 import BarChart from './BarChart.jsx';
 import { WORKOUT_TYPES, avgClock, estimateKcal, fmtDur, seedHealth, sleepMinutes } from './health.js';
 
@@ -44,17 +44,11 @@ export default function HealthView({ area, cat, group }) {
     tip: x.sl ? [`${x.sl.bed} 취침 → ${x.sl.wake} 기상`, fmtDur(x.sleepMin)] : [],
   }));
 
-  // 오늘 기록을 넣으면 일일체크의 해당 액션도 완료 처리
-  const completeToday = (row, date, memo) => {
-    if (row && date === iso(now) && !isDone(row)) finish(row, { t: '없음', memo });
-  };
   const addWorkout = w => {
     setHealth(h => ({ ...h, workouts: [...h.workouts, { id: uid(), ...w }] }));
-    completeToday(ACT_WORKOUT, w.date, `${w.type} ${w.minutes}분`);
   };
   const addSleep = s => {
     setHealth(h => ({ ...h, sleep: [...h.sleep.filter(x => x.date !== s.date), { id: uid(), ...s }] }));
-    completeToday(ACT_SLEEP, s.date, `${s.bed} ~ ${s.wake}`);
   };
   const delWorkout = id => setHealth(h => ({ ...h, workouts: h.workouts.filter(w => w.id !== id) }));
   const delSleep = id => setHealth(h => ({ ...h, sleep: h.sleep.filter(s => s.id !== id) }));
@@ -115,15 +109,6 @@ export default function HealthView({ area, cat, group }) {
           recent={[...health.sleep].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5)} onDelete={delSleep} />
       </div>
 
-      <h2 className="hv-sec">건강 관리 체크 항목</h2>
-      <div className="catv-items">
-        {items.map(({ it, rows }) => (
-          <section key={it} className="catv-item">
-            <div className="catv-item-h"><h3>{it}</h3><span className="muted">{rows.filter(isDone).length}/{rows.length}</span></div>
-            {rows.map(r => <ActionRow key={r.id} row={r} showCycle />)}
-          </section>
-        ))}
-      </div>
     </div>
   );
 }
@@ -154,7 +139,7 @@ function WorkoutForm({ today, onAdd, recent, onDelete }) {
         <label>시간(분)<input type="number" min="1" max="600" value={f.minutes} onChange={e => setF({ ...f, minutes: e.target.value })} /></label>
         <button className="btn primary">추가</button>
       </form>
-      <p className="note">칼로리는 종류별 평균값으로 추정합니다. 오늘 기록을 넣으면 일일체크의 "운동 기록"이 완료됩니다.</p>
+      <p className="note">칼로리는 종류별 평균값으로 추정합니다.</p>
       <ul className="hv-recent">{recent.map(w => (
         <li key={w.id}><span>{w.date.slice(5).replace('-', '/')}</span><span className="grow">{w.type} {num(w.minutes)}분 · {num(w.kcal)}kcal</span><button className="tl-del" onClick={() => onDelete(w.id)}>삭제</button></li>))}</ul>
     </section>

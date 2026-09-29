@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AREAS, ROWS, iso } from '../data.js';
-import { ActionRow, MoneyInput, WEEK, areaVar, num, useCtx } from '../shared.jsx';
+import { MoneyInput, WEEK, areaVar, num, useCtx } from '../shared.jsx';
 import BarChart from './BarChart.jsx';
 
 /* 카테고리 상세 화면 엔진
@@ -68,7 +68,6 @@ export default function ToolView({ area, cat, group, config: C }) {
     e.preventDefault();
     if (C.fields.some(f => f.req && (form[f.k] === '' || form[f.k] == null))) return;
     set(rs => [{ id: uid(), ...form }, ...rs]);
-    if (tickRow && !isDone(tickRow)) finish(tickRow, { t: '없음', memo: String(form[C.title] || '') });
     setForm(blank());
   };
   const canAdd = !C.fields.some(f => f.req && (form[f.k] === '' || form[f.k] == null));
@@ -203,18 +202,8 @@ export default function ToolView({ area, cat, group, config: C }) {
             <label key={f.k} className={`tv-f ${f.type === 'long' ? 'wide' : ''}`}><span>{f.label}{f.req ? ' *' : ''}</span><Field f={f} value={form[f.k]} onChange={v => setForm({ ...form, [f.k]: v })} /></label>))}
           <button className="btn primary" disabled={!canAdd}>추가</button>
         </form>
-        {tickRow && <p className="note">{C.noun}을(를) 추가하면 체크리스트의 "{C.tick}"이(가) 체크됩니다.</p>}
       </section>
 
-      <h2 className="hv-sec">{cat} 체크 항목</h2>
-      <div className="catv-items">
-        {items.map(({ it, rows: rs }) => (
-          <section key={it} className="catv-item">
-            <div className="catv-item-h"><h3>{it}</h3><span className="muted">{rs.filter(isDone).length}/{rs.length}</span></div>
-            {rs.map(r => <ActionRow key={r.id} row={r} showCycle />)}
-          </section>
-        ))}
-      </div>
     </div>
   );
 }

@@ -152,14 +152,32 @@ export function flatten(items) {
   return out;
 }
 
-/** 진행률: 하위가 없으면 입력값, 있으면 하위 작업들의 기간 가중 평균 */
-export function progressOf(items, id) {
+/** 진행률: 하위가 없으면 leaf(항목) 값, 있으면 하위 작업들의 기간 가중 평균.
+    leaf 는 화면에서 체크리스트 기록으로 계산하는 함수를 넘긴다 (checkProgress) */
+export function progressOf(items, id, leaf = it => Number(it.progress) || 0) {
   const it = items.find(i => i.id === id);
   const kids = childrenOf(items, id);
-  if (!kids.length) return it ? Number(it.progress) || 0 : 0;
+  if (!kids.length) return it ? leaf(it) : 0;
   let w = 0, sum = 0;
-  kids.forEach(k => { const d = Math.max(1, daysBetween(k.start, k.end) + 1); w += d; sum += d * progressOf(items, k.id); });
+  kids.forEach(k => { const d = Math.max(1, daysBetween(k.start, k.end) + 1); w += d; sum += d * progressOf(items, k.id, leaf); });
   return w ? Math.round(sum / w) : 0;
+}
+
+/** 체크리스트로 계산하는 작업 진행률 함수를 만든다.
+    작업 기간(시작~종료) 동안 해야 할 체크 수 대비 실제 체크 수. 수시체크는 제외.
+    rows: 이 보드가 따라가는 체크 항목(카테고리 전체 또는 영역 전체), item.link 가 있으면 그 항목 하나만 */
+export function checkProgress(rows, done, periodKeysBetween) {
+  const cache = new Map();
+  return it => {
+    const ck = `${it.start}|${it.end}|${it.link || ''}`;
+    if (cache.has(ck)) return cache.get(ck);
+    const use = (it.link ? rows.filter(r => r.id === it.link) : rows).filter(r => r.c !== 'S');
+    let need = 0, got = 0;
+    use.forEach(r => periodKeysBetween(r.c, it.start, it.end).forEach(k => { need++; if (done[`${r.id}@${k}`]) got++; }));
+    const p = need ? Math.round(got / need * 100) : 0;
+    cache.set(ck, p);
+    return p;
+  };
 }
 
 /** 상태: 완료 / 지연(종료일 지남) / 예정(시작 전) / 진행 */

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AREAS, ROWS, iso } from '../data.js';
-import { ActionRow, MoneyInput, areaVar, num, useCtx } from '../shared.jsx';
+import { MoneyInput, areaVar, num, useCtx } from '../shared.jsx';
 
 /* 개인 › 여가 관리 전용 화면: 여행 · 독서 · 취미 활동 기록
    leisure = {
@@ -47,7 +47,6 @@ export default function LeisureView({ area, cat, group }) {
   const today = iso(now), y = String(now.getFullYear());
   const L = store.leisure || seedLeisure(now);
   const set = fn => setStore(s => ({ ...s, leisure: fn(s.leisure || seedLeisure(now)) }));
-  const check = (row, memo) => { if (row && !isDone(row)) finish(row, { t: '없음', memo }); };
 
   // 여행
   const trips = [...L.trips].sort((a, b) => a.start.localeCompare(b.start));
@@ -57,7 +56,6 @@ export default function LeisureView({ area, cat, group }) {
     e.preventDefault();
     if (!tf.name.trim()) return;
     set(x => ({ ...x, trips: [...x.trips, { id: uid(), name: tf.name.trim(), start: tf.start, end: tf.end < tf.start ? tf.start : tf.end, budget: Number(tf.budget) || 0, spent: 0 }] }));
-    check(ACT.trip, tf.name.trim());
     setTf({ ...tf, name: '', budget: '' });
   };
   const updTrip = (id, patch) => set(x => ({ ...x, trips: x.trips.map(t => (t.id === id ? { ...t, ...patch } : t)) }));
@@ -76,7 +74,6 @@ export default function LeisureView({ area, cat, group }) {
   const setRead = (b, v) => {
     const read = Math.max(0, Math.min(b.pages, Number(v) || 0));
     set(x => ({ ...x, books: x.books.map(k => (k.id === b.id ? { ...k, read, want: false, done: read >= k.pages ? (k.done || today) : undefined } : k)) }));
-    check(ACT.book, `${b.title} ${read}/${b.pages}쪽`);
   };
   const startBook = b => set(x => ({ ...x, books: x.books.map(k => (k.id === b.id ? { ...k, want: false } : k)) }));
   const delBook = id => set(x => ({ ...x, books: x.books.filter(k => k.id !== id) }));
@@ -92,8 +89,6 @@ export default function LeisureView({ area, cat, group }) {
     e.preventDefault();
     const minutes = Math.max(1, Number(lf.minutes) || 0);
     set(x => ({ ...x, logs: [{ id: uid(), date: lf.date, kind: lf.kind, minutes, memo: lf.memo.trim() }, ...x.logs] }));
-    if (lf.kind === '기타 연습') check(ACT.guitar, `${minutes}분`);
-    if (lf.kind === '밴드 합주') check(ACT.band, `${minutes}분`);
     setLf({ ...lf, memo: '' });
   };
   const hm = m => (m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ''}` : `${m}분`);
@@ -129,7 +124,7 @@ export default function LeisureView({ area, cat, group }) {
                 <div className="muted">{md(t.start)} ~ {md(t.end)} · {dayDiff(t.start, t.end)}박 {dayDiff(t.start, t.end) + 1}일</div>
                 <div className="lv-cost">
                   <span>예산 {won(t.budget)}</span>
-                  <label>사용 <MoneyInput value={t.spent} onChange={v => { updTrip(t.id, { spent: Number(v) || 0 }); check(ACT.cost, t.name); }} aria-label={`${t.name} 사용 금액`} />원</label>
+                  <label>사용 <MoneyInput value={t.spent} onChange={v => { updTrip(t.id, { spent: Number(v) || 0 }); }} aria-label={`${t.name} 사용 금액`} />원</label>
                 </div>
                 <span className="pbar"><i style={{ width: `${Math.min(100, ratio * 100)}%`, background: ratio > 1 ? 'var(--over)' : 'var(--viz-sl)' }} /></span>
               </li>
@@ -198,18 +193,8 @@ export default function LeisureView({ area, cat, group }) {
             ) : <p className="muted">이번 달 기록이 없습니다.</p>}
           </div>
         </div>
-        <p className="note">여행을 추가하면 "여행 일정 연동", 사용 금액을 고치면 "여행 비용 연동", 쪽수를 고치면 "독서 기록 연동", 기타 연습·밴드 합주를 기록하면 "악보 연동"·"합주 연동"이 이번 주 완료로 체크됩니다.</p>
       </section>
 
-      <h2 className="hv-sec">여가 관리 체크 항목</h2>
-      <div className="catv-items">
-        {items.map(({ it, rows }) => (
-          <section key={it} className="catv-item">
-            <div className="catv-item-h"><h3>{it}</h3><span className="muted">{rows.filter(isDone).length}/{rows.length}</span></div>
-            {rows.map(r => <ActionRow key={r.id} row={r} showCycle />)}
-          </section>
-        ))}
-      </div>
     </div>
   );
 }

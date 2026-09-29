@@ -236,6 +236,22 @@ export function periodKey(c, d) {
   if (c === 'Y') return String(d.getFullYear());
   return iso(d);
 }
+/** a~b(YYYY-MM-DD, 포함) 사이에 걸치는 기간 키 목록. 목표 진행률을 체크 기록으로 계산할 때 쓴다 */
+const PK_CACHE = new Map();
+export function periodKeysBetween(c, a, b) {
+  const ck = `${c}|${a}|${b}`;
+  if (PK_CACHE.has(ck)) return PK_CACHE.get(ck);
+  const out = [];
+  if (a && b && a <= b) {
+    const seen = new Set();
+    for (let d = new Date(a + 'T00:00:00'), end = new Date(b + 'T00:00:00'); d <= end; d.setDate(d.getDate() + 1)) {
+      const k = periodKey(c, d);
+      if (!seen.has(k)) { seen.add(k); out.push(k); }
+    }
+  }
+  PK_CACHE.set(ck, out);
+  return out;
+}
 /** 정기 체크가 도래하는 날. 설정에서 바꾸며, 앱이 저장된 값으로 setRules 를 호출해 맞춘다 */
 export const DEFAULT_RULES = { weekDay: 0, monthDay: 'last', yearMonth: 12, yearDay: 30 };
 let RULES = { ...DEFAULT_RULES };

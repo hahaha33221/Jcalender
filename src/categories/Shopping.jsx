@@ -3,13 +3,12 @@ import { iso } from '../data.js';
 import { MoneyInput, useCtx } from '../shared.jsx';
 import { ACT_EXPENSE, EXP_CATS, addShop, buyShop, delShop, seedFinance, unbuyShop, won } from './finance.js';
 
-/** 재무 데이터와 변경 함수. 오늘 날짜 지출이 생기면 일일체크 "지출 입력"을 완료한다 */
+/** 재무 데이터와 변경 함수 */
 export function useFinance() {
   const { store, setStore, now, isDone, finish } = useCtx();
   const f = store.finance || seedFinance(now);
   const update = (fn, todayMemo) => {
     setStore(s => ({ ...s, finance: fn(s.finance || seedFinance(now)) }));
-    if (todayMemo && ACT_EXPENSE && !isDone(ACT_EXPENSE)) finish(ACT_EXPENSE, { t: '없음', memo: todayMemo });
   };
   return [f, update, now];
 }

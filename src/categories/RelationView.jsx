@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AREAS, ROWS, iso } from '../data.js';
-import { ActionRow, WEEK, areaVar, useCtx } from '../shared.jsx';
+import { WEEK, areaVar, useCtx } from '../shared.jsx';
 
 /* 개인 › 인맥/관계 관리 전용 화면: 바로 전화하기 · 생일/기념일 · 명함
    people: [{ id, name, group, phone, company, title, birthday('YYYY-MM-DD'), annivName, annivDate, memo,
@@ -91,7 +91,6 @@ export default function RelationView({ area, cat, group }) {
   const [openId, setOpenId] = useState(null);
   const blank = { name: '', group: '친구', phone: '', company: '', birthday: '', annivName: '', annivDate: '', card: '' };
   const [form, setForm] = useState(blank);
-  const tick = (row, memo) => { if (row && !isDone(row)) finish(row, { t: '없음', memo }); };
 
   // 다가오는 생일·기념일 (30일 이내)
   const events = people.flatMap(p => [
@@ -110,7 +109,6 @@ export default function RelationView({ area, cat, group }) {
     e.preventDefault();
     if (!form.name.trim()) return;
     setPeople(ps => [...ps, { id: uid(), ...form, name: form.name.trim(), phone: form.phone.trim(), memo: '', title: '', notes: [] }]);
-    tick(ACT_CARD, form.name.trim());
     setForm(blank);
   };
   const open = people.find(p => p.id === openId);
@@ -187,23 +185,14 @@ export default function RelationView({ area, cat, group }) {
           <label className="btn rv-file">{form.card ? '명함 선택됨' : '명함 사진'}<input type="file" accept="image/*" onChange={e => pickCard(e.target.files[0], card => setForm(f => ({ ...f, card })))} hidden /></label>
           <button className="btn primary" disabled={!form.name.trim()}>추가</button>
         </form>
-        <p className="note">사람을 추가하면 "명함 등록"이 체크됩니다. 명함 사진은 저장 공간을 아끼려고 작게 줄여서 저장합니다.</p>
+        <p className="note">명함 사진은 저장 공간을 아끼려고 작게 줄여서 저장합니다.</p>
       </section>
 
-      <h2 className="hv-sec">인맥/관계 관리 체크 항목</h2>
-      <div className="catv-items">
-        {items.map(({ it, rows }) => (
-          <section key={it} className="catv-item">
-            <div className="catv-item-h"><h3>{it}</h3><span className="muted">{rows.filter(isDone).length}/{rows.length}</span></div>
-            {rows.map(r => <ActionRow key={r.id} row={r} showCycle />)}
-          </section>
-        ))}
-      </div>
 
       {open && <PersonDetail p={open} today={today} onClose={() => setOpenId(null)} upd={patch => upd(open.id, patch)}
         onDelete={() => { setPeople(ps => ps.filter(x => x.id !== open.id)); setOpenId(null); }}
-        pickCard={file => pickCard(file, card => { upd(open.id, { card }); tick(ACT_CARD, open.name); })}
-        addNote={text => { upd(open.id, { notes: [{ id: uid(), date: today, text }, ...open.notes] }); tick(ACT_NOTE, `${open.name}: ${text}`); }} />}
+        pickCard={file => pickCard(file, card => { upd(open.id, { card }); })}
+        addNote={text => { upd(open.id, { notes: [{ id: uid(), date: today, text }, ...open.notes] }); }} />}
     </div>
   );
 }

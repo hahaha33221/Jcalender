@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AREAS, iso } from '../data.js';
-import { ActionRow, MoneyInput, WEEK, areaVar, useCtx } from '../shared.jsx';
+import { MoneyInput, WEEK, areaVar, useCtx } from '../shared.jsx';
 import ShoppingList, { useFinance } from './Shopping.jsx';
 import { EXP_CATS, addExpense, delExpense, won } from './finance.js';
 
@@ -62,7 +62,7 @@ export default function FinanceView({ area, cat, group }) {
               <label className="wide">메모<input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} placeholder="예: 점심" /></label>
               <button className="btn primary" disabled={!Number(form.amount)}>기록</button>
             </form>
-            <p className="note">오늘 지출을 기록하면 일일체크의 "지출 입력"이 완료됩니다.</p>
+            
           </section>
           <section className="panel">
             <div className="hv-ch"><h2>분류별 지출</h2><span className="muted">{month.replace('-', '년 ')}월</span></div>
@@ -93,15 +93,6 @@ export default function FinanceView({ area, cat, group }) {
         ) : <p className="muted">이 달의 지출 내역이 없습니다.</p>}
       </section>
 
-      <h2 className="hv-sec">개인 재무 체크 항목</h2>
-      <div className="catv-items">
-        {items.map(({ it, rows }) => (
-          <section key={it} className="catv-item">
-            <div className="catv-item-h"><h3>{it}</h3><span className="muted">{rows.filter(isDone).length}/{rows.length}</span></div>
-            {rows.map(r => <ActionRow key={r.id} row={r} showCycle />)}
-          </section>
-        ))}
-      </div>
     </div>
   );
 }

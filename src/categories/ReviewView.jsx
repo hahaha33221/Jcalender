@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AREAS, ROWS, iso, periodKey } from '../data.js';
-import { ActionRow, WEEK, areaVar, num, useCtx } from '../shared.jsx';
+import { WEEK, areaVar, num, useCtx } from '../shared.jsx';
 import { sleepMinutes } from './health.js';
 
 /* 개인 › 리뷰/회고, 저널링 전용 화면
@@ -122,7 +122,6 @@ export default function ReviewView({ area, cat, group }) {
   };
   const saveReview = () => {
     set(x => ({ ...x, reviews: [...x.reviews.filter(r => r.week !== week), { id: saved?.id || uid(), week, keep: rview.keep.trim(), problem: rview.problem.trim(), tryNext: rview.tryNext.trim(), saved: today }] }));
-    if (week === thisWeek && ACT_REVIEW && !isDone(ACT_REVIEW)) finish(ACT_REVIEW, { t: '없음', memo: '주간 회고 작성' });
     setRv(null);
   };
 
@@ -216,15 +215,6 @@ export default function ReviewView({ area, cat, group }) {
         </section>
       </div>
 
-      <h2 className="hv-sec">리뷰/회고, 저널링 체크 항목</h2>
-      <div className="catv-items">
-        {items.map(({ it, rows }) => (
-          <section key={it} className="catv-item">
-            <div className="catv-item-h"><h3>{it}</h3><span className="muted">{rows.filter(isDone).length}/{rows.length}</span></div>
-            {rows.map(r => <ActionRow key={r.id} row={r} showCycle />)}
-          </section>
-        ))}
-      </div>
     </div>
   );
 }

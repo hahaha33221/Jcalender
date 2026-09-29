@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AREAS, ROWS, iso } from '../data.js';
-import { ActionRow, WEEK, areaVar, num, useCtx } from '../shared.jsx';
+import { WEEK, areaVar, num, useCtx } from '../shared.jsx';
 import BarChart from './BarChart.jsx';
 
 /* 학습 대시보드 (개인 › 자기계발/학습, 근로 › 직무 학습 공통)
@@ -50,7 +50,6 @@ export default function StudyView({ area, cat, group }) {
   const today = iso(now), key = `${area}|${cat}`, P = PRESETS[key];
   const S = store.study?.[key] || seedStudy(key, now);
   const set = fn => setStore(s => ({ ...s, study: { ...(s.study || {}), [key]: fn(s.study?.[key] || seedStudy(key, now)) } }));
-  const tick = (name, memo) => { const row = ROWS.find(r => r.a === area && r.cat === cat && r.action === name); if (row && !isDone(row)) finish(row, { t: '없음', memo }); };
 
   // 통계
   const minsOn = d => S.logs.filter(l => l.date === d).reduce((a, l) => a + l.minutes, 0);
@@ -73,7 +72,6 @@ export default function StudyView({ area, cat, group }) {
     const minutes = Math.max(1, Number(f.minutes) || 0);
     if (!f.subject) return;
     set(x => ({ ...x, logs: [{ id: uid(), date: f.date, subject: f.subject, minutes, memo: f.memo.trim() }, ...x.logs] }));
-    if (f.date === today) { tick(P.acts.time, `${f.subject} ${minutes}분`); if (f.memo.trim()) tick(P.acts.note, f.memo.trim()); }
     setF({ ...f, memo: '' });
   };
   const [sf, setSf] = useState({ name: '', target: 50 });
@@ -137,7 +135,6 @@ export default function StudyView({ area, cat, group }) {
           <ul className="lv-simple">{[...S.logs].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10).map(l => (
             <li key={l.id}><time>{md(l.date)}</time><span className="tag">{l.subject}</span><span className="grow">{hm(l.minutes)}{l.memo ? ` · ${l.memo}` : ''}</span>
               <button className="tl-del" onClick={() => set(x => ({ ...x, logs: x.logs.filter(k => k.id !== l.id) }))}>삭제</button></li>))}</ul>
-          <p className="note">오늘 기록을 넣으면 "{P.acts.time}", 내용을 적으면 "{P.acts.note}"이 체크됩니다.</p>
         </section>
 
         <section className="panel">
@@ -161,15 +158,6 @@ export default function StudyView({ area, cat, group }) {
         </section>
       </div>
 
-      <h2 className="hv-sec">{cat} 체크 항목</h2>
-      <div className="catv-items">
-        {items.map(({ it, rows }) => (
-          <section key={it} className="catv-item">
-            <div className="catv-item-h"><h3>{it}</h3><span className="muted">{rows.filter(isDone).length}/{rows.length}</span></div>
-            {rows.map(r => <ActionRow key={r.id} row={r} showCycle />)}
-          </section>
-        ))}
-      </div>
     </div>
   );
 }

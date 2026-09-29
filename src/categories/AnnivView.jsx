@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AREAS, iso } from '../data.js';
 import { ANNIV_KINDS, nextAnniv } from '../anniv.js';
-import { ActionRow, WEEK, areaVar, useCtx } from '../shared.jsx';
+import { WEEK, areaVar, useCtx } from '../shared.jsx';
 
 /* 개인 › 기념일 관리 전용 화면: 다가오는 기념일, 월별 달력형 목록, 기념일 편집 */
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -48,15 +48,6 @@ export default function AnnivView({ area, cat, group }) {
 
       <AnnivManager />
 
-      <h2 className="hv-sec">기념일 관리 체크 항목</h2>
-      <div className="catv-items">
-        {items.map(({ it, rows }) => (
-          <section key={it} className="catv-item">
-            <div className="catv-item-h"><h3>{it}</h3><span className="muted">{rows.filter(isDone).length}/{rows.length}</span></div>
-            {rows.map(r => <ActionRow key={r.id} row={r} showCycle />)}
-          </section>
-        ))}
-      </div>
     </div>
   );
 }

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { AREAS, ROWS, iso } from '../data.js';
-import { ActionRow, areaVar, useCtx } from '../shared.jsx';
+import { AREAS, CYCLES, ROWS, iso, periodKeysBetween } from '../data.js';
+import { areaVar, useCtx } from '../shared.jsx';
 import {
-  EMPTY, addItem, addMile, boardForYear, boardKey, daysBetween, delItem, delMile, flatten, progressOf, seedGoals, statusOf, toDate, updItem, updMile,
+  EMPTY, addItem, addMile, boardForYear, boardKey, checkProgress, daysBetween, delItem, delMile, flatten, progressOf, seedGoals, statusOf, toDate, updItem, updMile,
 } from './goals.js';
 
 /* 목표 관리 (연 단위 WBS + 마일스톤)
@@ -24,6 +24,13 @@ export function useGoals(area, cat) {
   return { boards, g: boards[key] || EMPTY, update };
 }
 
+/** 보드가 따라가는 체크 항목: 카테고리 보드는 그 카테고리, '목표 관리'(영역 공통) 보드는 영역 전체 */
+const checkRowsOf = (area, cat) => ROWS.filter(r => r.a === area && (cat === '목표 관리' || r.cat === cat));
+/** 작업 진행률을 체크리스트 기록으로 계산하는 함수 */
+export const leafFor = (area, cat, done) => checkProgress(checkRowsOf(area, cat), done || {}, periodKeysBetween);
+/** 마일스톤 완료 = 연결된 목표·작업의 진행률 100% */
+const withDone = (miles, items, leaf) => miles.map(m => ({ ...m, done: !!m.link && items.some(i => i.id === m.link) && progressOf(items, m.link, leaf) >= 100 }));
+
 export function YearPicker({ year, setYear }) {
   return (
     <div className="year-pick" role="group" aria-label="연도">
@@ -35,12 +42,15 @@ export function YearPicker({ year, setYear }) {
 }
 
 export function GoalBoard({ area, cat, title = '목표 관리', year: yearProp, setYear: setYearProp }) {
-  const { now } = useCtx();
+  const { now, store } = useCtx();
   const today = iso(now);
   const [yearOwn, setYearOwn] = useState(now.getFullYear());
   const year = yearProp ?? yearOwn, setYear = setYearProp ?? setYearOwn;
   const { g: full, update } = useGoals(area, cat);
-  const g = boardForYear(full, year);
+  const leaf = leafFor(area, cat, store.done);
+  const acts = checkRowsOf(area, cat).filter(r => r.c !== 'S');
+  const yb = boardForYear(full, year);
+  const g = { ...yb, miles: withDone(yb.miles, full.items, leaf) };
   const [fold, setFold] = useState({});
   const [mform, setMform] = useState({ name: '', date: today, link: '' });
 
@@ -53,9 +63,9 @@ export function GoalBoard({ area, cat, title = '목표 관리', year: yearProp, 
   const roots = rows.filter(r => r.level === 0);
   const leaves = rows.filter(r => !r.hasKids);
   let w = 0, sum = 0;
-  roots.forEach(r => { const d = Math.max(1, daysBetween(r.item.start, r.item.end) + 1); w += d; sum += d * progressOf(g.items, r.item.id); });
+  roots.forEach(r => { const d = Math.max(1, daysBetween(r.item.start, r.item.end) + 1); w += d; sum += d * progressOf(g.items, r.item.id, leaf); });
   const overall = w ? Math.round(sum / w) : 0;
-  const late = leaves.filter(r => statusOf(r.item, progressOf(g.items, r.item.id), today).k === 'late');
+  const late = leaves.filter(r => statusOf(r.item, progressOf(g.items, r.item.id, leaf), today).k === 'late');
   const nextMile = [...g.miles].filter(m => !m.done && m.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
 
   // 일정 막대: 그 해 1월 1일 ~ 12월 31일
@@ -95,11 +105,11 @@ export function GoalBoard({ area, cat, title = '목표 관리', year: yearProp, 
           <div className="tablewrap">
             <table className="wbs">
               <thead>
-                <tr><th className="c-code">WBS</th><th className="c-name">항목</th><th className="c-mid">시작</th><th className="c-mid">종료</th><th className="c-prog c-mid">진행률</th><th className="c-mid">상태</th><th /></tr>
+                <tr><th className="c-code">WBS</th><th className="c-name">항목</th><th className="c-mid">시작</th><th className="c-mid">종료</th><th className="c-link c-mid">진행률 기준 (체크 항목)</th><th className="c-prog c-mid">진행률</th><th className="c-mid">상태</th><th /></tr>
               </thead>
               <tbody>
                 {shown.map(({ item: it, level, code, hasKids }) => {
-                  const p = progressOf(g.items, it.id), st = statusOf(it, p, today);
+                  const p = progressOf(g.items, it.id, leaf), st = statusOf(it, p, today);
                   const l = pct(it.start), r = pct(nextDay(it.end));
                   return (
                     <tr key={it.id} className={`lv${Math.min(level, 2)}`}>
@@ -112,9 +122,11 @@ export function GoalBoard({ area, cat, title = '목표 관리', year: yearProp, 
                       </td>
                       <td className="c-mid"><input type="date" value={it.start} onChange={e => setDate(it, 'start', e.target.value)} aria-label={`${code} 시작일`} /></td>
                       <td className="c-mid"><input type="date" value={it.end} onChange={e => setDate(it, 'end', e.target.value)} aria-label={`${code} 종료일`} /></td>
-                      <td className="c-prog c-mid">{hasKids ? <b>{p}%</b> : (
-                        <select value={p} onChange={e => update(x => updItem(x, it.id, { progress: Number(e.target.value) }))} aria-label={`${code} 진행률`}>
-                          {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(v => <option key={v} value={v}>{v}%</option>)}</select>)}</td>
+                      <td className="c-link c-mid">{hasKids ? <span className="muted">하위 작업 평균</span> : (
+                        <select value={it.link || ''} onChange={e => update(x => updItem(x, it.id, { link: e.target.value || undefined }))} aria-label={`${code} 진행률 기준 체크 항목`}>
+                          <option value="">{cat === '목표 관리' ? '영역 전체' : '카테고리 전체'}</option>
+                          {acts.map(r => <option key={r.id} value={r.id}>{CYCLES[r.c].slice(0, 2)} · {r.action.replace(' (제안)', '')}</option>)}</select>)}</td>
+                      <td className="c-prog c-mid"><b>{p}%</b></td>
                       <td className="c-mid"><span className={`st ${st.k}`}>{st.t}</span></td>
                       <td className="c-act">
                         {level < 2 && <button className="btn sm" onClick={() => { update(x => addItem(x, it.id, today, year)); setFold({ ...fold, [it.id]: false }); }}>+ 하위</button>}
@@ -145,7 +157,7 @@ export function GoalBoard({ area, cat, title = '목표 관리', year: yearProp, 
                 </div>
               </div>
               {shown.map(({ item: it, level, code }) => {
-                const p = progressOf(g.items, it.id), st = statusOf(it, p, today);
+                const p = progressOf(g.items, it.id, leaf), st = statusOf(it, p, today);
                 const l = pct(it.start), r = pct(nextDay(it.end));
                 return (
                   <div key={it.id} className={`gantt-row lv${Math.min(level, 2)}`}>
@@ -166,16 +178,15 @@ export function GoalBoard({ area, cat, title = '목표 관리', year: yearProp, 
       )}
 
       <div className="panel">
-        <div className="csum-h"><h2>마일스톤</h2><span className="muted">{year}년 · {g.miles.filter(m => m.done).length}/{g.miles.length} 완료</span></div>
+        <div className="csum-h"><h2>마일스톤</h2><span className="muted">{year}년 · {g.miles.filter(m => m.done).length}/{g.miles.length} 완료 · 연결 항목 진행률이 100%가 되면 완료</span></div>
         {g.miles.length > 0 && (
           <div className="tablewrap">
             <table className="prog mile-tb">
-              <thead><tr><th>완료</th><th>날짜</th><th>남은 날</th><th>마일스톤</th><th>연결 항목</th><th /></tr></thead>
+              <thead><tr><th>날짜</th><th>남은 날</th><th>마일스톤</th><th>연결 항목</th><th /></tr></thead>
               <tbody>{[...g.miles].sort((a, b) => a.date.localeCompare(b.date)).map(m => {
                 const dd = daysBetween(today, m.date);
                 return (
                   <tr key={m.id} className={m.done ? 'is-done' : ''}>
-                    <td><input type="checkbox" checked={m.done} onChange={e => update(x => updMile(x, m.id, { done: e.target.checked }))} aria-label={`${m.name} 완료`} /></td>
                     <td><input type="date" value={m.date} onChange={e => e.target.value && update(x => updMile(x, m.id, { date: e.target.value }))} aria-label={`${m.name} 날짜`} /></td>
                     <td className={`nowrap ${!m.done && dd < 0 ? 'late-t' : ''}`}>{m.done ? '완료' : dd === 0 ? '오늘' : dd > 0 ? `D-${dd}` : `${-dd}일 지남`}</td>
                     <td><input value={m.name} onChange={e => update(x => updMile(x, m.id, { name: e.target.value }))} aria-label="마일스톤 이름" /></td>
@@ -202,7 +213,7 @@ export function GoalBoard({ area, cat, title = '목표 관리', year: yearProp, 
 
 /* '목표 관리' 카테고리 화면: 영역의 모든 카테고리 목표를 모아서 본다 (통합 WBS · 연간 일정표 · 마일스톤) + 영역 공통 목표 */
 export default function GoalView({ area, cat, group }) {
-  const { now, isDone, openCat, setStore } = useCtx();
+  const { now, openCat, store } = useCtx();
   const today = iso(now);
   const [year, setYear] = useState(now.getFullYear());
   const [tasks, setTasks] = useState(false);        // 작업(3단계)까지 펼치기
@@ -214,18 +225,19 @@ export default function GoalView({ area, cat, group }) {
   const groups = order.map((c, ci) => {
     const b = boards[boardKey(area, c)];
     if (!b) return null;
-    const yb = boardForYear(b, year);
+    const leaf = leafFor(area, c, store.done);
+    const yb0 = boardForYear(b, year), yb = { ...yb0, miles: withDone(yb0.miles, b.items, leaf) };
     const rows = flatten(yb.items);
     const roots = rows.filter(r => r.level === 0);
     if (!roots.length && !yb.miles.length) return null;
     let w = 0, sum = 0;
-    roots.forEach(r => { const d = Math.max(1, daysBetween(r.item.start, r.item.end) + 1); w += d; sum += d * progressOf(yb.items, r.item.id); });
+    roots.forEach(r => { const d = Math.max(1, daysBetween(r.item.start, r.item.end) + 1); w += d; sum += d * progressOf(yb.items, r.item.id, leaf); });
     const starts = roots.map(r => r.item.start).sort(), ends = roots.map(r => r.item.end).sort();
-    return { c, key: boardKey(area, c), yb, rows, roots, p: w ? Math.round(sum / w) : 0, start: starts[0], end: ends[ends.length - 1] };
+    return { c, key: boardKey(area, c), yb, rows, roots, leaf, p: w ? Math.round(sum / w) : 0, start: starts[0], end: ends[ends.length - 1] };
   }).filter(Boolean).map((g, i) => ({ ...g, n: i + 1 }));
 
-  const allRoots = groups.flatMap(g => g.roots.map(r => ({ g, r, p: progressOf(g.yb.items, r.item.id) })));
-  const allLeaves = groups.flatMap(g => g.rows.filter(r => !r.hasKids).map(r => ({ g, r, st: statusOf(r.item, progressOf(g.yb.items, r.item.id), today) })));
+  const allRoots = groups.flatMap(g => g.roots.map(r => ({ g, r, p: progressOf(g.yb.items, r.item.id, g.leaf) })));
+  const allLeaves = groups.flatMap(g => g.rows.filter(r => !r.hasKids).map(r => ({ g, r, st: statusOf(r.item, progressOf(g.yb.items, r.item.id, g.leaf), today) })));
   let W = 0, S = 0;
   allRoots.forEach(x => { const d = Math.max(1, daysBetween(x.r.item.start, x.r.item.end) + 1); W += d; S += d * x.p; });
   const avg = W ? Math.round(S / W) : 0;
@@ -234,11 +246,6 @@ export default function GoalView({ area, cat, group }) {
   const mm = today.slice(5, 7), monthKey = `${year}-${mm}`;
   const monthMiles = miles.filter(x => x.m.date.slice(0, 7) === monthKey);
   const soonMiles = miles.filter(x => !x.m.done && x.m.date.slice(0, 7) !== monthKey && x.m.date > today && daysBetween(today, x.m.date) <= 30);
-  const setMile = (key, id, patch) => setStore(s => {
-    const cur = s.goals?.v === 2 ? s.goals : seedGoals(now);
-    const b = cur.boards[key] || EMPTY;
-    return { ...s, goals: { ...cur, boards: { ...cur.boards, [key]: updMile(b, id, patch) } } };
-  });
 
   // 연간 일정표 위치
   const y0 = `${year}-01-01`, y1 = `${year}-12-31`, span = daysBetween(y0, y1) + 1;
@@ -248,7 +255,6 @@ export default function GoalView({ area, cat, group }) {
     const l = pct(it.start), r = pct(nextDay(it.end));
     return r > l ? <span className={`gbar ${st} ${cls}`} style={{ left: `${l}%`, width: `${r - l}%` }} title={`${it.name} · ${md(it.start)} ~ ${md(it.end)} · ${p}%`}><i style={{ width: `${p}%` }} /></span> : null;
   };
-  const items = group.items.map(it => ({ it, rows: group.rows.filter(r => r.item === it) }));
   const catLabel = c => (c === '목표 관리' ? '영역 공통' : c);
   const MileList = ({ list }) => (
     <ul className="gv-miles">{list.map(({ g, m }) => {
@@ -267,7 +273,7 @@ export default function GoalView({ area, cat, group }) {
     <div className="catv gv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 각 카테고리에서 세운 {year}년 목표를 모두 모아 봅니다. 목표 수정은 카테고리 이름을 눌러 해당 페이지에서 합니다.</p>
+        <p>{AREAS[area].n} · 각 카테고리에서 세운 {year}년 목표를 모두 모아 봅니다. 진행률은 체크리스트 체크 기록으로 계산됩니다. 목표 수정은 카테고리 이름을 눌러 해당 페이지에서 합니다.</p>
       </header>
 
       <div className="bar"><YearPicker year={year} setYear={setYear} />
@@ -312,7 +318,7 @@ export default function GoalView({ area, cat, group }) {
                 <td className="c-mid" />
               </tr>,
               ...(fold[g.key] ? [] : g.rows.filter(r => tasks || r.level < 2).map(r => {
-                const p = progressOf(g.yb.items, r.item.id), st = statusOf(r.item, p, today);
+                const p = progressOf(g.yb.items, r.item.id, g.leaf), st = statusOf(r.item, p, today);
                 return (
                   <tr key={r.item.id} className={`lv${Math.min(r.level, 2)}`}>
                     <td className="c-code">{g.n}.{r.code}</td>
@@ -346,7 +352,7 @@ export default function GoalView({ area, cat, group }) {
                   {g.start && bar({ name: catLabel(g.c), start: g.start, end: g.end }, g.p, 'run', 'cat')}
                 </div></div>,
               ...g.rows.filter(r => r.level === 0 || (tasks && r.level === 1)).map(r => {
-                const p = progressOf(g.yb.items, r.item.id), st = statusOf(r.item, p, today);
+                const p = progressOf(g.yb.items, r.item.id, g.leaf), st = statusOf(r.item, p, today);
                 return (
                   <div key={r.item.id} className={`gantt-row lv${r.level + 1}`}>
                     <span className="gantt-label" style={{ paddingLeft: 14 + r.level * 14 }}><em>{g.n}.{r.code}</em> {r.item.name}</span>
@@ -367,12 +373,11 @@ export default function GoalView({ area, cat, group }) {
         <div className="csum-h"><h2>통합 마일스톤</h2><span className="muted">{year}년 · {miles.filter(x => x.m.done).length}/{miles.length} 완료</span></div>
         {miles.length ? (
           <div className="tablewrap"><table className="prog mile-tb">
-            <thead><tr><th>완료</th><th>날짜</th><th>남은 날</th><th>마일스톤</th><th>카테고리</th><th>연결 목표</th></tr></thead>
+            <thead><tr><th>날짜</th><th>남은 날</th><th>마일스톤</th><th>카테고리</th><th>연결 목표</th></tr></thead>
             <tbody>{miles.map(({ g, m, link }) => {
               const dd = daysBetween(today, m.date);
               return (
                 <tr key={m.id} className={m.done ? 'is-done' : ''}>
-                  <td><input type="checkbox" checked={m.done} onChange={e => setMile(g.key, m.id, { done: e.target.checked })} aria-label={`${m.name} 완료`} /></td>
                   <td className="nowrap">{md(m.date)}</td>
                   <td className={`nowrap ${!m.done && dd < 0 ? 'late-t' : ''}`}>{m.done ? '완료' : dd === 0 ? '오늘' : dd > 0 ? `D-${dd}` : `${-dd}일 지남`}</td>
                   <td className={m.done ? 'muted' : ''}>{m.name}</td>
@@ -387,15 +392,6 @@ export default function GoalView({ area, cat, group }) {
 
       <GoalBoard area={area} cat={cat} title="영역 공통 목표 편집" year={year} setYear={setYear} />
 
-      <h2 className="hv-sec">목표 관리 체크 항목</h2>
-      <div className="catv-items">
-        {items.map(({ it, rows: rs }) => (
-          <section key={it} className="catv-item">
-            <div className="catv-item-h"><h3>{it}</h3><span className="muted">{rs.filter(isDone).length}/{rs.length}</span></div>
-            {rs.map(r => <ActionRow key={r.id} row={r} showCycle />)}
-          </section>
-        ))}
-      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AREAS, CYCLES, isDue, periodKey } from '../data.js';
-import { ActionRow, areaVar, useCtx } from '../shared.jsx';
+import { areaVar, useCtx } from '../shared.jsx';
 
 /* 카테고리 기본 상세 화면: 요약 → 주기별 현황 → 세부 항목별 액션.
    전용 화면을 만들 때 이 파일을 복사해서 시작하면 된다. */
@@ -38,7 +38,7 @@ export default function DefaultView({ area, cat, group }) {
         {items.map(({ it, rows: rs }) => (
           <section key={it} className="catv-item">
             <div className="catv-item-h"><h3>{it}</h3><span className="muted">{rs.filter(isDone).length}/{rs.length}</span></div>
-            {rs.map(r => <ActionRow key={r.id} row={r} showCycle />)}
+            {rs.map(r => <div key={r.id} className="dv-row"><b>{r.action.replace(' (제안)', '')}</b><span className="muted">{CYCLES[r.c]} · {r.detail}</span></div>)}
           </section>
         ))}
       </div>
