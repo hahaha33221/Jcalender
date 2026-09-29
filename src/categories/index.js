@@ -38,3 +38,6 @@ export const CATEGORY_VIEWS = {
 export const viewFor = (area, cat) => CATEGORY_VIEWS[`${area}|${cat}`] || DefaultView;
 /** 전용 화면이 만들어진 카테고리인지 (영역 페이지 타일에 "완료" 표시) */
 export const hasCustomView = (area, cat) => !!CATEGORY_VIEWS[`${area}|${cat}`];
+/** 1차 검수를 마친 카테고리 (영역 페이지 타일에 "완료" 대신 "1차 검수" 표시). 목표 관리는 개인·사업·근로 모두 */
+const FIRST_REVIEW = new Set(['P|건강 관리', 'P|자기계발/학습', 'P|목표 관리', 'B|목표 관리', 'W|목표 관리']);
+export const isFirstReviewed = (area, cat) => FIRST_REVIEW.has(`${area}|${cat}`);

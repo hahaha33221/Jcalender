@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActionRow, Ctx, WEEK, areaVar, num, useCtx } from './shared.jsx';
-import { hasCustomView, viewFor } from './categories/index.js';
+import { hasCustomView, isFirstReviewed, viewFor } from './categories/index.js';
 import { seedHealth } from './categories/health.js';
 import { seedFinance } from './categories/finance.js';
 import { addExampleGoals, boardForYear, boardKey, dropNoGoal, hasGoals, migrateGoals, seedGoals } from './categories/goals.js';
@@ -671,7 +671,7 @@ function AreaPage({ area }) {
       <div className="tiles" style={{ '--ac': areaVar(area) }}>
         {shown.map(g => (
           <button key={g.cat} className="tile" onClick={() => openCat(area, g.cat)}>
-            <span className="tile-h"><b>{g.cat}</b>{hasCustomView(area, g.cat) && <span className="tile-done" title="전용 상세 화면 완료">완료</span>}{store.reviewed?.[`${area}|${g.cat}`] && <span className="tile-rev" title="검수 완료">검수 완료</span>}<span className="tile-go" aria-hidden="true">›</span></span>
+            <span className="tile-h"><b>{g.cat}</b>{isFirstReviewed(area, g.cat) ? <span className="tile-done first" title="1차 검수 완료">1차 검수</span> : hasCustomView(area, g.cat) && <span className="tile-done" title="전용 상세 화면 완료">완료</span>}{store.reviewed?.[`${area}|${g.cat}`] && <span className="tile-rev" title="검수 완료">검수 완료</span>}<span className="tile-go" aria-hidden="true">›</span></span>
             <span className="tile-items">{g.items.slice(0, 5).map(it => <span key={it} className="tile-item">{it}</span>)}{g.items.length > 5 && <span className="tile-item more">외 {g.items.length - 5}</span>}</span>
             <span className="tile-cyc">{Object.keys(CYCLES).filter(c => g.cyc[c]).map(c => <span key={c} className={`cyc c-${c}`}>{CYCLES[c].slice(0, 2)} {g.cyc[c]}</span>)}
               {goalsOf(g.cat) > 0 && <span className="cyc goal">{now.getFullYear()}년 목표 {goalsOf(g.cat)}</span>}</span>
