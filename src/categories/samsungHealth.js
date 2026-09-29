@@ -30,7 +30,7 @@ export function parseCsv(text) {
 
 /** 설명 줄을 건너뛰고 { 열이름: 값 } 목록으로 */
 function toObjects(text) {
-  const rows = parseCsv(text.replace(/^﻿/, ''));
+  const rows = parseCsv(text.replace(/^\uFEFF/, ''));
   if (!rows.length) return [];
   let h = 0;
   if (rows[0].length <= 3 && /samsung|shealth/.test(rows[0][0]) && rows.length > 1) h = 1;   // 설명 줄

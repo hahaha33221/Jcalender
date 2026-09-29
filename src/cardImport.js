@@ -11,7 +11,7 @@ export const CARD_COMPANIES = ['롯데카드', 'KB국민카드'];
 /** 한글 글자 코드: UTF-8 이 깨지면 EUC-KR 로 다시 읽는다 */
 function decode(buf) {
   const u = new TextDecoder('utf-8').decode(buf);
-  if (!u.includes('�')) return u.replace(/^﻿/, '');
+  if (!/\uFFFD/.test(u)) return u.replace(/^\uFEFF/, '');
   try { return new TextDecoder('euc-kr').decode(buf); } catch (e) { return u; }
 }
 /** HTML 표(확장자만 .xls 인 파일) → 가장 큰 표의 행 */
