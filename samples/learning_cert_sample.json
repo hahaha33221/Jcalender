@@ -1,0 +1,38 @@
+{
+  "app": "나의 자격증 앱",
+  "updatedAt": "2026-09-29T21:00:00+09:00",
+  "summary": {
+    "todayMinutes": 35,
+    "weekMinutes": 65,
+    "streakDays": 5,
+    "progress": 30,
+    "progressLabel": "정보처리기사 기출"
+  },
+  "sessions": [
+    {
+      "date": "2026-09-29",
+      "minutes": 35,
+      "title": "기출 20문항"
+    },
+    {
+      "date": "2026-09-28",
+      "minutes": 30,
+      "title": "이론 1장 정리"
+    },
+    {
+      "date": "2026-09-27",
+      "minutes": 20,
+      "title": "오답 노트"
+    },
+    {
+      "date": "2026-09-26",
+      "minutes": 50,
+      "title": "모의고사 1회"
+    },
+    {
+      "date": "2026-09-25",
+      "minutes": 15,
+      "title": "요약 암기"
+    }
+  ]
+}

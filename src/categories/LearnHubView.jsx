@@ -3,12 +3,18 @@ import { AREAS, iso } from '../data.js';
 import { areaVar, num, useCtx } from '../shared.jsx';
 import StudyView from './StudyView.jsx';
 
-/* 개인 › 자기계발/학습: 영어 · 독서 · 기타 3개 아이콘 카드
-   직접 개발하는 앱과 연동한다. 카드마다 앱 주소(열기)와 데이터 주소(동기화)를 저장하고,
+/* 직접 개발하는 앱과 연동하는 아이콘 카드
+   - 개인 › 자기계발/학습: 영어 · IT · 자격증 (LEARN_APPS)
+   - 개인 › 여가 관리: 독서 · 기타 (LEISURE_APPS, LeisureView 에서 AppCards 로 사용)
+   카드마다 앱 주소(열기)와 데이터 주소(동기화)를 저장하고,
    데이터 주소는 docs/learning-app-integration.md 의 JSON 형식을 돌려주면 된다.
-   learn = { english|reading|guitar: { appName, openUrl, dataUrl, data, syncedAt } } */
+   learn = { english|it|cert|reading|guitar: { appName, openUrl, dataUrl, data, syncedAt } } */
 export const LEARN_APPS = [
   { key: 'english', name: '영어' },
+  { key: 'it', name: 'IT' },
+  { key: 'cert', name: '자격증' },
+];
+export const LEISURE_APPS = [
   { key: 'reading', name: '독서' },
   { key: 'guitar', name: '기타' },
 ];
@@ -18,6 +24,14 @@ const ICONS = {
   english: (
     <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10 14h36a6 6 0 0 1 6 6v18a6 6 0 0 1-6 6H28l-10 9v-9h-8a6 6 0 0 1-6-6V20a6 6 0 0 1 6-6z" />
       <path d="M17 37l6-15 6 15M19.5 31h7" /><path d="M36 26c2-2 7-2 8 1v10M44 32c-1-2-8-2-8 2s6 4 8 1" /></svg>
+  ),
+  it: (
+    <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="12" width="48" height="32" rx="4" /><path d="M24 52h16M32 44v8" />
+      <path d="M26 22l-6 6 6 6M38 22l6 6-6 6M34 20l-4 16" /></svg>
+  ),
+  cert: (
+    <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="10" width="48" height="34" rx="3" /><path d="M16 20h24M16 27h18M16 34h12" />
+      <circle cx="44" cy="36" r="7" /><path d="M40 42l-3 12 7-4 7 4-3-12" /></svg>
   ),
   reading: (
     <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 18c-6-5-15-6-24-4v34c9-2 18-1 24 4 6-5 15-6 24-4V14c-9-2-18-1-24 4z" /><path d="M32 18v34" />
@@ -47,6 +61,22 @@ export function validateFeed(j) {
 }
 
 export default function LearnHubView({ area, cat }) {
+  return (
+    <div className="catv lh" style={{ '--ac': areaVar(area) }}>
+      <header className="page-h">
+        <h1 className="area-title">{cat}</h1>
+        <p>{AREAS[area].n} · 영어 · IT · 자격증 학습 앱과 연동합니다. 아이콘을 누르면 앱을 열고, 연동 설정에서 앱 주소와 데이터 주소를 입력합니다. 가져온 기록은 아래 공부 시간·진도·기록에 함께 들어갑니다.</p>
+      </header>
+      <AppCards apps={LEARN_APPS} />
+
+      {/* 공부 시간 · 과목별 진도 · 공부 기록 (연동 앱 기록 포함) */}
+      <StudyView area={area} cat={cat} embedded apps={LEARN_APPS} />
+    </div>
+  );
+}
+
+/** 앱 연동 카드 묶음 (apps = [{ key, name }]) */
+export function AppCards({ apps }) {
   const { store, setStore } = useCtx();
   const learn = store.learn || {};
   const [open, setOpen] = useState(null);             // 설정을 펼친 카드
@@ -81,14 +111,8 @@ export default function LearnHubView({ area, cat }) {
   };
 
   return (
-    <div className="catv lh" style={{ '--ac': areaVar(area) }}>
-      <header className="page-h">
-        <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 영어 · 독서 · 기타 학습 앱과 연동합니다. 아이콘을 누르면 앱을 열고, 연동 설정에서 앱 주소와 데이터 주소를 입력합니다. 가져온 기록은 아래 공부 시간·진도·기록에 함께 들어갑니다.</p>
-      </header>
-
-      <div className="lh-grid">
-        {LEARN_APPS.map(({ key: k, name }) => {
+      <div className={`lh-grid n${apps.length}`}>
+        {apps.map(({ key: k, name }) => {
           const c = card(k), d = c.data, linked = !!(c.openUrl || c.dataUrl);
           return (
             <section key={k} className={`lh-card ${d ? 'has' : ''}`} aria-label={name}>
@@ -130,9 +154,5 @@ export default function LearnHubView({ area, cat }) {
           );
         })}
       </div>
-
-      {/* 공부 시간 · 과목별 진도 · 공부 기록 (연동 앱 기록 포함) */}
-      <StudyView area={area} cat={cat} embedded apps={LEARN_APPS} />
-    </div>
   );
 }

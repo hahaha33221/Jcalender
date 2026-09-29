@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AREAS, ROWS, iso } from '../data.js';
 import { MoneyInput, areaVar, num, useCtx } from '../shared.jsx';
+import { AppCards, LEISURE_APPS } from './LearnHubView.jsx';
 
 /* 개인 › 여가 관리 전용 화면: 여행 · 독서 · 취미 활동 기록
    leisure = {
@@ -98,8 +99,10 @@ export default function LeisureView({ area, cat, group }) {
     <div className="catv lsv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 여행 계획과 비용, 올해 읽은 책, 취미 활동 시간을 한 곳에서 관리합니다.</p>
+        <p>{AREAS[area].n} · 여행 계획과 비용, 올해 읽은 책, 취미 활동 시간을 한 곳에서 관리합니다. 독서 · 기타 카드는 직접 만든 앱과 연동합니다.</p>
       </header>
+
+      <AppCards apps={LEISURE_APPS} />
 
       <div className="hv-stats">
         <div className="hv-stat sl"><span className="muted">다음 여행</span>

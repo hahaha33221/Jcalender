@@ -1,7 +1,9 @@
-# 자기계발/학습 앱 연동 안내
+# 학습 · 취미 앱 연동 안내
 
-생활 관리 앱의 **개인 › 자기계발/학습** 화면에는 영어 · 독서 · 기타 3개의 카드가 있습니다.
-직접 개발하는 학습 앱이 아래 형식의 JSON 을 제공하면, 카드와 아래 공부 시간 · 과목별 진도 · 공부 기록에 함께 반영됩니다.
+직접 개발하는 앱이 아래 형식의 JSON 을 제공하면 생활 관리 앱의 카드에 반영됩니다.
+
+- **개인 › 자기계발/학습**: 영어 · IT · 자격증 카드. 가져온 기록은 아래 공부 시간 · 과목별 진도 · 공부 기록에도 함께 들어갑니다.
+- **개인 › 여가 관리**: 독서 · 기타 카드. 카드 안에서 오늘/이번 주/연속 일수, 진행률, 최근 기록을 보여줍니다.
 
 ## 1. 연결 방법
 
@@ -13,7 +15,7 @@
 3. **동기화** 를 누르면 데이터 주소에서 기록을 가져옵니다.
    서버가 없다면 **JSON 파일 불러오기** 로 같은 형식의 파일을 직접 넣을 수 있습니다.
 
-카드 키: `english`(영어), `reading`(독서), `guitar`(기타)
+카드 키: 자기계발/학습 `english`(영어), `it`(IT), `cert`(자격증) / 여가 관리 `reading`(독서), `guitar`(기타)
 
 ## 2. JSON 형식
 
@@ -47,7 +49,7 @@
 
 - `summary` 와 `sessions` 중 하나는 있어야 합니다.
 - 기록은 최근 50건까지 저장합니다. 동기화할 때마다 해당 카드의 기록 전체를 새 값으로 바꿉니다.
-- sessions 는 "공부 기록"에 "앱 연동" 표시로 들어가고, 이름이 카드 이름(영어/독서/기타)으로 시작하는 과목의 진도에 합산됩니다.
+- 자기계발/학습 카드의 sessions 는 "공부 기록"에 "앱 연동" 표시로 들어가고, 이름이 카드 이름(영어/IT/자격증)으로 시작하는 과목의 진도에 합산됩니다.
 - 연동 기록이 하나라도 있으면 예시 공부 기록은 계산에서 빠집니다.
 
 ## 3. CORS (브라우저 보안)
@@ -63,6 +65,5 @@ Content-Type: application/json
 
 ## 4. 시험용 파일
 
-- `samples/learning_english_sample.json`
-- `samples/learning_reading_sample.json`
-- `samples/learning_guitar_sample.json`
+- 자기계발/학습: `samples/learning_english_sample.json`, `samples/learning_it_sample.json`, `samples/learning_cert_sample.json`
+- 여가 관리: `samples/learning_reading_sample.json`, `samples/learning_guitar_sample.json`
