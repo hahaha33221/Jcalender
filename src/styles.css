@@ -522,7 +522,7 @@ tr.lv0 .gbar { top: 4px; height: 14px; }
 .gantt-row.lv2 { font-weight: 400; color: var(--ink2); }
 .gantt .gbar.cat { background: color-mix(in srgb, var(--ac) 20%, transparent); }
 
-/* 인맥/관계 관리 */
+/* 인맥 관리 */
 .rv-av { width: 36px; height: 36px; border-radius: 50%; background: color-mix(in srgb, var(--ac) 18%, var(--card)); color: var(--ac); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; flex: none; }
 .rv-dn { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .rv-dn small { color: var(--ink3); font-size: 12px; }

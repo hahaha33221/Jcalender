@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AREAS, ROWS, iso } from '../data.js';
 import { WEEK, areaVar, useCtx } from '../shared.jsx';
 
-/* 개인 › 인맥/관계 관리 전용 화면: 바로 전화하기 · 생일/기념일 · 명함
+/* 개인 › 인맥 관리 전용 화면: 바로 전화하기 · 생일/기념일 · 명함
    people: [{ id, name, group, phone, company, title, birthday('YYYY-MM-DD'), annivName, annivDate, memo,
               card(명함 이미지 data URL), notes: [{ id, date, text }] }] */
 export const GROUPS = ['가족', '친구', '동료', '지인'];

@@ -37,13 +37,19 @@ const readHash = () => {
   return PAGES.includes(p) ? { page: p, cat: AREAS[p] ? c : null } : { page: 'home', cat: null };
 };
 const INIT = { done: {}, outs: {}, prio: {}, events: null, anniv: null, annivDays: 10, health: null, finance: null, goals: null, people: null, leisure: null, journal: null, rules: DEFAULT_RULES, log: [] };
+/** 이름을 바꾼 카테고리: 저장된 검수 표시·목표 보드의 키도 새 이름으로 옮긴다 */
+const RENAMED_CATS = { 'P|인맥/관계 관리': 'P|인맥 관리' };
+function renameCats(st) {
+  const mv = o => { if (!o) return o; const r = { ...o }; Object.entries(RENAMED_CATS).forEach(([a, b]) => { if (a in r) { if (!(b in r)) r[b] = r[a]; delete r[a]; } }); return r; };
+  return { ...st, reviewed: mv(st.reviewed), goals: st.goals?.boards ? { ...st.goals, boards: mv(st.goals.boards) } : st.goals };
+}
 const seedAll = () => ({ ...INIT, events: seedEvents(), anniv: seedAnniv(), health: seedHealth(), finance: seedFinance(), goals: seedGoals(), people: seedPeople(), leisure: seedLeisure(), journal: seedJournal() });
 
 function useStore() {
   const [store, setStore] = useState(() => {
     let v = null;
     try { v = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* 저장소 사용 불가 또는 손상 */ }
-    const merged = { ...INIT, ...(v || {}) };
+    const merged = renameCats({ ...INIT, ...(v || {}) });
     return { ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: dropNoGoal(merged.goals ? addExampleGoals(migrateGoals(merged.goals)) : seedGoals()), people: merged.people ? migratePeople(merged.people, new Date()) : seedPeople(), leisure: merged.leisure ?? seedLeisure(), journal: merged.journal ?? seedJournal() };
   });
   const [persist, setPersist] = useState(true);

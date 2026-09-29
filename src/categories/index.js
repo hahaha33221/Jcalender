@@ -25,7 +25,7 @@ export const CATEGORY_VIEWS = {
   'P|기념일 관리': AnnivView,
   'P|개인 재무': FinanceView,
   'P|목표 관리': GoalView,
-  'P|인맥/관계 관리': RelationView,
+  'P|인맥 관리': RelationView,
   'P|여가 관리': LeisureView,
   'P|리뷰/회고, 저널링': ReviewView,
   'P|자기계발/학습': LearnHubView,
