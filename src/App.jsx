@@ -654,28 +654,17 @@ function categoriesOf(area, now, isDone) {
 }
 
 function AreaPage({ area }) {
-  const { store, isDone, now, go, openCat } = useCtx();
+  const { store, isDone, now, openCat } = useCtx();
   const boards = store.goals?.boards || {};
   const goalsOf = c => (hasGoals(area, c) && boards[boardKey(area, c)] ? boardForYear(boards[boardKey(area, c)], now.getFullYear()).items.filter(i => !i.parent).length : 0);
-  const [cyc, setCyc] = useState('ALL');
   const cats = categoriesOf(area, now, isDone);
-  const shown = cats.filter(g => cyc === 'ALL' || g.cyc[cyc]);
-  const total = cats.reduce((n, g) => n + g.rows.length, 0), left = cats.reduce((n, g) => n + g.left, 0);
   return (
     <>
       <header className="page-h" style={{ '--ac': areaVar(area) }}>
         <h1 className="area-title">{AREAS[area].n}</h1>
-        <p>카테고리 {cats.length}개 · 액션 {total}개 · 오늘 남은 항목 {left}개. 카테고리를 누르면 상세 페이지로 들어갑니다.</p>
       </header>
-      <div className="bar">
-        <div className="chips" role="group" aria-label="주기로 거르기">
-          <button aria-pressed={cyc === 'ALL'} onClick={() => setCyc('ALL')}>전체</button>
-          {Object.entries(CYCLES).map(([k, n]) => <button key={k} aria-pressed={cyc === k} onClick={() => setCyc(k)}>{n.replace('-루틴', '')}</button>)}
-        </div>
-        <button className="btn sm grow-r" onClick={() => go('check', { area })}>체크리스트로 보기</button>
-      </div>
       <div className="tiles" style={{ '--ac': areaVar(area) }}>
-        {shown.map(g => (
+        {cats.map(g => (
           <button key={g.cat} className="tile" onClick={() => openCat(area, g.cat)}>
             <span className="tile-h"><b>{g.cat}</b>{isFirstReviewed(area, g.cat) ? <span className="tile-done first" title="1차 검수 완료">1차 검수</span> : hasCustomView(area, g.cat) && <span className="tile-done" title="전용 상세 화면 완료">완료</span>}{store.reviewed?.[`${area}|${g.cat}`] && <span className="tile-rev" title="검수 완료">검수 완료</span>}<span className="tile-go" aria-hidden="true">›</span></span>
             <span className="tile-items">{g.items.slice(0, 5).map(it => <span key={it} className="tile-item">{it}</span>)}{g.items.length > 5 && <span className="tile-item more">외 {g.items.length - 5}</span>}</span>
@@ -689,7 +678,6 @@ function AreaPage({ area }) {
           </button>
         ))}
       </div>
-      {shown.length === 0 && <div className="empty">이 주기에 해당하는 카테고리가 없습니다.</div>}
     </>
   );
 }
