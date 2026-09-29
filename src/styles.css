@@ -810,3 +810,15 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .ob-sum span { width: 60px; color: var(--ink3); flex: none; }
 .ob-f { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 @media (max-width: 600px) { .cs-cfg { grid-template-columns: minmax(0, 1fr); } .cs-ai { margin-left: 0; } .ob .rv-fields { grid-template-columns: minmax(0, 1fr); } }
+
+/* 여가 관리 요약 */
+.lsv-empty { margin: 0 0 16px; }
+.lsv-trips { list-style: none; margin: 0; padding: 0; }
+.lsv-trips li { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(120px, 220px); gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line2); }
+.lsv-dd { font-size: 17px; color: var(--ai); }
+.lsv-tn { display: flex; flex-direction: column; min-width: 0; }
+.lsv-tn small, .lsv-cost small { color: var(--ink3); font-size: 12px; }
+.lsv-cost { display: flex; flex-direction: column; gap: 2px; text-align: right; }
+@media (max-width: 600px) { .lsv-trips li { grid-template-columns: 56px minmax(0, 1fr); } .lsv-cost { grid-column: 1 / -1; text-align: left; } }
+.lsv .fv-bars li { grid-template-columns: 80px minmax(0, 1fr) auto; }
+.lsv .fv-bv { white-space: nowrap; width: auto; }
