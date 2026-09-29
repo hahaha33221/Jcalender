@@ -707,10 +707,6 @@ function CategoryPage({ area, cat }) {
       </nav>
       <View area={area} cat={cat} group={g} />
       {cat !== '목표 관리' && <GoalBoard area={area} cat={cat} title={`${cat} 목표`} />}
-      <div className="cat-nav">
-        <span className="muted">다른 카테고리</span>
-        <div className="chips">{cats.filter(x => x.cat !== cat).map(x => <button key={x.cat} onClick={() => openCat(area, x.cat)}>{x.cat}</button>)}</div>
-      </div>
     </>
   );
 }
