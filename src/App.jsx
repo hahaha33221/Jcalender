@@ -172,7 +172,7 @@ export default function App() {
     <Ctx.Provider value={ctx}>
       <div className="app">
         <aside className="nav" aria-label="주 메뉴">
-          <div className="brand"><b>생활 관리</b><span>{now.getFullYear()}.{pad(now.getMonth() + 1)}.{pad(now.getDate())} ({WEEK[now.getDay()]})</span></div>
+          <div className="brand"><b>Jcalender</b><span>{now.getFullYear()}.{pad(now.getMonth() + 1)}.{pad(now.getDate())} ({WEEK[now.getDay()]})</span></div>
           <nav>
             {NAV.map((n, i) => n.sec
               ? <div className="nav-sec" key={i}>{n.sec}</div>

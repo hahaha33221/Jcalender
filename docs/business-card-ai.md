@@ -41,7 +41,7 @@ Authorization: Bearer {인증 토큰}      (설정한 경우만)
 ```
 
 - `{ "card": {...} }`, `{ "result": {...} }` 처럼 한 번 감싸도 읽습니다.
-- 생활 관리 앱과 주소가 다르면 CORS 헤더(`Access-Control-Allow-Origin`)가 필요합니다.
+- Jcalender 앱과 주소가 다르면 CORS 헤더(`Access-Control-Allow-Origin`)가 필요합니다.
 
 ## 4. 서버 예시 (Node.js 18+, Claude API 사용)
 
