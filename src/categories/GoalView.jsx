@@ -390,7 +390,6 @@ export default function GoalView({ area, cat, group }) {
         ) : <p className="muted">{year}년 마일스톤이 없습니다.</p>}
       </section>
 
-      <GoalBoard area={area} cat={cat} title="영역 공통 목표 편집" year={year} setYear={setYear} />
 
     </div>
   );
