@@ -38,11 +38,26 @@ export function seedHealth(today = new Date()) {
     if (rnd() < 0.7) {
       const type = WORKOUT_TYPES[Math.floor(rnd() * 5)];
       const minutes = 20 + Math.round(rnd() * 8) * 5;
-      workouts.push({ id: `w${date}`, date, type, minutes, kcal: estimateKcal(type, minutes) });
+      workouts.push({ id: `w${date}`, date, type, minutes, kcal: estimateKcal(type, minutes), src: '예시' });
     }
     const bed = 22 * 60 + 40 + Math.round(rnd() * 11) * 10;      // 22:40 ~ 00:30
     const wake = 6 * 60 + 10 + Math.round(rnd() * 9) * 10;       // 06:10 ~ 07:40
-    sleep.push({ id: `s${date}`, date, bed: hm(bed), wake: hm(wake) });
+    sleep.push({ id: `s${date}`, date, bed: hm(bed), wake: hm(wake), src: '예시' });
   }
-  return { workouts, sleep, goalSleep: 420 };
+  return { workouts, sleep, goalSleep: 420, ...seedHealthExtra(today) };
+}
+
+/** 식단·병원 진찰 예시 (삼성 헬스에서 가져오기 전 화면이 비지 않도록) */
+export function seedHealthExtra(today = new Date()) {
+  const d = n => iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() - n));
+  const meals = [];
+  const menu = [['아침', '그릭요거트와 과일', 320], ['점심', '비빔밥', 650], ['저녁', '닭가슴살 샐러드', 480], ['간식', '아메리카노·견과류', 180],
+    ['아침', '토스트와 계란', 410], ['점심', '김치찌개 백반', 720], ['저녁', '연어 포케', 560]];
+  for (let i = 0; i < 7; i++) for (let j = 0; j < 3; j++) { const [meal, name, kcal] = menu[(i + j * 2) % menu.length]; meals.push({ id: `m${i}${j}`, date: d(i), meal, name: `${name} (예시)`, kcal: kcal + ((i * 37 + j * 11) % 90) - 45, src: '예시' }); }
+  const visits = [
+    { id: 'v1', date: d(40), hospital: '서울내과 (예시)', dept: '내과', note: '감기 · 인후염', rx: '해열제 3일분', next: '' },
+    { id: 'v2', date: d(12), hospital: '밝은치과 (예시)', dept: '치과', note: '스케일링', rx: '', next: d(-60) },
+    { id: 'v3', date: d(3), hospital: '튼튼정형외과 (예시)', dept: '정형외과', note: '무릎 통증 · 물리치료', rx: '소염제 5일분', next: d(-4) },
+  ];
+  return { meals, visits, goalKcal: 2000 };
 }
