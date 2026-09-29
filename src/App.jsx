@@ -155,17 +155,15 @@ export default function App() {
   const openCat = (a, c) => nav(a, c);
 
   const ctx = { store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go, openCat };
-  const remaining = ROWS.filter(r => isDue(r.c, now) && !isDone(r)).length;
-  const areaLeft = a => ROWS.filter(r => r.a === a && isDue(r.c, now) && !isDone(r)).length;
 
   const NAV = [
     { id: 'home', label: '대시보드' },
     { id: 'progress', label: '진행 현황' },
-    { id: 'check', label: '체크리스트', badge: remaining },
+    { id: 'check', label: '체크리스트' },
     { sec: '상세 내용' },
-    { id: 'P', label: AREAS.P.n, color: areaVar('P'), badge: areaLeft('P') },
-    { id: 'B', label: AREAS.B.n, color: areaVar('B'), badge: areaLeft('B') },
-    { id: 'W', label: AREAS.W.n, color: areaVar('W'), badge: areaLeft('W') },
+    { id: 'P', label: AREAS.P.n, color: areaVar('P') },
+    { id: 'B', label: AREAS.B.n, color: areaVar('B') },
+    { id: 'W', label: AREAS.W.n, color: areaVar('W') },
     { sec: '관리' },
     { id: 'settings', label: '설정' },
   ];
@@ -179,10 +177,9 @@ export default function App() {
             {NAV.map((n, i) => n.sec
               ? <div className="nav-sec" key={i}>{n.sec}</div>
               : <button key={n.id} className={page === n.id ? 'on' : ''} aria-current={page === n.id ? 'page' : undefined} style={n.color ? { '--ac': n.color } : undefined} onClick={() => go(n.id)}>
-                  {n.color && <i className="dot" />}<span>{n.label}</span>{n.badge > 0 && <em title="오늘 남은 항목">{n.badge}</em>}
+                  {n.color && <i className="dot" />}<span>{n.label}</span>
                 </button>)}
           </nav>
-          <p className="nav-foot">숫자는 오늘 도래한 주기 중 남은 항목입니다.</p>
         </aside>
         <main className="main">
           {!persist && <p className="banner">이 브라우저에서는 데이터가 저장되지 않습니다. 새로고침하면 진행 상태가 사라집니다.</p>}
