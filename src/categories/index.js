@@ -34,3 +34,5 @@ export const CATEGORY_VIEWS = {
 };
 
 export const viewFor = (area, cat) => CATEGORY_VIEWS[`${area}|${cat}`] || DefaultView;
+/** 전용 화면이 만들어진 카테고리인지 (영역 페이지 타일에 "완료" 표시) */
+export const hasCustomView = (area, cat) => !!CATEGORY_VIEWS[`${area}|${cat}`];

@@ -613,3 +613,4 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .jv-li .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jv-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--mc); flex: none; }
 @media (max-width: 1100px) { .jv-grid, .jv-kpt { grid-template-columns: minmax(0, 1fr); } }
+.tile-done { font-size: 11.5px; font-weight: 700; color: var(--ok); background: var(--oksoft); border: 1px solid var(--ok); border-radius: 10px; padding: 0 8px; line-height: 1.6; flex: none; }
