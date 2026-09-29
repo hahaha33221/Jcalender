@@ -841,3 +841,11 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .nd-cat ul { list-style: none; margin: 4px 0 0; padding: 0; font-size: 12.5px; }
 .nd-cat li { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; }
 .nd-cat li > span:last-child { min-width: 0; }
+
+/* 개인 재무 › 카드 이용내역 가져오기 */
+.fv-card-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.fv-card-row > label.btn { cursor: pointer; }
+.fv-card-pick { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--ink2); }
+.fv-card-guide { margin: 10px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--ink2); }
+.fv-card-guide b { margin-right: 6px; color: var(--ink); }
+.fv-table .tag + .tag { margin-left: 4px; }
