@@ -562,9 +562,6 @@ tr.lv0 .gbar { top: 4px; height: 14px; }
 .rv-cardbtns { display: flex; gap: 6px; }
 .rv-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
 .rv-fields label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink2); }
-.rv-notes { list-style: none; margin: 6px 0 0; padding: 0; font-size: 13px; }
-.rv-notes li { padding: 5px 0; border-top: 1px solid var(--line2); display: flex; gap: 8px; }
-.rv-notes time { color: var(--ink3); flex: none; }
 .rv-mf { display: flex; justify-content: flex-end; margin-top: 6px; }
 .rv-zoom { position: fixed; inset: 0; background: rgba(0,0,0,.8); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; cursor: zoom-out; }
 .rv-zoom img { max-width: 100%; max-height: 100%; border-radius: 8px; background: #fff; }
@@ -771,3 +768,45 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .lh-set .note { margin: 0; font-size: 12px; color: var(--ink3); }
 @media (max-width: 900px) { .lh-grid, .lh-grid.n2 { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 700px) { .lh-grid.n4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* 인맥 관리 › 명함 촬영 · 등록 온보딩 */
+.cs-btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cs-cam { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 700; }
+.cs-cam svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.cs-btns > label.btn { cursor: pointer; }
+.cs-ai { font-size: 12.5px; margin-left: auto; }
+.cs-q { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.cs-q li { border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; background: var(--paper); min-width: 0; }
+.cs-q img { width: 100%; height: 80px; object-fit: contain; background: var(--card); border-radius: 4px; }
+.cs-q .cs-st { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-q li.run .cs-st { color: var(--ink3); }
+.cs-q li.done .cs-st { color: var(--ok); }
+.cs-q li.fail .cs-st { color: var(--over); }
+.cs-err { color: var(--over); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-qb { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+.cs-cfg { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.cs-cfg label { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--ink2); }
+.cs-cfg .note { grid-column: 1 / -1; margin: 0; }
+.ob { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
+.ob-h { display: flex; align-items: center; gap: 8px; }
+.ob-h b { font-size: 17px; }
+.ob-h .btn { margin-left: auto; }
+.ob-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.ob-steps li { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink3); border-top: 3px solid var(--line); padding-top: 6px; min-width: 0; white-space: nowrap; }
+.ob-steps li span { width: 18px; height: 18px; border-radius: 50%; background: var(--line); color: var(--ink2); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex: none; }
+.ob-steps li.on { color: var(--ink); font-weight: 700; border-top-color: var(--ac); }
+.ob-steps li.on span, .ob-steps li.ok span { background: var(--ac); color: #fff; }
+.ob-steps li.ok { border-top-color: var(--ac); }
+.ob-img { width: 100%; max-height: 200px; object-fit: contain; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; }
+.ob-msg { margin: 0; font-size: 13px; color: var(--ok); }
+.ob-msg.err { color: var(--over); }
+.ob-q { margin: 4px 0 0; font-size: 17px; font-weight: 700; }
+.ob-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.ob-pick button { flex: 1 1 100px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); font-size: 15px; cursor: pointer; }
+.ob-pick button[aria-pressed="true"] { border-color: var(--ac); background: color-mix(in srgb, var(--ac) 14%, var(--card)); font-weight: 700; }
+.ob-chk { grid-column: 1 / -1; flex-direction: row !important; align-items: center; }
+.ob-sum { list-style: none; margin: 0; padding: 10px 12px; background: var(--paper); border-radius: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.ob-sum li { display: flex; gap: 10px; }
+.ob-sum span { width: 60px; color: var(--ink3); flex: none; }
+.ob-f { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+@media (max-width: 600px) { .cs-cfg { grid-template-columns: minmax(0, 1fr); } .cs-ai { margin-left: 0; } .ob .rv-fields { grid-template-columns: minmax(0, 1fr); } }

@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { AREAS, ROWS, iso } from '../data.js';
+import { AREAS, iso } from '../data.js';
 import { WEEK, areaVar, useCtx } from '../shared.jsx';
+import CardScan, { GROUPS, shrinkImage } from './CardScan.jsx';
 
-/* 개인 › 인맥 관리 전용 화면: 바로 전화하기 · 생일/기념일 · 명함
-   people: [{ id, name, group, phone, company, title, birthday('YYYY-MM-DD'), annivName, annivDate, memo,
-              card(명함 이미지 data URL), notes: [{ id, date, text }] }] */
-export const GROUPS = ['가족', '친구', '동료', '지인'];
+/* 개인 › 인맥 관리 전용 화면: 명함 촬영(AI 분석 · 온보딩) · 바로 전화하기 · 생일/기념일 · 명함
+   people: [{ id, name, group, phone, company, title, email, address, birthday('YYYY-MM-DD'), annivName, annivDate,
+              card(명함 이미지 data URL) }]  (예전 memo · notes 는 쓰지 않음) */
+export { GROUPS };
 const uid = () => Math.random().toString(36).slice(2, 10);
-const ACT_CARD = ROWS.find(r => r.a === 'P' && r.action === '명함 등록');
-const ACT_NOTE = ROWS.find(r => r.a === 'P' && r.action.startsWith('만남 메모 기록'));
 const telOf = p => (p || '').replace(/[^0-9+]/g, '');
 
 /** 다음 생일·기념일 (올해 지났으면 내년) */
@@ -42,14 +41,14 @@ export function seedPeople(today = new Date()) {
   const y = today.getFullYear();
   const md = n => { const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + n); return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const list = [
-    { id: 'p1', name: '어머니 (예시)', group: '가족', phone: '010-0000-0001', birthday: `1965-${md(5)}`, annivName: '', annivDate: '', memo: '주말 통화', company: '', title: '' },
-    { id: 'p2', name: '김민수 (예시)', group: '친구', phone: '010-0000-0002', birthday: `1990-${md(2)}`, annivName: '', annivDate: '', memo: '대학 동기', company: '예시상사', title: '대리', hue: 150 },
-    { id: 'p3', name: '이지은 (예시)', group: '친구', phone: '010-0000-0003', birthday: `1991-${md(40)}`, annivName: '', annivDate: '', memo: '독서 모임', company: '', title: '' },
-    { id: 'p4', name: '박팀장 (예시)', group: '동료', phone: '010-0000-0004', birthday: `1982-${md(120)}`, annivName: '입사 동기 모임', annivDate: `2019-${md(18)}`, memo: '전 직장 상사', company: '예시테크', title: '팀장', hue: 210 },
-    { id: 'p5', name: '최선배 (예시)', group: '지인', phone: '010-0000-0005', birthday: '', annivName: '', annivDate: '', memo: '업계 선배', company: '예시컨설팅', title: '이사', hue: 20 },
-    { id: 'p6', name: '배우자 (예시)', group: '가족', phone: '010-0000-0006', birthday: `1992-${md(200)}`, annivName: '결혼기념일', annivDate: `2016-${md(9)}`, memo: '', company: '', title: '' },
+    { id: 'p1', name: '어머니 (예시)', group: '가족', phone: '010-0000-0001', birthday: `1965-${md(5)}`, annivName: '', annivDate: '', company: '', title: '' },
+    { id: 'p2', name: '김민수 (예시)', group: '친구', phone: '010-0000-0002', birthday: `1990-${md(2)}`, annivName: '', annivDate: '', company: '예시상사', title: '대리', hue: 150 },
+    { id: 'p3', name: '이지은 (예시)', group: '친구', phone: '010-0000-0003', birthday: `1991-${md(40)}`, annivName: '', annivDate: '', company: '', title: '' },
+    { id: 'p4', name: '박팀장 (예시)', group: '동료', phone: '010-0000-0004', birthday: `1982-${md(120)}`, annivName: '입사 동기 모임', annivDate: `2019-${md(18)}`, company: '예시테크', title: '팀장', hue: 210 },
+    { id: 'p5', name: '최선배 (예시)', group: '지인', phone: '010-0000-0005', birthday: '', annivName: '', annivDate: '', company: '예시컨설팅', title: '이사', hue: 20 },
+    { id: 'p6', name: '배우자 (예시)', group: '가족', phone: '010-0000-0006', birthday: `1992-${md(200)}`, annivName: '결혼기념일', annivDate: `2016-${md(9)}`, company: '', title: '' },
   ];
-  return list.map(({ hue, ...p }) => ({ ...p, card: hue ? sampleCard(p, hue) : '', notes: [] }));
+  return list.map(({ hue, ...p }) => ({ ...p, card: hue ? sampleCard(p, hue) : '' }));
 }
 
 /** 예전 형식(연락 주기)의 예시 데이터는 새 예시로 바꾸고, 직접 넣은 사람은 새 필드만 채운다 */
@@ -57,32 +56,11 @@ export function migratePeople(people, today) {
   if (!people) return people;
   const old = people.some(p => 'cycle' in p) && people.every(p => p.name.includes('(예시)'));
   if (old) return seedPeople(today);
-  return people.map(({ cycle, last, ...p }) => ({ birthday: '', annivName: '', annivDate: '', company: '', title: '', card: '', memo: '', notes: [], ...p }));
+  return people.map(({ cycle, last, ...p }) => ({ birthday: '', annivName: '', annivDate: '', company: '', title: '', email: '', address: '', card: '', ...p }));
 }
 
-/** 사진을 긴 변 1,000px 이하 JPEG 로 줄여 data URL 로 (브라우저 저장 공간 절약) */
-function shrinkImage(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const k = Math.min(1, 1000 / Math.max(img.width, img.height));
-        const c = document.createElement('canvas');
-        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        resolve(c.toDataURL('image/jpeg', 0.82));
-      };
-      img.onerror = reject;
-      img.src = r.result;
-    };
-    r.onerror = reject;
-    r.readAsDataURL(file);
-  });
-}
-
-export default function RelationView({ area, cat, group }) {
-  const { store, setStore, now, isDone, finish } = useCtx();
+export default function RelationView({ area, cat }) {
+  const { store, setStore, now } = useCtx();
   const today = iso(now);
   const people = store.people || seedPeople(now);
   const setPeople = fn => setStore(s => ({ ...s, people: fn(s.people || seedPeople(now)) }));
@@ -98,7 +76,7 @@ export default function RelationView({ area, cat, group }) {
     p.annivDate && { p, kind: p.annivName || '기념일', ...nextDay(p.annivDate, today), years: nextDay(p.annivDate, today).date.getFullYear() - Number(p.annivDate.slice(0, 4)) },
   ].filter(Boolean)).sort((a, b) => a.dday - b.dday);
   const soon = events.filter(e => e.dday <= 30);
-  const shown = people.filter(p => (grp === 'ALL' || p.group === grp) && (!q || `${p.name} ${p.company} ${p.phone} ${p.memo}`.includes(q)));
+  const shown = people.filter(p => (grp === 'ALL' || p.group === grp) && (!q || `${p.name} ${p.company} ${p.phone} ${p.email || ''}`.includes(q)));
 
   const upd = (id, patch) => setPeople(ps => ps.map(p => (p.id === id ? { ...p, ...patch } : p)));
   const pickCard = async (file, done) => {
@@ -108,18 +86,21 @@ export default function RelationView({ area, cat, group }) {
   const add = e => {
     e.preventDefault();
     if (!form.name.trim()) return;
-    setPeople(ps => [...ps, { id: uid(), ...form, name: form.name.trim(), phone: form.phone.trim(), memo: '', title: '', notes: [] }]);
+    setPeople(ps => [...ps, { id: uid(), ...form, name: form.name.trim(), phone: form.phone.trim(), title: '', email: '' }]);
     setForm(blank);
   };
   const open = people.find(p => p.id === openId);
-  const items = group.items.map(it => ({ it, rows: group.rows.filter(r => r.item === it) }));
+  // 명함 촬영 온보딩 결과 저장: 연락처 + (선택) 기념일 관리
+  const saveScanned = (person, annivs) => setStore(s => ({ ...s, people: [...(s.people || seedPeople(now)), person], anniv: annivs.length ? [...(s.anniv || []), ...annivs] : s.anniv }));
 
   return (
     <div className="catv rv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 바로 전화하고, 다가오는 생일·기념일을 챙깁니다. 명함을 누르면 크게 보고 상세 정보를 고칠 수 있습니다.</p>
+        <p>{AREAS[area].n} · 명함을 찍어 AI 로 등록하고, 바로 전화하고, 다가오는 생일·기념일을 챙깁니다. 명함을 누르면 크게 보고 상세 정보를 고칠 수 있습니다.</p>
       </header>
+
+      <CardScan onSave={saveScanned} />
 
       <div className="hv-stats">
         <div className="hv-stat sl"><span className="muted">등록한 사람</span><b>{people.length}명</b><span className="hv-sub">{GROUPS.map(g => `${g} ${people.filter(p => p.group === g).length}`).join(' · ')}</span></div>
@@ -152,7 +133,7 @@ export default function RelationView({ area, cat, group }) {
             <article key={p.id} className="rv-card">
               <div className="rv-top">
                 <span className="rv-av" aria-hidden="true">{p.name.slice(0, 1)}</span>
-                <span className="rv-dn"><b>{p.name}</b><small>{p.group}{p.company ? ` · ${p.company}` : ''}{p.memo ? ` · ${p.memo}` : ''}</small></span>
+                <span className="rv-dn"><b>{p.name}</b><small>{p.group}{p.company ? ` · ${p.company}` : ''}{p.title ? ` ${p.title}` : ''}</small></span>
               </div>
               <div className="rv-call">
                 {p.phone ? <>
@@ -189,17 +170,15 @@ export default function RelationView({ area, cat, group }) {
       </section>
 
 
-      {open && <PersonDetail p={open} today={today} onClose={() => setOpenId(null)} upd={patch => upd(open.id, patch)}
+      {open && <PersonDetail p={open} onClose={() => setOpenId(null)} upd={patch => upd(open.id, patch)}
         onDelete={() => { setPeople(ps => ps.filter(x => x.id !== open.id)); setOpenId(null); }}
-        pickCard={file => pickCard(file, card => { upd(open.id, { card }); })}
-        addNote={text => { upd(open.id, { notes: [{ id: uid(), date: today, text }, ...open.notes] }); }} />}
+        pickCard={file => pickCard(file, card => { upd(open.id, { card }); })} />}
     </div>
   );
 }
 
-/* 상세 창: 명함 크게 + 정보 수정 + 메모 */
-function PersonDetail({ p, today, onClose, upd, onDelete, pickCard, addNote }) {
-  const [note, setNote] = useState('');
+/* 상세 창: 명함 크게 + 정보 수정 */
+function PersonDetail({ p, onClose, upd, onDelete, pickCard }) {
   const [zoom, setZoom] = useState(false);
   const [arm, setArm] = useState(false);
   useEffect(() => {
@@ -229,16 +208,9 @@ function PersonDetail({ p, today, onClose, upd, onDelete, pickCard, addNote }) {
           <label>생일<input type="date" value={p.birthday || ''} onChange={e => upd({ birthday: e.target.value })} /></label>
           <label>기념일 이름<input value={p.annivName || ''} onChange={e => upd({ annivName: e.target.value })} placeholder="예: 결혼기념일" /></label>
           <label>기념일 날짜<input type="date" value={p.annivDate || ''} onChange={e => upd({ annivDate: e.target.value })} /></label>
-          <label>메모<input value={p.memo || ''} onChange={e => upd({ memo: e.target.value })} /></label>
+          <label>이메일<input value={p.email || ''} onChange={e => upd({ email: e.target.value })} inputMode="email" /></label>
+          <label>주소<input value={p.address || ''} onChange={e => upd({ address: e.target.value })} /></label>
         </div>
-        <h3 className="lv-h3">만남·통화 메모</h3>
-        <div className="row2">
-          <input value={note} onChange={e => setNote(e.target.value)} placeholder="예: 다음 달 점심 약속" aria-label="메모 입력"
-            onKeyDown={e => { if (e.key === 'Enter' && note.trim()) { addNote(note.trim()); setNote(''); } }} />
-          <button className="btn primary" disabled={!note.trim()} onClick={() => { addNote(note.trim()); setNote(''); }}>기록</button>
-        </div>
-        <ul className="rv-notes">{p.notes.map(n => <li key={n.id}><time>{n.date.slice(5).replace('-', '/')}</time>{n.text}</li>)}</ul>
-        {!p.notes.length && <p className="muted">메모가 없습니다.</p>}
         <div className="rv-mf"><button className={`btn sm ${arm ? 'danger' : ''}`} onClick={() => (arm ? onDelete() : (setArm(true), setTimeout(() => setArm(false), 3000)))}>{arm ? '정말 삭제할까요?' : '이 사람 삭제'}</button></div>
       </div>
       {zoom && <div className="rv-zoom" onClick={e => { e.stopPropagation(); setZoom(false); }}><img src={p.card} alt={`${p.name} 명함 원본`} /></div>}
