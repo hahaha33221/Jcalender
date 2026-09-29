@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { AREAS, iso } from '../data.js';
+import { iso } from '../data.js';
 import { ANNIV_HEAD, ANNIV_KINDS, mergeAnniv, nextAnniv, parseAnnivRows, replaceAnniv } from '../anniv.js';
 import { WEEK, areaVar, useCtx } from '../shared.jsx';
 import { download, excelDate, readXlsx, writeXlsx } from '../xlsx.js';
@@ -22,7 +22,6 @@ export default function AnnivView({ area, cat, group }) {
     <div className="catv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 생일과 기념일 {store.anniv.length}건 · 대시보드에는 D-{store.annivDays}일 이내 기념일이 보입니다.</p>
       </header>
 
       <section className="panel anniv">

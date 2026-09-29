@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { AREAS, iso } from '../data.js';
+import { iso } from '../data.js';
 import { areaVar, num, useCtx } from '../shared.jsx';
 import StudyView from './StudyView.jsx';
 
@@ -95,7 +95,6 @@ export default function LearnHubView({ area, cat }) {
     <div className="catv lh" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 영어 · IT · 자격증 학습 앱과 연동합니다. 아이콘을 누르면 앱을 열고, 연동 설정에서 앱 주소와 데이터 주소를 입력합니다. 가져온 기록은 아래 공부 시간·진도·기록에 함께 들어갑니다.</p>
       </header>
       <AppCards apps={LEARN_APPS} />
 

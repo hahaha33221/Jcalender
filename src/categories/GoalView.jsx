@@ -273,7 +273,6 @@ export default function GoalView({ area, cat, group }) {
     <div className="catv gv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 각 카테고리에서 세운 {year}년 목표를 모두 모아 봅니다. 진행률은 체크리스트 체크 기록으로 계산됩니다. 목표 수정은 카테고리 이름을 눌러 해당 페이지에서 합니다.</p>
       </header>
 
       <div className="bar"><YearPicker year={year} setYear={setYear} />

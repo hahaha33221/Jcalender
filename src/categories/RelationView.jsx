@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AREAS, iso } from '../data.js';
+import { iso } from '../data.js';
 import { WEEK, areaVar, useCtx } from '../shared.jsx';
 import CardScan, { GROUPS, shrinkImage } from './CardScan.jsx';
 
@@ -97,7 +97,6 @@ export default function RelationView({ area, cat }) {
     <div className="catv rv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 명함을 찍어 AI 로 등록하고, 바로 전화하고, 다가오는 생일·기념일을 챙깁니다. 명함을 누르면 크게 보고 상세 정보를 고칠 수 있습니다.</p>
       </header>
 
       <CardScan onSave={saveScanned} />

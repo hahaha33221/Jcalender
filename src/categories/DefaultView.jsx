@@ -15,7 +15,6 @@ export default function DefaultView({ area, cat, group }) {
     <div className="catv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 세부 항목 {group.items.length}개 · 액션 {group.rows.length}개</p>
       </header>
 
       <div className="catv-stats">

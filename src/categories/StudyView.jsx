@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AREAS, iso } from '../data.js';
+import { iso } from '../data.js';
 import { WEEK, areaVar, num, useCtx } from '../shared.jsx';
 import BarChart from './BarChart.jsx';
 
@@ -82,7 +82,6 @@ export default function StudyView({ area, cat, embedded, apps }) {
     <div className={`catv sv ${embedded ? 'embedded' : ''}`} style={{ '--ac': areaVar(area) }}>
       {!embedded && <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 공부 시간, 과목별 진도, 공부 기록을 한눈에 봅니다.</p>
       </header>}
 
       <div className="sv-grid">

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { AREAS, iso } from '../data.js';
+import { iso } from '../data.js';
 import { WEEK, areaVar, num, useCtx } from '../shared.jsx';
 import BarChart from './BarChart.jsx';
 import { WORKOUT_TYPES, avgClock, estimateKcal, fmtDur, seedHealth, seedHealthExtra, sleepMinutes } from './health.js';
@@ -66,7 +66,6 @@ export default function HealthView({ area, cat }) {
     <div className="catv hv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 삼성 헬스에서 내보낸 운동·수면·식단 기록을 모아 보고, 병원 진찰 기록을 함께 관리합니다.</p>
       </header>
 
       <section className="panel sh-imp">

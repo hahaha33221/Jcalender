@@ -1,5 +1,5 @@
 import React from 'react';
-import { AREAS, iso } from '../data.js';
+import { iso } from '../data.js';
 import { WEEK, areaVar, num, useCtx } from '../shared.jsx';
 import BarChart from './BarChart.jsx';
 import { AppCards, LEISURE_APPS } from './LearnHubView.jsx';
@@ -66,7 +66,6 @@ export default function LeisureView({ area, cat }) {
     <div className="catv lsv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 여행 · 독서 · 기타 · 밴드 합주 앱에서 받은 정보를 요약해 보여줍니다. 기록은 각 앱에서 하고, 여기서는 연동 설정과 요약만 봅니다.</p>
       </header>
 
       <AppCards apps={LEISURE_APPS} />

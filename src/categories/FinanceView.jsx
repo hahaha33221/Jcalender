@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AREAS, iso } from '../data.js';
+import { iso } from '../data.js';
 import { MoneyInput, WEEK, areaVar, useCtx } from '../shared.jsx';
 import ShoppingList, { useFinance } from './Shopping.jsx';
 import { EXP_CATS, addExpense, delExpense, won } from './finance.js';
@@ -36,7 +36,6 @@ export default function FinanceView({ area, cat, group }) {
     <div className="catv fv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 지출 관리와 구매해야 할 물품. 물품을 구매 완료하면 지출 내역에 자동으로 기록됩니다.</p>
       </header>
 
       <div className="hv-stats">

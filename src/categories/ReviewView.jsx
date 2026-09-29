@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AREAS, ROWS, iso, periodKey } from '../data.js';
+import { ROWS, iso, periodKey } from '../data.js';
 import { WEEK, areaVar, num, useCtx } from '../shared.jsx';
 import { sleepMinutes } from './health.js';
 
@@ -134,7 +134,6 @@ export default function ReviewView({ area, cat, group }) {
     <div className="catv jv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 매일 짧은 일기와 기분을 남기고, 주말에는 한 주를 잘한 것 · 아쉬운 것 · 다음 주에 할 것으로 돌아봅니다.</p>
       </header>
 
       <div className="hv-stats">

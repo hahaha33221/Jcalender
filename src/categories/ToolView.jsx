@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AREAS, ROWS, iso } from '../data.js';
+import { ROWS, iso } from '../data.js';
 import { MoneyInput, WEEK, areaVar, num, useCtx } from '../shared.jsx';
 import BarChart from './BarChart.jsx';
 
@@ -121,7 +121,6 @@ export default function ToolView({ area, cat, group, config: C }) {
     <div className="catv tv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · {C.intro}</p>
       </header>
 
       {stats.length > 0 && <div className="hv-stats">{stats.map(s => (
