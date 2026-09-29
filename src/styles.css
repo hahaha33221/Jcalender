@@ -677,10 +677,8 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .sv-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; align-items: start; }
 .sv-grid .panel { margin: 0; min-width: 0; }
 .sv-goal { width: 60px; padding: 1px 6px; margin: 0 4px; }
-.sv-card { border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; background: var(--paper); }
-.sv-q { font-size: 20px; font-weight: 700; margin: 0; }
-.sv-a { font-size: 16px; margin: 0; color: var(--ok); }
-.sv-done { padding: 20px 0; }
+.sv.embedded { padding: 0; margin-top: 16px; }
+.sv-app { font-size: 12px; white-space: nowrap; }
 @media (max-width: 1100px) { .sv-grid { grid-template-columns: minmax(0, 1fr); } .tv-charts { grid-template-columns: minmax(0, 1fr); } }
 
 /* 목표 관리: 가운데 정렬 · 맨 위 요약 */
@@ -741,3 +739,27 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .sh-meal ul { list-style: none; margin: 2px 0 0; padding: 0; }
 .sh-meal li { display: flex; gap: 8px; align-items: center; font-size: 12.5px; padding: 2px 0 2px 10px; }
 .sh-none { margin: 2px 0 0 10px; font-size: 12px; }
+
+/* 자기계발/학습: 영어 · 독서 · 기타 앱 연동 카드 */
+.lh-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.lh-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.lh-card.has { border-top: 4px solid var(--ac); }
+.lh-icon { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 0 6px; color: var(--ink); text-decoration: none; border-radius: 10px; }
+.lh-icon:hover { background: var(--paper); }
+.lh-icon svg { width: 72px; height: 72px; fill: none; stroke: var(--ac); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.lh-icon b { font-size: 18px; }
+.lh-state { margin: 0; text-align: center; font-size: 12.5px; color: var(--ink3); }
+.lh-data { display: flex; flex-direction: column; gap: 10px; }
+.lh-kpi { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.lh-kpi li { background: var(--paper); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; align-items: center; font-size: 12px; }
+.lh-kpi b { font-size: 15px; color: var(--ink); }
+.lh-prog { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12.5px; }
+.lh-sess { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.lh-sess li { display: flex; gap: 8px; padding: 4px 0; border-top: 1px dashed var(--line); }
+.lh-sess time { color: var(--ink3); min-width: 36px; }
+.lh-btns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.lh-set { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.lh-set > label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink3); }
+.lh-set input { width: 100%; box-sizing: border-box; }
+.lh-set .note { margin: 0; font-size: 12px; color: var(--ink3); }
+@media (max-width: 900px) { .lh-grid { grid-template-columns: minmax(0, 1fr); } }

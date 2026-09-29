@@ -1,0 +1,38 @@
+{
+  "app": "나의 기타 앱",
+  "updatedAt": "2026-09-29T21:00:00+09:00",
+  "summary": {
+    "todayMinutes": 30,
+    "weekMinutes": 50,
+    "streakDays": 5,
+    "progress": 35,
+    "progressLabel": "코드 진도"
+  },
+  "sessions": [
+    {
+      "date": "2026-09-29",
+      "minutes": 30,
+      "title": "C·G·Am·F 전환"
+    },
+    {
+      "date": "2026-09-28",
+      "minutes": 20,
+      "title": "스트로크 연습"
+    },
+    {
+      "date": "2026-09-27",
+      "minutes": 40,
+      "title": "곡 1개 연습"
+    },
+    {
+      "date": "2026-09-26",
+      "minutes": 25,
+      "title": "핑거링 기초"
+    },
+    {
+      "date": "2026-09-25",
+      "minutes": 15,
+      "title": "메트로놈 60bpm"
+    }
+  ]
+}

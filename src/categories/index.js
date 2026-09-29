@@ -8,6 +8,7 @@ import RelationView from './RelationView.jsx';
 import LeisureView from './LeisureView.jsx';
 import ReviewView from './ReviewView.jsx';
 import StudyView from './StudyView.jsx';
+import LearnHubView from './LearnHubView.jsx';
 import ToolView from './ToolView.jsx';
 import { TOOL_CONFIGS } from './toolConfigs.js';
 
@@ -27,7 +28,7 @@ export const CATEGORY_VIEWS = {
   'P|인맥/관계 관리': RelationView,
   'P|여가 관리': LeisureView,
   'P|리뷰/회고, 저널링': ReviewView,
-  'P|자기계발/학습': StudyView,
+  'P|자기계발/학습': LearnHubView,
   'B|목표 관리': GoalView,
   'W|목표 관리': GoalView,
   'W|직무 학습': StudyView,

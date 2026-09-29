@@ -1,0 +1,43 @@
+{
+  "app": "나의 영어 앱",
+  "updatedAt": "2026-09-29T21:00:00+09:00",
+  "summary": {
+    "todayMinutes": 25,
+    "weekMinutes": 45,
+    "streakDays": 6,
+    "progress": 62,
+    "progressLabel": "단어장 진도"
+  },
+  "sessions": [
+    {
+      "date": "2026-09-29",
+      "minutes": 25,
+      "title": "단어 30개 암기"
+    },
+    {
+      "date": "2026-09-28",
+      "minutes": 20,
+      "title": "듣기 연습"
+    },
+    {
+      "date": "2026-09-27",
+      "minutes": 30,
+      "title": "문법: 가정법"
+    },
+    {
+      "date": "2026-09-26",
+      "minutes": 15,
+      "title": "회화 표현 10개"
+    },
+    {
+      "date": "2026-09-25",
+      "minutes": 20,
+      "title": "단어 복습"
+    },
+    {
+      "date": "2026-09-24",
+      "minutes": 40,
+      "title": "모의고사 듣기"
+    }
+  ]
+}

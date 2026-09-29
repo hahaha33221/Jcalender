@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AREAS, ROWS, iso } from '../data.js';
+import { AREAS, iso } from '../data.js';
 import { WEEK, areaVar, num, useCtx } from '../shared.jsx';
 import BarChart from './BarChart.jsx';
 
@@ -7,25 +7,23 @@ import BarChart from './BarChart.jsx';
    study['영역|카테고리'] = {
      subjects: [{ id, name, target(목표 시간) }], dailyGoal(분),
      logs: [{ id, date, subject, minutes, memo }],
-     cards: [{ id, subject, q, a, box(0~3), next(다음 복습일) }],
-   } */
+   }
+   개인 › 자기계발/학습은 LearnHubView(영어·독서·기타 앱 연동 카드) 아래에 embedded 로 붙고,
+   연동 앱에서 가져온 기록(store.learn[*].data.sessions)도 공부 시간·진도·기록에 함께 계산한다 */
 const uid = () => Math.random().toString(36).slice(2, 10);
 const addDays = (s, n) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + n); return iso(d); };
 const md = s => `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
 const hm = m => (m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ''}` : `${m}분`);
-const GAP = [1, 3, 7, 14];                                  // 맞힐 때마다 다음 복습까지 늘어나는 날 수
 
 const PRESETS = {
   'P|자기계발/학습': {
     acts: { time: '공부 시간 기록', note: '공부 내용 기록' },
-    subjects: [['영어 (예시)', 120], ['독서 (예시)', 60], ['코딩 (예시)', 80]],
-    cards: [['영어 (예시)', 'reluctant', '꺼리는, 마지못한'], ['영어 (예시)', 'be supposed to', '~하기로 되어 있다'], ['영어 (예시)', 'take for granted', '당연하게 여기다'], ['코딩 (예시)', 'Array.map 은 무엇을 돌려주나?', '각 요소를 바꾼 새 배열']],
-    memos: ['단어 30개 암기', '문법: 가정법', '책 40쪽', '리액트 상태 관리', '듣기 연습', '모의고사 1회'],
+    subjects: [['영어', 120], ['독서', 60], ['기타', 80]],
+    memos: ['단어 30개 암기', '책 40쪽', '코드 연습', '듣기 연습', '책 1장', '곡 1개 연습'],
   },
   'W|직무 학습': {
     acts: { time: '학습 시간 기록', note: '학습 내용 기록' },
     subjects: [['데이터 분석 (예시)', 60], ['자격증 준비 (예시)', 100], ['사내 교육 (예시)', 20]],
-    cards: [['데이터 분석 (예시)', 'GROUP BY 와 HAVING 의 차이', 'WHERE 는 묶기 전, HAVING 은 묶은 뒤 조건'], ['자격증 준비 (예시)', 'WBS 란?', '작업을 계층으로 나눈 구조'], ['자격증 준비 (예시)', '임계 경로(CPM)', '여유 시간이 0인 가장 긴 경로']],
     memos: ['SQL 조인 복습', '기출 20문항', '사내 교육 1강', '대시보드 실습', '이론 2장'],
   },
 };
@@ -41,24 +39,27 @@ export function seedStudy(key, today = new Date()) {
     const s = subjects[Math.floor(rnd() * subjects.length)];
     logs.push({ id: `l${i}`, date: addDays(t, -i), subject: s.name, minutes: 20 + Math.round(rnd() * 5) * 10, memo: `${P.memos[i % P.memos.length]} (예시)` });
   }
-  const cards = P.cards.map(([subject, q, a], i) => ({ id: `c${i}`, subject, q, a, box: i % 2, next: addDays(t, i < 2 ? 0 : i) }));
-  return { subjects, dailyGoal: 30, logs, cards };
+  return { subjects, dailyGoal: 30, logs };
 }
 
-export default function StudyView({ area, cat, group }) {
-  const { store, setStore, now, isDone, finish } = useCtx();
-  const today = iso(now), key = `${area}|${cat}`, P = PRESETS[key];
-  const S = store.study?.[key] || seedStudy(key, now);
+/** 연동 앱 기록 → 공부 기록 형태 (과목은 앱 이름과 같은 이름으로 시작하는 과목에 붙임) */
+export function appLogs(learn, subjects, apps) {
+  return apps.flatMap(({ key: k, name }) => {
+    const sub = subjects.find(s => s.name.startsWith(name))?.name || name;
+    return (learn?.[k]?.data?.sessions || []).map((x, i) => ({ id: `app-${k}-${i}`, date: x.date, subject: sub, minutes: x.minutes, memo: x.title, app: true }));
+  });
+}
+
+export default function StudyView({ area, cat, embedded, apps }) {
+  const { store, setStore, now } = useCtx();
+  const today = iso(now), key = `${area}|${cat}`;
+  const raw = store.study?.[key] || seedStudy(key, now);
+  // 연동 앱 기록을 가져왔으면 예시 기록은 빼고 계산
+  const fromApps = apps ? appLogs(store.learn, raw.subjects, apps) : [];
+  const S = { ...raw, logs: [...(fromApps.length ? raw.logs.filter(l => !/\(예시\)$/.test(l.memo || '')) : raw.logs), ...fromApps] };
   const set = fn => setStore(s => ({ ...s, study: { ...(s.study || {}), [key]: fn(s.study?.[key] || seedStudy(key, now)) } }));
 
-  // 통계
   const minsOn = d => S.logs.filter(l => l.date === d).reduce((a, l) => a + l.minutes, 0);
-  const todayMin = minsOn(today);
-  const monday = (() => { const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return iso(d); })();
-  const weekMin = S.logs.filter(l => l.date >= monday && l.date <= today).reduce((a, l) => a + l.minutes, 0);
-  let streak = 0;
-  for (let d = minsOn(today) ? today : addDays(today, -1); minsOn(d) > 0; d = addDays(d, -1)) streak++;
-  const due = S.cards.filter(c => c.next <= today);
 
   const chart = Array.from({ length: 14 }, (_, i) => addDays(today, i - 13)).map(d => ({
     key: d, label: md(d), title: `${md(d)} (${WEEK[new Date(d + 'T00:00:00').getDay()]})`, value: minsOn(d),
@@ -77,31 +78,12 @@ export default function StudyView({ area, cat, group }) {
   const [sf, setSf] = useState({ name: '', target: 50 });
   const addSubject = e => { e.preventDefault(); if (!sf.name.trim()) return; set(x => ({ ...x, subjects: [...x.subjects, { id: uid(), name: sf.name.trim(), target: Math.max(1, Number(sf.target) || 1) }] })); setSf({ name: '', target: 50 }); };
 
-  // 복습 카드
-  const [flip, setFlip] = useState(false);
-  const card = due[0];
-  const answer = ok => {
-    set(x => ({ ...x, cards: x.cards.map(c => (c.id === card.id ? { ...c, box: ok ? Math.min(3, c.box + 1) : 0, next: addDays(today, ok ? GAP[Math.min(3, c.box + 1)] : 1) } : c)) }));
-    setFlip(false);
-  };
-  const [cf, setCf] = useState({ q: '', a: '' });
-  const addCard = e => { e.preventDefault(); if (!cf.q.trim() || !cf.a.trim()) return; set(x => ({ ...x, cards: [...x.cards, { id: uid(), subject: f.subject, q: cf.q.trim(), a: cf.a.trim(), box: 0, next: today }] })); setCf({ q: '', a: '' }); };
-  const items = group.items.map(it => ({ it, rows: group.rows.filter(r => r.item === it) }));
-
   return (
-    <div className="catv sv" style={{ '--ac': areaVar(area) }}>
-      <header className="page-h">
+    <div className={`catv sv ${embedded ? 'embedded' : ''}`} style={{ '--ac': areaVar(area) }}>
+      {!embedded && <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-        <p>{AREAS[area].n} · 공부 시간과 과목별 진도를 한눈에 보고, 복습 카드로 배운 내용을 다시 확인합니다.</p>
-      </header>
-
-      <div className="hv-stats">
-        <div className={`hv-stat ${todayMin >= S.dailyGoal ? 'ex' : 'sl'}`}><span className="muted">오늘 공부</span><b>{hm(todayMin)}</b>
-          <span className="pbar"><i style={{ width: `${Math.min(100, todayMin / S.dailyGoal * 100)}%`, background: 'var(--viz-ex)' }} /></span></div>
-        <div className="hv-stat sl"><span className="muted">이번 주</span><b>{hm(weekMin)}</b><span className="hv-sub">하루 목표 {S.dailyGoal}분 × 7 = {hm(S.dailyGoal * 7)}</span></div>
-        <div className="hv-stat sl"><span className="muted">연속 공부</span><b>{streak}일</b><span className="hv-sub">{todayMin ? '오늘 기록함' : '오늘 아직 기록 없음'}</span></div>
-        <div className={`hv-stat ${due.length ? 'over' : 'ex'}`}><span className="muted">오늘 복습할 카드</span><b>{due.length}장</b><span className="hv-sub">전체 {S.cards.length}장</span></div>
-      </div>
+        <p>{AREAS[area].n} · 공부 시간, 과목별 진도, 공부 기록을 한눈에 봅니다.</p>
+      </header>}
 
       <div className="sv-grid">
         <section className="panel">
@@ -122,7 +104,7 @@ export default function StudyView({ area, cat, group }) {
         </section>
       </div>
 
-      <div className="sv-grid">
+      <div>
         <section className="panel">
           <div className="csum-h"><h2>공부 기록</h2><span className="muted">{S.logs.length}회</span></div>
           <form className="lv-form" onSubmit={addLog}>
@@ -134,27 +116,7 @@ export default function StudyView({ area, cat, group }) {
           </form>
           <ul className="lv-simple">{[...S.logs].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10).map(l => (
             <li key={l.id}><time>{md(l.date)}</time><span className="tag">{l.subject}</span><span className="grow">{hm(l.minutes)}{l.memo ? ` · ${l.memo}` : ''}</span>
-              <button className="tl-del" onClick={() => set(x => ({ ...x, logs: x.logs.filter(k => k.id !== l.id) }))}>삭제</button></li>))}</ul>
-        </section>
-
-        <section className="panel">
-          <div className="csum-h"><h2>복습 카드</h2><span className="muted">맞히면 1·3·7·14일 뒤에 다시 나옵니다</span></div>
-          {card ? (
-            <div className="sv-card">
-              <span className="tag">{card.subject}</span>
-              <p className="sv-q">{card.q}</p>
-              {flip ? <>
-                <p className="sv-a">{card.a}</p>
-                <div className="btns"><button className="btn" onClick={() => answer(false)}>몰랐음 (내일 다시)</button><button className="btn primary" onClick={() => answer(true)}>알았음</button></div>
-              </> : <button className="btn primary" onClick={() => setFlip(true)}>정답 보기</button>}
-              <small className="muted">남은 카드 {due.length}장</small>
-            </div>
-          ) : <p className="muted sv-done">오늘 복습할 카드를 모두 끝냈습니다.</p>}
-          <form className="lv-form" onSubmit={addCard}>
-            <input value={cf.q} onChange={e => setCf({ ...cf, q: e.target.value })} placeholder="질문 (예: 단어)" aria-label="카드 질문" className="wide" />
-            <input value={cf.a} onChange={e => setCf({ ...cf, a: e.target.value })} placeholder="정답" aria-label="카드 정답" className="wide" />
-            <button className="btn" disabled={!cf.q.trim() || !cf.a.trim()}>카드 추가</button>
-          </form>
+              {l.app ? <span className="muted sv-app">앱 연동</span> : <button className="tl-del" onClick={() => set(x => ({ ...x, logs: x.logs.filter(k => k.id !== l.id) }))}>삭제</button>}</li>))}</ul>
         </section>
       </div>
 

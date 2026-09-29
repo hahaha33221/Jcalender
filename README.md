@@ -37,7 +37,8 @@ src/
     RelationView.jsx 개인 › 인맥/관계 관리 전용 화면
     LeisureView.jsx 개인 › 여가 관리 전용 화면
     ReviewView.jsx  개인 › 리뷰/회고, 저널링 전용 화면 (일기, 기분 달력, 주간 회고 초안)
-    StudyView.jsx   학습 대시보드 (개인 › 자기계발/학습, 근로 › 직무 학습): 공부 시간 그래프, 과목별 진도, 공부 기록, 복습 카드
+    LearnHubView.jsx 개인 › 자기계발/학습: 영어 · 독서 · 기타 앱 연동 카드 (docs/learning-app-integration.md) + 아래 StudyView
+    StudyView.jsx   학습 화면 (자기계발/학습 아래, 근로 › 직무 학습): 공부 시간 그래프, 과목별 진도, 공부 기록
     ToolView.jsx    카테고리 상세 화면 엔진: 설정대로 요약·다가오는 일정·단계 보드·추세 그래프·항목별 합계·목표 대비 막대·표 수정·추가를 그림
     toolConfigs.js  사업·근로 등 25개 카테고리의 화면 설정(필드, 요약, 그래프, 예시 기록)
     GoalView.jsx    GoalBoard(카테고리별 연간 목표 보드) + 목표 관리 화면(영역 전체 현황)

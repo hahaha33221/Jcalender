@@ -1,0 +1,33 @@
+{
+  "app": "나의 독서 앱",
+  "updatedAt": "2026-09-29T21:00:00+09:00",
+  "summary": {
+    "todayMinutes": 35,
+    "weekMinutes": 75,
+    "streakDays": 4,
+    "progress": 46,
+    "progressLabel": "올해 24권 중"
+  },
+  "sessions": [
+    {
+      "date": "2026-09-29",
+      "minutes": 35,
+      "title": "「사피엔스」 3장"
+    },
+    {
+      "date": "2026-09-28",
+      "minutes": 40,
+      "title": "「사피엔스」 2장"
+    },
+    {
+      "date": "2026-09-27",
+      "minutes": 15,
+      "title": "독서 메모 정리"
+    },
+    {
+      "date": "2026-09-26",
+      "minutes": 30,
+      "title": "「사피엔스」 1장"
+    }
+  ]
+}
