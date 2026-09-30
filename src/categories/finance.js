@@ -91,6 +91,8 @@ export function delExpense(f, id) {
   const e = f.expenses.find(x => x.id === id);
   return e?.shopId ? unbuyShop(f, e.shopId) : { ...f, expenses: f.expenses.filter(x => x.id !== id) };
 }
+/** 지출에 연계 프로젝트 붙이기 (pid 가 빈 값이면 떼기) */
+export const setExpenseProject = (f, id, pid) => ({ ...f, expenses: f.expenses.map(e => { if (e.id !== id) return e; const { projectId, ...rest } = e; return pid ? { ...rest, projectId: pid } : rest; }) });
 export const setExpenseCat = (f, id, cat) => ({ ...f, expenses: f.expenses.map(e => (e.id === id ? { ...e, cat } : e)) });
 
 /* ── 지출 카테고리 편집 (finance → 새 finance) ── */
