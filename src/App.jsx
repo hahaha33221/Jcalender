@@ -17,6 +17,8 @@ import { SpeechRec, parseKoEvent } from './voice.js';
 import { HOLIDAYS } from './holidays.js';
 import { annivOn, lunarTag, nextAnniv, replaceAnnivOnce, seedAnniv } from './anniv.js';
 import { FREQ, expandEvents, repeatText, skipDate } from './recur.js';
+import { ddaysOn } from './dday.js';
+import { DdayStrip } from './categories/DdayPanel.jsx';
 import { ddayText, planDueSoon } from './categories/PlanResearchView.jsx';
 
 /* ───────────────────────── 공통 ───────────────────────── */
@@ -216,6 +218,7 @@ function Home() {
         <DueCards />
       </div>
       <Calendar sel={sel} setSel={setSel} />
+      <DdayStrip />
       <AnnivStrip />
       <PlanDueStrip />
       <ShoppingList compact />
@@ -528,6 +531,7 @@ function Calendar({ sel, setSel }) {
                   {['Y', 'M', 'W'].filter(c => isDue(c, d)).map(c => <span key={c} className={`cal-due ${c}`}>{CYCLES[c].slice(0, 2)}</span>)}</span>
                 {HOLIDAYS[k] && <span className="cal-hol">{HOLIDAYS[k]}</span>}
                 {annivOn(store.anniv, k).map(a => <span key={a.id} className="cal-anniv">{a.name}</span>)}
+                {ddaysOn(store.ddays, k).map(x => <span key={x.id} className="cal-anniv cal-dd">{x.label}</span>)}
                 {evs.slice(0, 2).map(e => <span key={e.id} className={`cal-ev ${drag?.ev.id === e.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(e.area) }} onPointerDown={ev => startDrag(ev, e)}
                   onClick={ev => { ev.stopPropagation(); openEdit(e); }} title={`${e.sid ? `${repeatText(e)} · ` : ''}누르면 수정 · 끌어서 옮기기`}>{e.sid && <i className="cal-rep" aria-hidden="true">↻</i>}{e.time && <small>{e.time}</small>} {e.title}</span>)}
                 {evs.length > 2 && <span className="cal-more">+{evs.length - 2}건</span>}
@@ -536,7 +540,7 @@ function Calendar({ sel, setSel }) {
           })}
         </div>
       </div>
-      <DayTimeline date={selDate} isToday={sel === todayStr} list={list} dueCycles={dueCycles} holiday={HOLIDAYS[sel]} anniv={annivOn(store.anniv, sel)}
+      <DayTimeline date={selDate} isToday={sel === todayStr} list={list} dueCycles={dueCycles} holiday={HOLIDAYS[sel]} anniv={[...annivOn(store.anniv, sel), ...ddaysOn(store.ddays, sel).map(x => ({ id: x.id, kind: 'D-day', name: x.label }))]}
         onAdd={time => setAdding({ date: sel, time })} onDelete={delEvent} startDrag={startDrag} drag={drag} onEdit={openEdit} />
       {drag && createPortal(<div className="cal-ghost" style={{ left: drag.x, top: drag.y, '--ac': areaVar(drag.ev.area) }}>
         {drag.ev.time && <small>{drag.ev.time}</small>} {drag.ev.title}

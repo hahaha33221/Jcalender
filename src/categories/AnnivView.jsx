@@ -4,8 +4,9 @@ import { ANNIV_HEAD, ANNIV_KINDS, annivDateText, lunarTag, mergeAnniv, nextAnniv
 import { WEEK, areaVar, useCtx } from '../shared.jsx';
 import { download, excelDate, readXlsx, writeXlsx } from '../xlsx.js';
 import { parseCsv } from './samsungHealth.js';
+import DdayPanel from './DdayPanel.jsx';
 
-/* 개인 › 기념일 관리 전용 화면: 다가오는 기념일, 월별 달력형 목록, 기념일 편집 */
+/* 개인 › 기념일 관리 전용 화면: 다가오는 기념일, D-day 관리(DdayPanel), 월별 달력형 목록, 기념일 편집 */
 const uid = () => Math.random().toString(36).slice(2, 10);
 const fmtMD = d => `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`;
 
@@ -35,6 +36,8 @@ export default function AnnivView({ area, cat, group }) {
             </div>))}</div>
         ) : <p className="muted anniv-empty">{store.annivDays}일 이내에 다가오는 기념일이 없습니다.</p>}
       </section>
+
+      <DdayPanel />
 
       <section className="panel">
         <h2>앞으로 12개월</h2>

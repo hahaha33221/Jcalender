@@ -1232,3 +1232,36 @@ body.report-open { overflow: hidden; }
 .an-md { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
 .an-md input { width: 52px; padding: 2px 4px; }
 .an-noyear { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--ink2); white-space: nowrap; }
+/* 기념일 관리 › D-day */
+.dd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.dd-card { display: flex; flex-direction: column; gap: 3px; text-align: left; background: var(--card); border: 1px solid var(--line); border-top: 4px solid var(--ai); border-radius: 8px; padding: 10px 12px; cursor: pointer; font: inherit; color: var(--ink); min-width: 0; }
+.dd-card:hover { border-color: var(--ac); }
+.dd-card.since { border-top-color: var(--ok); }
+.dd-card.soon { border-top-color: var(--over); }
+.dd-card.today { background: var(--oversoft); }
+.dd-card.past { opacity: .6; border-top-color: var(--line); }
+.dd-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.dd-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-pin { font-size: 10.5px; color: var(--ink3); border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; flex: none; }
+.dd-big { font-size: 26px; line-height: 1.2; color: var(--ai); font-variant-numeric: tabular-nums; }
+.dd-card.since .dd-big { color: var(--ok); }
+.dd-card.soon .dd-big, .dd-card.today .dd-big { color: var(--over); }
+.dd-sub, .dd-next, .dd-memo { font-size: 12px; color: var(--ink2); }
+.dd-next { color: var(--ok); font-weight: 700; }
+.dd-memo { color: var(--ink3); overflow-wrap: anywhere; }
+.dd-card.editing { cursor: default; gap: 6px; border-top-color: var(--ac); }
+.dd-btns { display: flex; gap: 6px; align-items: center; }
+.dd-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--ink2); white-space: nowrap; }
+.dd-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dd-add > input:first-child { flex: 1 1 220px; min-width: 0; }
+.dd-add select, .dd-add input[type=date] { width: auto; }
+.dd-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.dd-mini { display: flex; flex-direction: column; border: 1px solid var(--line2); border-left: 4px solid var(--ai); border-radius: 6px; padding: 6px 12px; min-width: 130px; flex: 0 1 auto; }
+.dd-mini.since { border-left-color: var(--ok); }
+.dd-mini.soon { border-left-color: var(--over); }
+.dd-mini.past { opacity: .6; }
+.dd-mini b { font-size: 18px; color: var(--ai); }
+.dd-mini.since b { color: var(--ok); } .dd-mini.soon b { color: var(--over); }
+.dd-mini span { font-size: 13px; }
+.dd-mini small { font-size: 11.5px; color: var(--ink3); }
+.cal-anniv.cal-dd { color: var(--ok); background: var(--oksoft); }
