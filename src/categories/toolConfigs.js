@@ -341,28 +341,6 @@ export const TOOL_CONFIGS = {
       { label: '기한 지남', value: `${rs.filter(r => r.stage !== '완료' && r.due && r.due < c.today).length}건`, tone: rs.some(r => r.stage !== '완료' && r.due && r.due < c.today) ? 'over' : 'sl' },
       { label: '높은 우선순위', value: `${rs.filter(r => r.stage !== '완료' && r.prio === '높음').length}건` }],
   },
-  'W|회의/업무 일정': {
-    intro: '회의 일정과 안건, 결정 사항을 한 곳에 기록합니다.', noun: '회의', title: 'title', tick: '결정 사항 메모',
-    fields: [
-      { k: 'date', label: '날짜', type: 'date' },
-      { k: 'time', label: '시간', type: 'time' },
-      { k: 'title', label: '회의', type: 'text', req: true },
-      { k: 'agenda', label: '안건', type: 'text' },
-      { k: 'decision', label: '결정 사항', type: 'text' },
-      { k: 'mins', label: '소요(분)', type: 'number', unit: '분', def: 60 },
-    ],
-    seed: now => ids('wm', [
-      { date: D(now, 0), time: '10:00', title: '주간 팀 회의 (예시)', agenda: '진행 현황 공유', decision: '', mins: 60 },
-      { date: D(now, 1), time: '14:00', title: '프로젝트 A 점검 (예시)', agenda: '일정 재조정', decision: '', mins: 45 },
-      { date: D(now, -2), time: '11:00', title: '고객 요구사항 회의 (예시)', agenda: '범위 확정', decision: '2차 범위에서 제외 2건', mins: 90 },
-      { date: D(now, -6), time: '10:00', title: '주간 팀 회의 (예시)', agenda: '', decision: '보고서 양식 통일', mins: 60 },
-    ]),
-    sort: (a, b) => b.date.localeCompare(a.date),
-    upcoming: { field: 'date', days: 7, label: '이번 주 회의', sub: r => `${r.time || ''} · ${r.agenda || '안건 미정'}` },
-    trend: { label: '일별 회의 시간', date: 'date', value: 'mins', unit: 'day', span: 14, fmt: 'minutes', tick: v => `${v}` },
-    stats: (rs, c) => { const w = rs.filter(r => Math.abs(dayDiff(c.today, r.date)) < 7);
-      return [{ label: '최근 7일 회의', value: `${w.length}건`, sub: `총 ${num(sum(w, 'mins'))}분` }, { label: '결정 사항 미기록', value: `${rs.filter(r => r.date < c.today && !r.decision).length}건`, tone: rs.some(r => r.date < c.today && !r.decision) ? 'over' : 'sl' }]; },
-  },
   'W|업무 문서': {
     intro: '보고서·회의록 등 업무 문서의 최신 버전과 위치를 관리합니다.', noun: '문서', title: 'name', tick: '보고서 등록',
     fields: [
