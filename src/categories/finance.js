@@ -34,28 +34,21 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 // 오늘 지출을 기록하면 일일체크의 "지출 입력"을 완료한다
 export const ACT_EXPENSE = ROWS.find(r => r.a === 'P' && r.c === 'D' && r.action === '지출 입력');
 
-export function seedFinance(today = new Date()) {
-  const d = n => iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() - n));
-  const monthStart = today.getDate() - 1;          // 이번 달 안의 날짜만 쓰도록 자른다
-  const at = n => d(Math.min(n, monthStart));
+/** 처음 시작할 때 빈 재무 데이터 (예시 없음) */
+export function seedFinance() {
+  return { budget: 0, expenses: [], shopping: [] };
+}
+
+/** 한 번만: 예전에 들어 있던 개인 재무 정보(지출·구매 목록·예산·카드 가져오기 기록)를 모두 비운다.
+    지출 카테고리 설정(cats)은 남긴다. 개인 재무 목표 보드도 비운다. store.financeCleared 로 한 번만 실행 */
+export function clearFinanceOnce(st) {
+  if (st.financeCleared) return st;
+  const boards = st.goals?.boards ? { ...st.goals.boards, 'P|개인 재무': { items: [], miles: [] } } : undefined;
   return {
-    budget: 1200000,
-    expenses: [
-      { id: 'e1', date: at(1), amount: 12800, cat: '식비', memo: '점심 (예시)' },
-      { id: 'e2', date: at(2), amount: 54000, cat: '생활용품', memo: '마트 장보기 (예시)' },
-      { id: 'e3', date: at(3), amount: 1400, cat: '교통', memo: '버스 (예시)' },
-      { id: 'e4', date: at(5), amount: 36000, cat: '여가', memo: '영화 (예시)' },
-      { id: 'e5', date: at(7), amount: 24500, cat: '식비', memo: '저녁 외식 (예시)' },
-      { id: 'e6', date: at(9), amount: 18000, cat: '의료', memo: '약국 (예시)' },
-      { id: 'e7', date: at(12), amount: 68000, cat: '식비', memo: '장보기 (예시)' },
-      { id: 'e8', date: at(15), amount: 45000, cat: '교통', memo: '교통카드 충전 (예시)' },
-    ],
-    shopping: [
-      { id: 's1', name: '어머니 생신 선물 (예시)', qty: 1, price: 80000, cat: '선물', added: d(2) },
-      { id: 's2', name: '세탁 세제 (예시)', qty: 1, price: 15900, cat: '생활용품', added: d(1) },
-      { id: 's3', name: '우유·계란 (예시)', qty: 2, price: 9800, cat: '식비', added: d(0) },
-      { id: 's4', name: '두루마리 휴지 (예시)', qty: 1, price: 21900, cat: '생활용품', added: d(3) },
-    ],
+    ...st,
+    finance: { ...seedFinance(), ...(st.finance?.cats ? { cats: st.finance.cats } : {}) },
+    goals: boards ? { ...st.goals, boards } : st.goals,
+    financeCleared: true,
   };
 }
 
