@@ -5,6 +5,7 @@ import { useFinance } from './Shopping.jsx';
 import { catsOf, delExpense, setExpenseCat, setExpenseProject, won } from './finance.js';
 import FinanceCats from './FinanceCats.jsx';
 import { CardImport, MonthlyLedger } from './FinanceMonthly.jsx';
+import ProjectReport from './ProjectReport.jsx';
 
 /* 개인 › 개인 재무 전용 화면: 지출 관리 + 구매해야 할 물품 (대시보드와 같은 데이터)
    "지출 카테고리 설정" 버튼 → FinanceCats 상세 페이지 (카테고리 이름 · 월 예산 · 포함 범위) */
@@ -161,6 +162,7 @@ function LinkedProjects({ f, update, now }) {
   const list = f.projects || [];
   const [name, setName] = useState('');
   const [arm, setArm] = useState(null);
+  const [report, setReport] = useState(false);
   const today = iso(now);
   const setP = (id, patch) => update(x => ({ ...x, projects: (x.projects || []).map(p => (p.id === id ? { ...p, ...patch, updated: today } : p)) }));
   const add = e => {
@@ -171,7 +173,9 @@ function LinkedProjects({ f, update, now }) {
   };
   return (
     <section className="panel fp">
-      <div className="csum-h"><h2>연계 프로젝트</h2><span className="muted">{list.length}개 · 자유롭게 적어 두세요 (입력하면 바로 저장)</span></div>
+      <div className="csum-h"><h2>연계 프로젝트</h2><span className="muted">{list.length}개 · 자유롭게 적어 두세요 (입력하면 바로 저장)</span>
+        {list.length > 0 && <button className="btn sm grow-r" onClick={() => setReport(true)}>보고서 PDF</button>}</div>
+      {report && <ProjectReport f={f} update={update} today={today} onClose={() => setReport(false)} />}
       {list.length ? <ul className="fp-list">{list.map(p => (
         <li key={p.id}>
           <div className="fp-h">
