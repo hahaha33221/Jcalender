@@ -82,6 +82,43 @@ export default function FinanceView({ area, cat }) {
         ) : <p className="muted">이 달의 지출 내역이 없습니다.</p>}
       </section>
 
+      <LinkedProjects f={f} update={update} now={now} />
     </div>
+  );
+}
+
+/* 연계 프로젝트: 개인 재무와 이어지는 일을 자유롭게 적어 두는 칸
+   finance.projects = [{ id, name, note(자유 글), updated('YYYY-MM-DD') }] */
+const pid = () => Math.random().toString(36).slice(2, 10);
+function LinkedProjects({ f, update, now }) {
+  const list = f.projects || [];
+  const [name, setName] = useState('');
+  const [arm, setArm] = useState(null);
+  const today = iso(now);
+  const setP = (id, patch) => update(x => ({ ...x, projects: (x.projects || []).map(p => (p.id === id ? { ...p, ...patch, updated: today } : p)) }));
+  const add = e => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    update(x => ({ ...x, projects: [...(x.projects || []), { id: pid(), name: name.trim(), note: '', updated: today }] }));
+    setName('');
+  };
+  return (
+    <section className="panel fp">
+      <div className="csum-h"><h2>연계 프로젝트</h2><span className="muted">{list.length}개 · 자유롭게 적어 두세요 (입력하면 바로 저장)</span></div>
+      {list.length ? <ul className="fp-list">{list.map(p => (
+        <li key={p.id}>
+          <div className="fp-h">
+            <input className="fp-name" value={p.name} onChange={e => setP(p.id, { name: e.target.value })} aria-label="프로젝트 이름" />
+            <small className="muted">수정 {p.updated}</small>
+            <button className={`btn sm ${arm === p.id ? 'danger' : ''}`} onClick={() => { if (arm === p.id) { update(x => ({ ...x, projects: (x.projects || []).filter(k => k.id !== p.id) })); setArm(null); } else { setArm(p.id); setTimeout(() => setArm(a => (a === p.id ? null : a)), 3000); } }}>{arm === p.id ? '정말 삭제?' : '삭제'}</button>
+          </div>
+          <textarea className="fp-note" value={p.note} onChange={e => setP(p.id, { note: e.target.value })} rows={Math.max(3, (p.note.match(/\n/g) || []).length + 2)}
+            placeholder="예: 목표 금액, 진행 상황, 관련 지출, 메모 등 자유롭게" aria-label={`${p.name} 내용`} />
+        </li>))}</ul> : <p className="muted">아직 연계 프로젝트가 없습니다.</p>}
+      <form className="fp-add" onSubmit={add}>
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="프로젝트 이름 (예: 이사 준비, 자동차 구매)" aria-label="새 연계 프로젝트 이름" />
+        <button className="btn primary" disabled={!name.trim()}>추가</button>
+      </form>
+    </section>
   );
 }
