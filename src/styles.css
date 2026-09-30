@@ -1086,3 +1086,51 @@ body.report-open { overflow: hidden; }
 .dash-plan li b.pr-dd { min-width: 48px; font-size: 13px; }
 @media (max-width: 900px) { .pr-grid { grid-template-columns: 1fr; } .pr-board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .pr-sadd, .pr-sedit { grid-template-columns: 1fr; } .pr-sadd > .btn, .pr-sedit .btn { grid-column: 1; } .pr-board { grid-template-columns: 1fr; } }
+/* 근로 › 업무 문서 (OneDrive 폴더 구조) */
+.od-st { font-size: 12px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--over); color: var(--over); }
+.od-st.on { border-color: var(--ok); color: var(--ok); }
+.od-err { color: var(--over); font-size: 13px; margin: 4px 0 0; }
+.od-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; margin-top: 8px; }
+.od-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink2); min-width: 0; }
+.od-steps { grid-column: 1 / -1; margin: 4px 0 0; padding-left: 20px; font-size: 13px; color: var(--ink2); }
+.od-steps code { font-size: 12px; background: var(--code); padding: 0 4px; border-radius: 4px; }
+.od-form .note { grid-column: 1 / -1; margin: 0; }
+.od-grid { display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.od-side { font-size: 13.5px; }
+.od-side .pr-h3:first-child { margin-top: 0; }
+.od-row { display: flex; align-items: center; gap: 2px; border-radius: 6px; }
+.od-row.on { background: var(--paper); box-shadow: inset 3px 0 0 var(--ac); }
+.od-tog { width: 22px; flex: none; border: 0; background: none; cursor: pointer; color: var(--ink3); font-size: 12px; padding: 4px 0; }
+.od-tog:disabled { cursor: default; }
+.od-fn { flex: 1; min-width: 0; border: 0; background: none; text-align: left; cursor: pointer; font: inherit; color: var(--ink); padding: 4px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.od-row.on .od-fn { font-weight: 700; }
+.od-pins { list-style: none; margin: 0; padding: 0; }
+.od-pins button { border: 0; background: none; cursor: pointer; font: inherit; color: var(--a3); padding: 3px 0; text-align: left; }
+.od-pins button.on { font-weight: 700; }
+.od-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.od-crumb { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; flex: 1; min-width: 0; font-size: 14px; color: var(--ink3); }
+.od-crumb button { border: 0; background: none; padding: 0; cursor: pointer; font: inherit; color: var(--a3); }
+.od-crumb button:disabled { color: var(--ink); font-weight: 700; cursor: default; }
+.od-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.od-tools input[type=search] { flex: 0 1 240px; min-width: 0; }
+.od-mode { margin: 0 0 6px; font-size: 13px; }
+.od-tablewrap { overflow-x: auto; }
+.od-table { width: 100%; }
+.od-table td { vertical-align: middle; }
+.od-table td.c { text-align: center; }
+.od-table td.r, .od-table th.r { text-align: right; }
+.od-table td:nth-child(4) { text-align: left; }
+.od-table .nw { white-space: nowrap; }
+.od-name { min-width: 180px; }
+.od-name > button, .od-name > span { display: inline-flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.od-folder .od-name button { font-weight: 700; color: var(--ink); }
+.od-path { display: block; color: var(--ink3); font-size: 11.5px; margin-left: 22px; }
+.od-ic { flex: none; width: 16px; height: 13px; border-radius: 2px; border: 1.5px solid var(--ink3); display: inline-block; }
+.od-ic.f { background: #f2c14e; border-color: #d9a520; border-radius: 1px 3px 2px 2px; }
+.od-ic.docx, .od-ic.doc, .od-ic.hwp, .od-ic.hwpx { border-color: #2b579a; }
+.od-ic.xlsx, .od-ic.xls, .od-ic.csv { border-color: #217346; }
+.od-ic.pptx, .od-ic.ppt { border-color: #d24726; }
+.od-ic.pdf { border-color: #c4302b; }
+@media (max-width: 900px) { .od-grid { grid-template-columns: minmax(0, 1fr); } .od-form { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .od-by { display: none; } }
+.od-table th:first-child button { justify-content: flex-start; } .od-table th:first-child { text-align: left; }

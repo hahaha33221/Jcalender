@@ -341,25 +341,6 @@ export const TOOL_CONFIGS = {
       { label: '기한 지남', value: `${rs.filter(r => r.stage !== '완료' && r.due && r.due < c.today).length}건`, tone: rs.some(r => r.stage !== '완료' && r.due && r.due < c.today) ? 'over' : 'sl' },
       { label: '높은 우선순위', value: `${rs.filter(r => r.stage !== '완료' && r.prio === '높음').length}건` }],
   },
-  'W|업무 문서': {
-    intro: '보고서·회의록 등 업무 문서의 최신 버전과 위치를 관리합니다.', noun: '문서', title: 'name', tick: '보고서 등록',
-    fields: [
-      { k: 'name', label: '문서', type: 'text', req: true },
-      { k: 'kind', label: '종류', type: 'select', options: ['보고서', '회의록', '기획서', '매뉴얼', '기타'] },
-      { k: 'ver', label: '버전', type: 'text', def: 'v1' },
-      { k: 'date', label: '수정일', type: 'date' },
-      { k: 'where', label: '위치', type: 'text' },
-    ],
-    seed: now => ids('wd', [
-      { name: '주간 보고서 (예시)', kind: '보고서', ver: 'v12', date: D(now, -1), where: '공유드라이브/보고' },
-      { name: '프로젝트 A 요구사항 (예시)', kind: '기획서', ver: 'v3', date: D(now, -4), where: '공유드라이브/프로젝트A' },
-      { name: '9월 팀 회의록 (예시)', kind: '회의록', ver: 'v1', date: D(now, -2), where: '위키' },
-      { name: '배포 매뉴얼 (예시)', kind: '매뉴얼', ver: 'v2', date: D(now, -40), where: '위키/운영' },
-    ]),
-    sort: (a, b) => b.date.localeCompare(a.date),
-    breakdown: { label: '종류별 문서 수', by: 'kind', fmt: 'count' },
-    stats: (rs, c) => [{ label: '문서', value: `${rs.length}건` }, { label: '30일 넘게 수정 안 됨', value: `${rs.filter(r => dayDiff(r.date, c.today) > 30).length}건`, sub: '정리 대상' }],
-  },
   'W|업무 연락처': {
     intro: '업무 연락처를 회사·부서별로 모으고 바로 전화합니다.', noun: '연락처', title: 'name', tick: '연락처 등록',
     fields: [

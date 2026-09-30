@@ -10,6 +10,7 @@ import ReviewView from './ReviewView.jsx';
 import LearnHubView from './LearnHubView.jsx';
 import ToolView from './ToolView.jsx';
 import PlanResearchView from './PlanResearchView.jsx';
+import DocsView from './DocsView.jsx';
 import { TOOL_CONFIGS } from './toolConfigs.js';
 
 /* 카테고리 상세 화면 등록표
@@ -32,6 +33,7 @@ export const CATEGORY_VIEWS = {
   'B|목표 관리': GoalView,
   'W|목표 관리': GoalView,
   'W|기획·조사': PlanResearchView,
+  'W|업무 문서': DocsView,
   ...Object.fromEntries(Object.entries(TOOL_CONFIGS).map(([k, c]) => [k, withConfig(c)])),
 };
 

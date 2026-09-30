@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AREAS, ROWS } from './data.js';
 import { useCtx } from './shared.jsx';
 import { LEARN_APPS, LEISURE_APPS } from './categories/LearnHubView.jsx';
+import { getToken } from './onedrive.js';
 
 /* 진행 현황 › 필요한 API · 기능 정리
    1) 연동 현황: 이미 만들어 둔 연동 기능이 지금 설정·연결됐는지 (저장된 설정으로 판단)
@@ -20,6 +21,8 @@ function useIntegrations() {
   };
   const ai = store.cardAi?.mode || 'off';
   const h = store.health?.imported;
+  const od = store.onedrive || {};
+  const odOn = !!(od.clientId && getToken());
   return [
     { name: '삼성 헬스 데이터', where: '개인', cat: '건강 관리', st: h ? 'ok' : 'part',
       state: h ? `가져옴 ${h.at}` : '아직 가져오지 않음 (예시 기록)', need: '공식 웹 API 없음 → 앱의 "개인 데이터 다운로드" 파일(zip·csv)을 주기적으로 가져오기' },
@@ -29,6 +32,9 @@ function useIntegrations() {
     { name: '명함 AI 분석', where: '개인', cat: '인맥 관리', st: ai === 'off' ? 'part' : 'ok',
       state: ai === 'off' ? '사용 안 함 (직접 입력)' : ai === 'server' ? `내 서버 ${store.cardAi?.endpoint || ''}` : 'Claude API 직접 호출',
       need: '명함 사진 → JSON 을 돌려주는 서버 (docs/business-card-ai.md) 또는 Claude API 키' },
+    { name: 'OneDrive (Microsoft Graph)', where: '근로', cat: '업무 문서', st: odOn ? 'ok' : 'part',
+      state: odOn ? '로그인됨 · 폴더 구조 읽기' : od.clientId ? '클라이언트 ID 입력됨 · 로그인 전' : '클라이언트 ID 미입력 (예시 폴더 표시)',
+      need: 'Azure 앱 등록(SPA) 클라이언트 ID + Files.Read 권한 (docs/onedrive-integration.md), 회사 계정은 관리자 동의가 필요할 수 있음' },
     ...LEARN_APPS.map(a => app(a, '개인', '자기계발/학습')),
     ...LEISURE_APPS.map(a => app(a, '개인', '여가 관리')),
   ];
