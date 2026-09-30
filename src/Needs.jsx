@@ -23,8 +23,6 @@ function useIntegrations() {
   return [
     { name: '삼성 헬스 데이터', where: '개인', cat: '건강 관리', st: h ? 'ok' : 'part',
       state: h ? `가져옴 ${h.at}` : '아직 가져오지 않음 (예시 기록)', need: '공식 웹 API 없음 → 앱의 "개인 데이터 다운로드" 파일(zip·csv)을 주기적으로 가져오기' },
-    { name: '병원 정보 조회', where: '개인', cat: '건강 관리', st: 'todo',
-      state: '진찰 기록은 직접 입력', need: '공공데이터포털 병원정보서비스 API 키 + 키를 숨길 서버 (진료 기록 자체는 개인 앱이 가져올 수 없음)' },
     { name: '카드 이용내역 (롯데 · KB국민)', where: '개인', cat: '개인 재무', st: store.finance?.cardImport ? 'ok' : 'part',
       state: store.finance?.cardImport ? `가져옴 ${store.finance.cardImport.at}` : '아직 가져오지 않음',
       need: '공식 개인 API 없음 → 카드사 이용내역 엑셀을 주기적으로 올리기. 자동 수집은 CODEF 같은 중계 API + 서버 필요' },
@@ -69,7 +67,7 @@ export default function NeedsPanel() {
       <h2>필요한 API · 기능</h2>
       <h3 className="lv-h3">연동 현황</h3>
       <div className="chips nd-chips" role="group" aria-label="연동 상태로 보기">
-        {[['all', '전체', list.length], ['ok', '연결됨', cnt('ok')], ['part', '설정 필요', cnt('part')], ['todo', '미개발', cnt('todo')]].map(([k, n, c]) => (
+        {[['all', '전체', list.length], ['ok', '연결됨', cnt('ok')], ['part', '설정 필요', cnt('part')], ['todo', '미개발', cnt('todo')]].filter(([k, , c]) => k !== 'todo' || c > 0 || st === k).map(([k, n, c]) => (
           <button key={k} aria-pressed={st === k} onClick={() => setSt(k)}>{n} <small>{c}</small></button>))}
       </div>
       <div className="nd-sort">
