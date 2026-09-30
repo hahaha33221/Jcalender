@@ -1223,3 +1223,7 @@ body.report-open { overflow: hidden; }
 .tl-open:hover { text-decoration: underline; }
 .modal .btns .grow { flex: 1; }
 .modal .btns { flex-wrap: wrap; gap: 6px; }
+/* 반복 일정 */
+.cal-rep { font-style: normal; font-size: 10px; color: var(--ink3); margin-right: 2px; }
+.tl-rep { display: inline-block; margin-left: 6px; font-size: 11px; color: var(--ink3); border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; }
+.ev-series { color: var(--ink2); background: var(--paper); border-radius: 6px; padding: 6px 8px; }

@@ -16,6 +16,7 @@ import { mockAi, mockApi } from './mock.js';
 import { SpeechRec, parseKoEvent } from './voice.js';
 import { HOLIDAYS } from './holidays.js';
 import { annivOn, nextAnniv, seedAnniv } from './anniv.js';
+import { FREQ, expandEvents, repeatText, skipDate } from './recur.js';
 import { ddayText, planDueSoon } from './categories/PlanResearchView.jsx';
 
 /* ───────────────────────── 공통 ───────────────────────── */
@@ -414,31 +415,45 @@ function Calendar({ sel, setSel }) {
   const [voice, setVoice] = useState(false);
   const first = new Date(ym.y, ym.m, 1), start = new Date(ym.y, ym.m, 1 - first.getDay());
   const cells = Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+  // 반복 일정은 보이는 42일(+ 선택한 날)만 펼쳐서 그린다
+  const from0 = iso(cells[0]), to0 = iso(cells[41]);
   const byDate = useMemo(() => {
     const m = {};
-    for (const e of store.events) (m[e.date] ||= []).push(e);
+    for (const e of expandEvents(store.events, sel < from0 ? sel : from0, sel > to0 ? sel : to0)) (m[e.date] ||= []).push(e);
     for (const k in m) m[k].sort((a, b) => (a.time || '').localeCompare(b.time || ''));
     return m;
-  }, [store.events]);
+  }, [store.events, from0, to0, sel]);
   const move = n => { const d = new Date(ym.y, ym.m + n, 1); setYm({ y: d.getFullYear(), m: d.getMonth() }); };
   const goToday = () => { setYm({ y: now.getFullYear(), m: now.getMonth() }); setSel(todayStr); };
   const pick = k => { setSel(k); const d = new Date(k + 'T00:00:00'); if (d.getMonth() !== ym.m) setYm({ y: d.getFullYear(), m: d.getMonth() }); };
   const notes = store.eventNotes || [];
   /** 일정 창 저장: 새 일정 / 기존 일정 수정 / 노트를 일정으로 */
-  const saveEvent = ({ id, fromNote, ...ev }) => {
-    setStore(s => ({
-      ...s,
-      events: id ? s.events.map(x => (x.id === id ? { ...x, ...ev } : x)) : [...s.events, { id: uid(), ...ev }],
-      eventNotes: fromNote ? (s.eventNotes || []).filter(n => n.id !== fromNote) : s.eventNotes,
-    }));
+  // scope: 'one' = 반복 중 이 날만(따로 떼어 낸 일정으로), 'all' = 반복 전체
+  const saveEvent = ({ id, sid, occ, scope, fromNote, ...ev }) => {
+    setStore(s => {
+      let events = s.events;
+      if (sid && scope === 'one') {
+        events = [...skipDate(events, sid, occ), { id: uid(), ...ev, repeat: null }];
+      } else if (sid) {
+        const shift = Math.round((new Date(ev.date + 'T00:00:00') - new Date(occ + 'T00:00:00')) / 864e5);
+        events = events.map(x => {
+          if (x.id !== sid) return x;
+          const d = new Date(x.date + 'T00:00:00'); d.setDate(d.getDate() + shift);
+          return { ...x, ...ev, date: iso(d), repeat: ev.repeat ? { ...ev.repeat, skip: x.repeat?.skip || [] } : null };
+        });
+      } else if (id) events = events.map(x => (x.id === id ? { ...x, ...ev } : x));
+      else events = [...events, { id: uid(), ...ev }];
+      return { ...s, events, eventNotes: fromNote ? (s.eventNotes || []).filter(n => n.id !== fromNote) : s.eventNotes };
+    });
     pick(ev.date);
     setAdding(null); setMoved(null);
   };
   const toNote = e => {
-    setStore(s => ({ ...s, events: s.events.filter(x => x.id !== e.id), eventNotes: [...(s.eventNotes || []), { id: uid(), title: e.title, area: e.area, time: e.time || '', memo: e.memo || '' }] }));
+    setStore(s => ({ ...s, events: e.sid ? skipDate(s.events, e.sid, e.date) : s.events.filter(x => x.id !== e.id), eventNotes: [...(s.eventNotes || []), { id: uid(), title: e.title, area: e.area, time: e.time || '', memo: e.memo || '' }] }));
     setAdding(null);
   };
-  const delEvent = id => setStore(s => ({ ...s, events: s.events.filter(x => x.id !== id) }));
+  /** 삭제: 반복 회차는 이 날만 빼고(all 이면 반복 전체), 보통 일정은 그대로 삭제 */
+  const delEvent = (e, all) => setStore(s => ({ ...s, events: e.sid && !all ? skipDate(s.events, e.sid, e.date) : s.events.filter(x => x.id !== (e.sid || e.id)) }));
   // 끌어서 옮기기 + 방금 옮긴 것 되돌리기
   // moved = { msg, events, notes, back } : 옮기기 직전의 일정·노트 (되돌리기용)
   const [moved, setMoved] = useState(null);
@@ -455,18 +470,21 @@ function Calendar({ sel, setSel }) {
       : over.allDay ? { date: sel, time: '' }
       : { date: sel, time: `${pad(over.h)}:${baseTime ? baseTime.slice(3, 5) : '00'}` };
     if (ev._note) {                                           // 노트 → 새 일정
-      const { _note, id, ...rest } = ev;
+      const { _note, id, repeat, ...rest } = ev;
       setStore(s => ({ ...s, events: [...s.events, { ...rest, id: uid(), ...next }], eventNotes: (s.eventNotes || []).filter(n => n.id !== id) }));
       setMoved({ ...snap, msg: `노트 "${ev.title}"을(를) ${mdTxt(next.date, next.time)} 일정으로 넣었습니다.` });
     } else {
       if (next.date === ev.date && next.time === baseTime) return;
-      setStore(s => ({ ...s, events: s.events.map(x => (x.id === ev.id ? { ...x, ...next } : x)) }));
-      setMoved({ ...snap, msg: `"${ev.title}" 일정을 ${mdTxt(ev.date, baseTime)} → ${mdTxt(next.date, next.time)}로 옮겼습니다.` });
+      if (ev.sid) {                                           // 반복 회차: 이 날만 떼어 옮긴다
+        const { id, sid, repeat, ...rest } = ev;
+        setStore(s => ({ ...s, events: [...skipDate(s.events, sid, ev.date), { ...rest, id: uid(), ...next }] }));
+      } else setStore(s => ({ ...s, events: s.events.map(x => (x.id === ev.id ? { ...x, ...next } : x)) }));
+      setMoved({ ...snap, msg: `"${ev.title}" 일정을 ${mdTxt(ev.date, baseTime)} → ${mdTxt(next.date, next.time)}로 옮겼습니다.${ev.sid ? ' (반복 중 이 날만)' : ''}` });
     }
     if (over.date) pick(over.date);
   };
   const undoMove = () => { if (!moved) return; setStore(s => ({ ...s, events: moved.events, eventNotes: moved.notes })); pick(moved.back); setMoved(null); };
-  const openEdit = e => { if (!dragged.current) setAdding({ ...e }); };
+  const openEdit = e => { if (!dragged.current) setAdding({ ...e, occ: e.sid ? e.date : undefined }); };
   const { drag, start: startDrag, dragged } = useEventDrag(moveEvent);
   // 날짜 두 번 누르기 → 그 날짜에 일정 추가 (다른 달 칸이면 첫 클릭에 달이 바뀌므로 첫 클릭한 날짜를 기억해 둔다)
   const lastClick = useRef(null);
@@ -511,7 +529,7 @@ function Calendar({ sel, setSel }) {
                 {HOLIDAYS[k] && <span className="cal-hol">{HOLIDAYS[k]}</span>}
                 {annivOn(store.anniv, k).map(a => <span key={a.id} className="cal-anniv">{a.name}</span>)}
                 {evs.slice(0, 2).map(e => <span key={e.id} className={`cal-ev ${drag?.ev.id === e.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(e.area) }} onPointerDown={ev => startDrag(ev, e)}
-                  onClick={ev => { ev.stopPropagation(); openEdit(e); }} title="누르면 수정 · 끌어서 옮기기">{e.time && <small>{e.time}</small>} {e.title}</span>)}
+                  onClick={ev => { ev.stopPropagation(); openEdit(e); }} title={`${e.sid ? `${repeatText(e)} · ` : ''}누르면 수정 · 끌어서 옮기기`}>{e.sid && <i className="cal-rep" aria-hidden="true">↻</i>}{e.time && <small>{e.time}</small>} {e.title}</span>)}
                 {evs.length > 2 && <span className="cal-more">+{evs.length - 2}건</span>}
               </button>
             );
@@ -524,7 +542,7 @@ function Calendar({ sel, setSel }) {
         {drag.ev.time && <small>{drag.ev.time}</small>} {drag.ev.title}
         <em>{drag.over ? (drag.over.date ? `${Number(drag.over.date.slice(5, 7))}/${Number(drag.over.date.slice(8, 10))}로` : drag.over.allDay ? '종일로' : drag.over.note ? '일정 노트로' : `${pad(drag.over.h)}시로`) : '놓을 곳을 고르세요'}</em></div>, document.body)}
       {adding && <EventDialog init={adding} onSave={saveEvent} onClose={() => setAdding(null)}
-        onDelete={adding.id ? () => { delEvent(adding.id); setAdding(null); } : null} onToNote={adding.id ? () => toNote(adding) : null} />}
+        onDelete={adding.id ? all => { delEvent(adding, all); setAdding(null); } : null} onToNote={adding.id ? () => toNote(adding) : null} />}
       {voice && <VoiceDialog now={now} onDone={ev => { setVoice(false); setAdding(ev); }} onClose={() => setVoice(false)} />}
     </section>
     </>
@@ -618,27 +636,29 @@ function DayTimeline({ date, isToday, list, dueCycles, holiday, anniv, onAdd, on
 function TimelineEvent({ e, onDelete, startDrag, drag, onEdit }) {
   return (
     <div className={`tl-ev ${drag?.ev.id === e.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(e.area) }} onPointerDown={ev => { if (!ev.target.closest('.tl-del')) startDrag?.(ev, e); }}>
-      <button className="grow tl-open" onClick={() => onEdit?.(e)} title="누르면 수정 · 끌어서 옮기기"><small>{e.time || '종일'}</small> {e.title}</button>
-      <button className="tl-del" onClick={() => onDelete(e.id)} aria-label={`${e.title} 삭제`}>삭제</button>
+      <button className="grow tl-open" onClick={() => onEdit?.(e)} title="누르면 수정 · 끌어서 옮기기"><small>{e.time || '종일'}</small> {e.title}{e.sid && <span className="tl-rep">{repeatText(e)}</span>}</button>
+      <button className="tl-del" onClick={() => onDelete(e)} aria-label={`${e.title} 삭제`} title={e.sid ? '반복 중 이 날만 삭제' : '삭제'}>{e.sid ? '이 날 삭제' : '삭제'}</button>
     </div>
   );
 }
 
 /* 일정 추가 창 */
 function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
-  const [f, setF] = useState({ title: init.title || '', date: init.date || '', time: init.time || '', area: init.area || 'P', memo: init.memo || '' });
+  const [f, setF] = useState({ title: init.title || '', date: init.date || '', time: init.time || '', area: init.area || 'P', memo: init.memo || '',
+    freq: init.repeat?.freq || '', until: init.repeat?.until || '' });
   const [arm, setArm] = useState(false);
-  const edit = !!init.id;
+  const edit = !!init.id, series = !!init.sid;
   useEffect(() => {
     const esc = e => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', esc);
     return () => window.removeEventListener('keydown', esc);
   }, []);
-  const submit = e => {
-    e.preventDefault();
+  const save = scope => {
     if (!f.title.trim() || !f.date) return;
-    onSave({ id: init.id, fromNote: init.fromNote, date: f.date, time: f.time, title: f.title.trim(), area: f.area, memo: f.memo.trim() });
+    const repeat = f.freq ? { freq: f.freq, until: f.until && f.until >= f.date ? f.until : '', skip: init.repeat?.skip || [] } : null;
+    onSave({ id: init.id, sid: init.sid, occ: init.occ, scope, fromNote: init.fromNote, date: f.date, time: f.time, title: f.title.trim(), area: f.area, memo: f.memo.trim(), repeat });
   };
+  const submit = e => { e.preventDefault(); save(series ? 'all' : undefined); };
   return (
     <div className="modal-bg" onClick={onClose}>
       <form className="modal" role="dialog" aria-label={edit ? '일정 수정' : '일정 추가'} onClick={e => e.stopPropagation()} onSubmit={submit}>
@@ -651,13 +671,25 @@ function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
         </div>
         <label>영역<select value={f.area} onChange={e => setF({ ...f, area: e.target.value })}>
           {Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}</select></label>
+        <div className="row2">
+          <label>반복<select value={f.freq} onChange={e => setF({ ...f, freq: e.target.value })} aria-label="반복">
+            {Object.entries(FREQ).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+          {f.freq && <label>반복 종료 (선택)<input type="date" value={f.until} min={f.date} onChange={e => setF({ ...f, until: e.target.value })} /></label>}
+        </div>
+        {f.freq && <p className="note">{repeatText({ date: f.date || init.date, repeat: { freq: f.freq, until: f.until } })}{f.until ? '' : ' · 끝나는 날 없음'}</p>}
+        {series && <p className="note ev-series">반복 일정의 {Number(init.occ.slice(5, 7))}/{Number(init.occ.slice(8, 10))} 회차입니다. "이 날만 저장"은 이 날만 따로 바꾸고, "반복 전체 저장"은 모든 회차에 적용합니다.</p>}
         <label>메모<textarea rows={2} value={f.memo} onChange={e => setF({ ...f, memo: e.target.value })} placeholder="장소, 준비물 등 (선택)" /></label>
         <p className="note">시간을 비우면 종일 일정으로 등록됩니다.</p>
         <div className="btns">
-          {onDelete && (arm ? <button type="button" className="btn danger" onClick={onDelete}>정말 삭제?</button> : <button type="button" className="btn" onClick={() => setArm(true)}>삭제</button>)}
+          {onDelete && (series
+            ? (arm ? <><button type="button" className="btn danger" onClick={() => onDelete(false)}>이 날만 삭제</button><button type="button" className="btn danger" onClick={() => onDelete(true)}>반복 전체 삭제</button></>
+              : <button type="button" className="btn" onClick={() => setArm(true)}>삭제</button>)
+            : arm ? <button type="button" className="btn danger" onClick={() => onDelete(true)}>정말 삭제?</button> : <button type="button" className="btn" onClick={() => setArm(true)}>삭제</button>)}
           {onToNote && <button type="button" className="btn" onClick={onToNote} title="날짜를 빼고 일정 노트로 보냅니다">노트로 보내기</button>}
           <span className="grow" />
-          <button type="button" className="btn" onClick={onClose}>취소</button><button className="btn primary" disabled={!f.title.trim() || !f.date}>{edit ? '저장' : '추가'}</button></div>
+          <button type="button" className="btn" onClick={onClose}>취소</button>
+          {series && <button type="button" className="btn" onClick={() => save('one')} disabled={!f.title.trim() || !f.date}>이 날만 저장</button>}
+          <button className="btn primary" disabled={!f.title.trim() || !f.date}>{series ? '반복 전체 저장' : edit ? '저장' : '추가'}</button></div>
       </form>
     </div>
   );
