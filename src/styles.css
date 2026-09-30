@@ -1348,3 +1348,8 @@ body.report-open { overflow: hidden; }
 .ds-colors button { width: 16px; height: 16px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
 .ds-colors button.on { border-color: var(--ink); }
 @media (max-width: 700px) { .pr-meta2 { grid-template-columns: minmax(0, 1fr); } }
+/* 오류 화면 */
+.eb { max-width: 760px; margin: 40px auto; padding: 24px; background: var(--card); border: 1px solid var(--over); border-radius: 10px; color: var(--ink); }
+.eb h1 { font-size: 20px; margin: 0 0 8px; color: var(--over); }
+.eb-msg { white-space: pre-wrap; word-break: break-all; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 10px; font-size: 12px; max-height: 320px; overflow: auto; }
+.eb-btns { display: flex; gap: 8px; flex-wrap: wrap; }

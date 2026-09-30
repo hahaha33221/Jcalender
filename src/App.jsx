@@ -64,7 +64,12 @@ function useStore() {
     const merged = renameCats({ ...INIT, ...(v || {}) });
     const base = replaceAnnivOnce(clearFinanceOnce({ ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: dropNoGoal(merged.goals ? addExampleGoals(migrateGoals(merged.goals)) : seedGoals()), people: merged.people ? migratePeople(merged.people, new Date()) : seedPeople(), leisure: merged.leisure ?? seedLeisure(), journal: merged.journal ?? seedJournal() }));
     // 저장 구조를 현재 버전으로 올리고(schema.js), 따로 둔 비밀 정보를 붙이고, 오래된 휴지통을 비운다
-    return purgeTrash(mergeSecrets(migrate(base), readSecrets()));
+    try { return purgeTrash(mergeSecrets(migrate(base), readSecrets())); }
+    catch (e) {                                                   // 옮기기가 실패해도 앱은 예전 구조로 연다 (데이터는 그대로)
+      console.error('저장 구조 옮기기 실패', e);
+      try { localStorage.setItem('jcalender.migrateError', `${new Date().toISOString()} ${e?.stack || e}`); } catch { /* 무시 */ }
+      return mergeSecrets(base, readSecrets());
+    }
   });
   const [persist, setPersist] = useState(true);
   useEffect(() => {
