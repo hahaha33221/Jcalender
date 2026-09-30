@@ -4,13 +4,15 @@ import { iso } from '../data.js';
 import { areaVar, useCtx } from '../shared.jsx';
 import { daysBetween } from './goals.js';
 import { ViewToggle } from './ToolView.jsx';
+import PlanApiImport from './PlanApiImport.jsx';
 
 /* 근로 › 기획·조사 전용 화면 (탭 2개)
    plan = {
      ui: { tab: 'research' | 'plan', view: 'kanban' | 'list' (기획 보드 보기 방식) },
      topics:  [{ id, title, purpose, due, status('조사 중'|'정리 완료'), summary, created }],
      sources: [{ id, topicId, title, url, from(출처), date, memo, tags: [], star(1~3) }],
-     plans:   [{ id, title, status, due, topicIds: [], sec: { s1..s6 }, created, updated }],
+     plans:   [{ id, title, status, due, topicIds: [], sec: { s1..s6 }, created, updated, ext?: { feed, key }(API로 가져온 카드) }],
+     feeds:   [API 연결 설정] (planApi.js)
    }
    - 조사: 주제별로 자료 카드(링크·메모)를 모으고 "알게 된 것 · 결론"을 정리 → "기획안으로" 버튼으로 기획서 초안 생성
    - 기획: 상태 보드(아이디어 → 초안 → 검토 → 확정, 보류) + 기획서(1.개요 ~ 6.기타) + PDF
@@ -229,6 +231,7 @@ function Sources({ P, set, topic, today }) {
 function Plans({ P, set, today, openId, setOpenId, view, setView }) {
   const [nt, setNt] = useState({ title: '', due: '' });
   const [printing, setPrinting] = useState(false);
+  const [api, setApi] = useState(false);
   const plan = P.plans.find(p => p.id === openId) || null;
   const add = () => {
     if (!nt.title.trim()) return;
@@ -245,7 +248,9 @@ function Plans({ P, set, today, openId, setOpenId, view, setView }) {
     <>
       <section className="panel">
         <div className="csum-h"><h2>기획 보드</h2><span className="muted">{view === 'kanban' ? '카드를 누르면 기획서를 엽니다 · ◀ ▶ 로 단계 이동' : '제목을 누르면 기획서를 엽니다 · 상태 칸에서 바로 변경'}</span>
-          <span className="grow" /><ViewToggle value={view} onChange={setView} /></div>
+          <span className="grow" /><button className="btn sm" onClick={() => setApi(v => !v)} aria-expanded={api}>API로 가져오기{(P.feeds || []).length ? ` (${P.feeds.length})` : ''}</button>
+          <ViewToggle value={view} onChange={setView} /></div>
+        {api && <PlanApiImport P={P} set={set} today={today} onClose={() => setApi(false)} />}
         <div className="pr-add pr-add-row">
           <input value={nt.title} onChange={e => setNt({ ...nt, title: e.target.value })} onKeyDown={e => e.key === 'Enter' && add()} placeholder="새 기획 제목" aria-label="새 기획 제목" />
           <label className="pr-due">마감<input type="date" value={nt.due} onChange={e => setNt({ ...nt, due: e.target.value })} aria-label="기획 마감" /></label>
@@ -264,6 +269,7 @@ function Plans({ P, set, today, openId, setOpenId, view, setView }) {
                     <div className="pr-km">
                       {d != null && <span className={`pr-dd ${live && d < 0 ? 'late' : live && d <= 3 ? 'soon' : ''}`}>{live ? ddayText(d) : md(p.due)}</span>}
                       {(p.topicIds || []).length > 0 && <span className="muted">조사 {p.topicIds.length}</span>}
+                      {p.ext && <span className="pa-badge" title="API로 가져온 기획">API</span>}
                       <span className="grow" />
                       {live && <><button className="btn xs" onClick={() => move(p, -1)} disabled={st === '아이디어'} aria-label="이전 단계">◀</button>
                         <button className="btn xs" onClick={() => move(p, 1)} aria-label="다음 단계">▶</button></>}

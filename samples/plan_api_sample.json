@@ -1,0 +1,8 @@
+{
+  "items": [
+    { "id": "P-101", "title": "신규 회원 이벤트 기획 (예시)", "status": "In Progress", "due_date": "2026-10-15", "description": "가입 전환율 높이기", "notes": "- 쿠폰 지급안\n- 친구 초대 보상", "url": "https://example.com/plan/101" },
+    { "id": "P-102", "title": "연말 행사 운영안 (예시)", "status": "Review", "due_date": "2026-11-20", "description": "12월 고객 초청 행사", "notes": "장소·예산 비교 필요" },
+    { "id": "P-103", "title": "사내 교육 프로그램 (예시)", "status": "Idea", "due_date": "", "description": "신입 온보딩 개선" },
+    { "id": "P-104", "title": "3분기 성과 보고 (예시)", "status": "Done", "due_date": "2026-09-25", "description": "완료된 보고" }
+  ]
+}

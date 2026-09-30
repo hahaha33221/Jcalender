@@ -35,6 +35,9 @@ function useIntegrations() {
     { name: 'OneDrive (Microsoft Graph)', where: '근로', cat: '업무 문서', st: odOn ? 'ok' : 'part',
       state: odOn ? '로그인됨 · 폴더 구조 읽기' : od.clientId ? '클라이언트 ID 입력됨 · 로그인 전' : '클라이언트 ID 미입력 (예시 폴더 표시)',
       need: 'Azure 앱 등록(SPA) 클라이언트 ID + Files.Read 권한 (docs/onedrive-integration.md), 회사 계정은 관리자 동의가 필요할 수 있음' },
+    { name: '기획 보드 API 가져오기', where: '근로', cat: '기획·조사', st: (store.plan?.feeds || []).some(f => f.lastSync) ? 'ok' : 'part',
+      state: (store.plan?.feeds || []).length ? (store.plan.feeds.filter(f => f.lastSync).map(f => `${f.name} ${f.lastSync}`).join(', ') || '연결 저장됨 · 가져오기 전') : '연결 없음',
+      need: 'CORS를 허용하는 JSON/CSV 주소 (구글 시트 웹에 게시 CSV 등). 노션·지라는 프록시 서버 필요' },
     ...LEARN_APPS.map(a => app(a, '개인', '자기계발/학습')),
     ...LEISURE_APPS.map(a => app(a, '개인', '여가 관리')),
   ];

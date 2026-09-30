@@ -1286,3 +1286,20 @@ body.report-open { overflow: hidden; }
 .ev-form .btns { flex-wrap: wrap; gap: 6px; }
 .ev-form .btns .grow { flex: 1; }
 .ev-form .row2 > label { min-width: 0; }
+/* 기획 보드 › API로 가져오기 */
+.pa { margin: 0 0 12px; border: 1px solid var(--ac); }
+.pa-feeds { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pa-feeds li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 8px; border: 1px solid var(--line2); border-radius: 6px; font-size: 13px; }
+.pa-feeds li.on { border-color: var(--ac); }
+.pa-form { display: grid; grid-template-columns: 1fr 2fr; gap: 8px 12px; }
+.pa-form label, .pa-map label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink2); min-width: 0; }
+.pa-tok { display: flex; gap: 6px; } .pa-tok input { flex: 1; min-width: 0; }
+.pa-btns { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.pa-map { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 12px; }
+.pa-sum { margin: 12px 0 6px; font-size: 13px; }
+.pa-prev td { font-size: 12.5px; }
+.pa-prev td:nth-child(2), .pa-prev td:nth-child(5) { text-align: left; }
+.pa-cut { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pa-badge { font-size: 10px; font-weight: 700; color: var(--a3); border: 1px solid var(--a3); border-radius: 6px; padding: 0 4px; }
+@media (max-width: 800px) { .pa-form { grid-template-columns: minmax(0, 1fr); } .pa-map { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pa-prev { width: 100%; } .pa-prev th, .pa-prev td { padding: 6px 8px; border-bottom: 1px solid var(--line2); }
