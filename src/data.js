@@ -199,7 +199,7 @@ export const CYCLES = { D: '일일체크-루틴', S: '수시체크', W: '주간�
 export const TY = { A: 'API', I: 'AI', N: '없음' };
 export const ROWS = [];
 /** 쓰지 않는 카테고리. 목록에서만 빼고, 다른 항목의 id(체크 기록)가 바뀌지 않도록 데이터 줄은 남겨 둔다 */
-export const HIDDEN_CATS = new Set(['P|개인 일정/캘린더', 'P|습관/루틴 관리', 'P|개인 목표 관리']);
+export const HIDDEN_CATS = new Set(['P|개인 일정/캘린더', 'P|습관/루틴 관리', 'P|개인 목표 관리', 'W|근태', 'W|성과 기록']);
 (() => {
   let a, c, cat = '', item = '', n = 0;
   for (const line of RAW.trim().split('\n')) {

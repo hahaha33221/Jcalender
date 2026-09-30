@@ -363,43 +363,6 @@ export const TOOL_CONFIGS = {
     stats: (rs, c) => { const w = rs.filter(r => Math.abs(dayDiff(c.today, r.date)) < 7);
       return [{ label: '최근 7일 회의', value: `${w.length}건`, sub: `총 ${num(sum(w, 'mins'))}분` }, { label: '결정 사항 미기록', value: `${rs.filter(r => r.date < c.today && !r.decision).length}건`, tone: rs.some(r => r.date < c.today && !r.decision) ? 'over' : 'sl' }]; },
   },
-  'W|근태': {
-    intro: '출퇴근 시각으로 근무시간을 계산하고 초과근무와 휴가를 관리합니다.', noun: '근무 기록', title: 'date', tick: '출근 기록',
-    fields: [
-      { k: 'date', label: '날짜', type: 'date', req: true },
-      { k: 'in', label: '출근', type: 'time', def: '09:00' },
-      { k: 'out', label: '퇴근', type: 'time', def: '18:00' },
-      { k: 'kind', label: '구분', type: 'select', options: ['근무', '연차', '반차', '재택'] },
-      { k: 'memo', label: '메모', type: 'text' },
-    ],
-    seed: now => { const out = []; for (let i = 13; i >= 0; i--) { const d = D(now, -i), wd = new Date(d + 'T00:00:00').getDay(); if (wd === 0 || wd === 6) continue;
-      const late = [0, 15, 40, 0, 70, 20, 0, 90, 10, 0][i % 10]; out.push({ date: d, in: `08:${50 + (i % 3) * 3}`, out: `${18 + Math.floor(late / 60)}:${String(10 + (late % 60)).slice(-2).padStart(2, '0')}`, kind: i === 8 ? '연차' : i === 3 ? '재택' : '근무', memo: '' }); }
-      return ids('wa', out.map(r => (r.kind === '연차' ? { ...r, in: '', out: '' } : r)).map(r => ({ ...r, memo: r.kind !== '근무' ? `${r.kind} (예시)` : '' }))); },
-    sort: (a, b) => b.date.localeCompare(a.date),
-    trend: { label: '일별 근무시간', date: 'date', value: r => hm(r.in, r.out), unit: 'day', span: 14, fmt: 'hours', tick: v => `${v / 60}`, steps: [120, 180, 240], goal: 480, goalLabel: '8h' },
-    stats: (rs, c) => { const cur = rs.filter(r => inMonth(r.date, c)), mins = cur.reduce((a, r) => a + hm(r.in, r.out), 0), over = cur.reduce((a, r) => a + Math.max(0, hm(r.in, r.out) - 480), 0);
-      return [{ label: '이번 달 근무', value: `${Math.round(mins / 60)}시간`, sub: `${cur.filter(r => r.kind !== '연차').length}일` }, { label: '초과근무', value: `${Math.round(over / 6) / 10}시간`, tone: over > 600 ? 'over' : 'sl', sub: '월 10시간 이하 목표' },
-        { label: '올해 연차 사용', value: `${rs.filter(r => r.kind === '연차' && r.date.startsWith(c.year)).length + rs.filter(r => r.kind === '반차' && r.date.startsWith(c.year)).length * 0.5}일` }]; },
-  },
-  'W|성과 기록': {
-    intro: '매일 한 줄 성과를 남기고, 평가 때 쓸 수 있게 영향과 태그로 모아 둡니다.', noun: '성과', title: 'what', tick: '성과 한 줄 기록',
-    fields: [
-      { k: 'date', label: '날짜', type: 'date' },
-      { k: 'what', label: '성과', type: 'text', req: true },
-      { k: 'impact', label: '영향', type: 'select', options: ['높음', '중간', '낮음'] },
-      { k: 'tag', label: '분류', type: 'select', options: ['개발', '협업', '개선', '고객', '학습'] },
-    ],
-    seed: now => ids('wp', [
-      { date: D(now, -1), what: '배포 스크립트 자동화로 배포 시간 30분 단축 (예시)', impact: '높음', tag: '개선' },
-      { date: D(now, -3), what: '고객 문의 3건 당일 해결 (예시)', impact: '중간', tag: '고객' },
-      { date: D(now, -6), what: '신규 입사자 온보딩 자료 작성 (예시)', impact: '중간', tag: '협업' },
-      { date: D(now, -9), what: '기능 1차 개발 완료 (예시)', impact: '높음', tag: '개발' },
-      { date: D(now, -15), what: '사내 스터디 발표 (예시)', impact: '낮음', tag: '학습' },
-    ]),
-    sort: (a, b) => b.date.localeCompare(a.date),
-    breakdown: { label: '분류별 성과 수', by: 'tag', fmt: 'count' },
-    stats: (rs, c) => [{ label: '이번 달 성과', value: `${rs.filter(r => inMonth(r.date, c)).length}건` }, { label: '높은 영향', value: `${rs.filter(r => r.impact === '높음').length}건`, tone: 'ex' }],
-  },
   'W|업무 문서': {
     intro: '보고서·회의록 등 업무 문서의 최신 버전과 위치를 관리합니다.', noun: '문서', title: 'name', tick: '보고서 등록',
     fields: [

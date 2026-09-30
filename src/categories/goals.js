@@ -9,7 +9,7 @@ import { EXTRA_MILES, GOAL_EXAMPLES } from './goalExamples.js';
    '영역|목표 관리' 보드는 영역 전체에 걸친 목표를 담는다 */
 export const boardKey = (area, cat) => `${area}|${cat}`;
 /** 목표 보드를 두지 않는 카테고리 (상세 화면·통합 보기·예시 모두 제외) */
-export const NO_GOAL = new Set(['P|기념일 관리', 'P|개인 목표 관리', 'P|인맥 관리']);
+export const NO_GOAL = new Set(['P|기념일 관리', 'P|개인 목표 관리', 'P|인맥 관리', 'W|근태', 'W|성과 기록']);
 export const hasGoals = (area, cat) => !NO_GOAL.has(boardKey(area, cat));
 /** 저장된 목표 데이터에서 목표를 두지 않는 카테고리의 보드를 지운다 */
 export const dropNoGoal = g => { if (!g?.boards || ![...NO_GOAL].some(k => g.boards[k])) return g; const boards = { ...g.boards }; NO_GOAL.forEach(k => delete boards[k]); return { ...g, boards }; };
