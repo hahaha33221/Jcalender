@@ -33,11 +33,26 @@ export default function FinanceView({ area, cat }) {
 
   const setBudget = v => update(x => ({ ...x, budget: Math.max(0, Number(v) || 0) }));
 
+  // 지출 내역 필터: 기간(선택한 달 / 전체) · 검색어 · 분류 · 카드 · 연계 프로젝트 · 금액 범위
+  const F0 = { period: 'month', q: '', cat: '', card: '', proj: '', min: '', max: '' };
+  const [flt, setFlt] = useState(F0);
+  const fset = patch => setFlt(x => ({ ...x, ...patch }));
+  const filtering = Object.keys(F0).some(k => k !== 'period' && flt[k] !== '');
+  const base = flt.period === 'all' ? [...f.expenses].sort((a, b) => b.date.localeCompare(a.date)) : monthExp;
+  const q = flt.q.trim().toLowerCase();
+  const list = base.filter(e => (!q || `${e.memo || ''} ${e.card || ''}`.toLowerCase().includes(q))
+    && (!flt.cat || e.cat === flt.cat)
+    && (!flt.card || (flt.card === '직접 입력' ? !e.card : e.card === flt.card))
+    && (!flt.proj || (flt.proj === 'none' ? !e.projectId : e.projectId === flt.proj))
+    && (flt.min === '' || e.amount >= Number(flt.min)) && (flt.max === '' || e.amount <= Number(flt.max)));
+  const listTotal = list.reduce((a, e) => a + e.amount, 0);
+  const cardOpts = [...new Set(f.expenses.map(e => e.card || '직접 입력'))];
+  const catOpts = [...new Set([...cats.map(c => c.name), ...base.map(e => e.cat)])];
   // 지출 내역: 날짜순 / 카테고리별(분류마다 모아 합계 · 비율, 접고 펴기)
-  const groups = names.map(c => { const list = monthExp.filter(e => e.cat === c); return { c, list, v: list.reduce((t, e) => t + e.amount, 0) }; })
+  const groups = catOpts.map(c => { const g = list.filter(e => e.cat === c); return { c, list: g, v: g.reduce((t, e) => t + e.amount, 0) }; })
     .filter(g => g.list.length).sort((a, b) => b.v - a.v);
   const showCat = c => {                                   // 분류별 지출 막대를 누르면 그 분류 묶음으로
-    setView('cat'); setFocus(c); setClosed(s0 => { const n = new Set(s0); n.delete(c); return n; });
+    setView('cat'); setFocus(c); setFlt(x => ({ ...x, cat: '' })); setClosed(s0 => { const n = new Set(s0); n.delete(c); return n; });
     setTimeout(() => document.getElementById(`fv-g-${c}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   };
   // 연계 프로젝트: 줄마다 고르기, "+ 새 프로젝트…" 로 바로 만들어 붙이기
@@ -50,7 +65,7 @@ export default function FinanceView({ area, cat }) {
     update(x => setExpenseProject({ ...x, projects: [...(x.projects || []), { id, name, note: '', updated: today }] }, e.id, id));
   };
   const row = e => (
-    <tr key={e.id}><td>{e.date.slice(5).replace('-', '/')}</td>
+    <tr key={e.id}><td>{flt.period === 'all' ? e.date.slice(2).replace(/-/g, '/') : e.date.slice(5).replace('-', '/')}</td>
       <td><select className="fv-cat" value={e.cat} onChange={ev => update(x => setExpenseCat(x, e.id, ev.target.value))} aria-label={`${e.memo || '지출'} 분류`}>
         {[...new Set([...cats.map(c => c.name), e.cat])].map(c => <option key={c}>{c}</option>)}</select></td>
       <td>{e.memo || '-'}{e.shopId && <span className="tag">구매 목록</span>}{e.card && <span className="tag">{e.card}</span>}</td>
@@ -98,16 +113,25 @@ export default function FinanceView({ area, cat }) {
         <div className="csum-h"><h2>지출 내역</h2>
           <select value={month} onChange={e => setMonth(e.target.value)} aria-label="월 선택" className="fv-month">
             {months.map(m => <option key={m} value={m}>{m.replace('-', '년 ')}월</option>)}</select>
-          <span className="muted">합계 {won(total)}</span>
+          <span className="muted">{filtering || flt.period === 'all' ? `${list.length}건 · 합계 ${won(listTotal)}` : `합계 ${won(total)}`}</span>
           <div className="chips grow-r" role="group" aria-label="보기 방식">
             <button aria-pressed={view === 'date'} onClick={() => setView('date')}>날짜순</button>
             <button aria-pressed={view === 'cat'} onClick={() => setView('cat')}>카테고리별</button>
           </div></div>
-        {!monthExp.length ? <p className="muted">이 달의 지출 내역이 없습니다.</p>
+        <div className="fv-filter" role="search" aria-label="지출 내역 필터">
+          <select value={flt.period} onChange={e => fset({ period: e.target.value })} aria-label="기간"><option value="month">선택한 달</option><option value="all">전체 기간</option></select>
+          <input type="search" value={flt.q} onChange={e => fset({ q: e.target.value })} placeholder="내용 검색 (가맹점)" aria-label="내용 검색" className="fv-fq" />
+          <select value={flt.cat} onChange={e => fset({ cat: e.target.value })} aria-label="분류 필터"><option value="">분류 전체</option>{catOpts.map(c => <option key={c}>{c}</option>)}</select>
+          <select value={flt.card} onChange={e => fset({ card: e.target.value })} aria-label="카드 필터"><option value="">카드 전체</option>{cardOpts.map(c => <option key={c}>{c}</option>)}</select>
+          <select value={flt.proj} onChange={e => fset({ proj: e.target.value })} aria-label="연계 프로젝트 필터"><option value="">프로젝트 전체</option><option value="none">프로젝트 없음</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+          <span className="fv-frange"><MoneyInput value={flt.min} onChange={v => fset({ min: v })} placeholder="최소 금액" aria-label="최소 금액" />~<MoneyInput value={flt.max} onChange={v => fset({ max: v })} placeholder="최대 금액" aria-label="최대 금액" /></span>
+          {(filtering || flt.period === 'all') && <button className="btn sm" onClick={() => setFlt(F0)}>필터 초기화</button>}
+        </div>
+        {!list.length ? <p className="muted">{base.length ? '필터에 맞는 지출이 없습니다.' : '이 달의 지출 내역이 없습니다.'}</p>
           : view === 'date' ? (
             <div className="tablewrap"><table className="prog fv-table">
               <thead><tr><th>날짜</th><th>분류</th><th>내용</th><th>연계 프로젝트</th><th>금액</th><th /></tr></thead>
-              <tbody>{monthExp.map(row)}</tbody>
+              <tbody>{list.map(row)}</tbody>
             </table></div>
           ) : (
             <div className="fv-groups">{groups.map(g => (
@@ -115,8 +139,8 @@ export default function FinanceView({ area, cat }) {
                 onToggle={e => { const open = e.currentTarget.open; setClosed(s0 => { const n = new Set(s0); if (open) n.delete(g.c); else n.add(g.c); return n; }); }}>
                 <summary>
                   <b>{g.c}</b><span className="muted">{g.list.length}건</span>
-                  <span className="fv-gbar"><i style={{ width: `${g.v / total * 100}%` }} /></span>
-                  <span className="fv-gpct muted">{Math.round(g.v / total * 100)}%</span>
+                  <span className="fv-gbar"><i style={{ width: `${g.v / listTotal * 100}%` }} /></span>
+                  <span className="fv-gpct muted">{Math.round(g.v / listTotal * 100)}%</span>
                   <b className="fv-gsum">{won(g.v)}</b>
                 </summary>
                 <div className="tablewrap"><table className="prog fv-table">
