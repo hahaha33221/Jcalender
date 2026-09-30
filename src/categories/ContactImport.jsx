@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { planImport, readContactBook, suggestCompany } from '../contactImport.js';
 import { GROUPS } from './CardScan.jsx';
+import { AREA_KEYS } from './RelationView.jsx';
 
 /* 인맥 관리 › 엑셀로 연락처 가져오기
    1) 파일 고르기(끌어 놓기 가능) → 2) 시트 고르기 · 회사 기본값 · 관계 → 3) 미리보기 → 4) 가져오기 (되돌리기 가능)
@@ -15,6 +16,7 @@ export default function ContactImport({ people, setStore, now, onClose }) {
   const [pick, setPick] = useState({});
   const [company, setCompany] = useState({});
   const [group, setGroup] = useState('업무');
+  const [areas, setAreas] = useState(['W']);
   const [dropSample, setDropSample] = useState(true);
   const [err, setErr] = useState('');
   const [over, setOver] = useState(false);
@@ -39,7 +41,7 @@ export default function ContactImport({ people, setStore, now, onClose }) {
 
   const run = () => {
     const id = uid(), at = new Date(now).toISOString().slice(0, 16).replace('T', ' ');
-    const added = plan.add.map(p => ({ ...p, id: uid(), importId: id }));
+    const added = plan.add.map(p => ({ ...p, areas, id: uid(), importId: id }));
     const patch = new Map(plan.patch.map(x => [x.id, x.after]));
     setStore(s => {
       const cur = s.people || people;
@@ -88,6 +90,8 @@ export default function ContactImport({ people, setStore, now, onClose }) {
         </table>
 
         <div className="ci-opts">
+          <span className="rv-achk" role="group" aria-label="영역"><b>영역</b>{AREA_KEYS.map(([k, n]) => <label key={k}><input type="checkbox" checked={areas.includes(k)}
+            onChange={e => setAreas(AREA_KEYS.map(([x]) => x).filter(x => (x === k ? e.target.checked : areas.includes(x))))} />{n}</label>)}</span>
           <label>관계<select value={group} onChange={e => setGroup(e.target.value)}>{GROUPS.map(g => <option key={g}>{g}</option>)}</select></label>
           {samples.length > 0 && <label className="ci-chk"><input type="checkbox" checked={dropSample} onChange={e => setDropSample(e.target.checked)} />예시 연락처 {samples.length}명 지우기</label>}
         </div>

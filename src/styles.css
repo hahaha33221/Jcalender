@@ -1177,3 +1177,16 @@ body.report-open { overflow: hidden; }
 .bd-table { width: 100%; }
 .bd-table th, .bd-table td { padding: 7px 10px; border-bottom: 1px solid var(--line2); }
 .bd-table .bd-title { width: 40%; }
+/* 인맥 관리 › 영역 (개인 · 근로 · 사업, 여러 개) */
+.rv-areas small { opacity: .7; }
+.rv-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.rv-area { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px; border: 1px solid currentColor; }
+.rv-area.a-P { color: var(--a1); } .rv-area.a-W { color: var(--a3); } .rv-area.a-B { color: var(--a2); }
+.rv-area.none { color: var(--ink3); border-style: dashed; }
+.rv-achk { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13px; }
+.rv-achk label { display: inline-flex; align-items: center; gap: 4px; flex-direction: row !important; }
+.rv-achk.big { margin: 8px 0 4px; }
+.rv-countbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 8px; }
+.rv-countbar .rv-count { margin: 0; }
+.rv-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; margin-bottom: 10px; font-size: 13px; }
+.rv-bulk-a { display: inline-flex; align-items: center; gap: 4px; }

@@ -23,7 +23,6 @@ export const dayDiff = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Dat
 const md = s => (s ? `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}` : '-');
 const mdw = s => `${md(s)} (${WEEK[new Date(s + 'T00:00:00').getDay()]})`;
 export const won = n => `${num(Math.round(n || 0))}원`;
-const telOf = p => (p || '').replace(/[^0-9+]/g, '');
 
 export function fmtVal(f, v) {
   if (v === '' || v == null) return '-';
@@ -80,7 +79,6 @@ export default function ToolView({ area, cat, group, config: C }) {
   const listed = rows.filter(r => !q || C.fields.some(f => String(r[f.k] ?? '').includes(q))).sort(C.sort || (() => 0));
   const showCols = C.fields.filter(f => f.list !== false);
   const titleF = fieldOf(C.title);
-  const phoneF = C.fields.find(f => f.type === 'phone');
 
   // 다가오는 일정
   const up = C.upcoming && rows.filter(r => r[C.upcoming.field] && (!C.upcoming.filter || C.upcoming.filter(r, c)))
@@ -138,7 +136,6 @@ export default function ToolView({ area, cat, group, config: C }) {
             <li key={r.id} className={d < 0 ? 'late' : d <= 3 ? 'hot' : ''}>
               <b className="tv-dd">{d < 0 ? `${-d}일 지남` : d === 0 ? '오늘' : `D-${d}`}</b>
               <span className="grow"><b>{r[C.title]}</b><small className="muted"> · {mdw(r[C.upcoming.field])}{C.upcoming.sub ? ` · ${C.upcoming.sub(r)}` : ''}</small></span>
-              {phoneF && r[phoneF.k] && <a className="btn sm primary" href={`tel:${telOf(r[phoneF.k])}`}>전화하기</a>}
             </li>))}</ul> : <p className="muted">기간 안에 해당하는 항목이 없습니다.</p>}
         </section>
       )}
@@ -154,13 +151,12 @@ export default function ToolView({ area, cat, group, config: C }) {
             return <>
               <div className="chips bd-chips">{[['ALL', `전체 ${rows.length}`], ...st.map(x => [x, `${x} ${rows.filter(r => r[F] === x).length}`])].map(([k, n]) => <button key={k} aria-pressed={bst === k} onClick={() => setBst(k)}>{n}</button>)}</div>
               <div className="tablewrap"><table className="fv-table bd-table">
-                <thead><tr><th className="fv-no">No.</th><th>단계</th><th>{titleF?.label || '제목'}</th>{cols.map(f => <th key={f.k}>{f.label}</th>)}<th /></tr></thead>
+                <thead><tr><th className="fv-no">No.</th><th>단계</th><th>{titleF?.label || '제목'}</th>{cols.map(f => <th key={f.k}>{f.label}</th>)}</tr></thead>
                 <tbody>{list.map((r, i) => (
                   <tr key={r.id}><td className="fv-no">{i + 1}</td>
                     <td><select className="bd-st" value={r[F]} onChange={e => upd(r.id, { [F]: e.target.value })} aria-label="단계">{st.map(x => <option key={x}>{x}</option>)}</select></td>
                     <td className="bd-title"><b>{r[C.title]}</b></td>
-                    {cols.map(f => <td key={f.k}>{r[f.k] !== '' && r[f.k] != null ? fmtVal(f, r[f.k]) : '-'}</td>)}
-                    <td className="nowrap">{phoneF && r[phoneF.k] && <a className="btn sm" href={`tel:${telOf(r[phoneF.k])}`}>전화</a>}</td></tr>))}</tbody>
+                    {cols.map(f => <td key={f.k}>{r[f.k] !== '' && r[f.k] != null ? fmtVal(f, r[f.k]) : '-'}</td>)}</tr>))}</tbody>
               </table></div>
               {!list.length && <p className="muted">해당 단계에 항목이 없습니다.</p>}
             </>;
@@ -176,7 +172,6 @@ export default function ToolView({ area, cat, group, config: C }) {
                       {cardLine(r) && <small>{cardLine(r)}</small>}
                       <div className="tv-card-b">
                         <button className="btn sm" disabled={si === 0} onClick={() => moveStage(r, -1)} aria-label="이전 단계">‹</button>
-                        {phoneF && r[phoneF.k] && <a className="btn sm" href={`tel:${telOf(r[phoneF.k])}`}>전화</a>}
                         <button className="btn sm" disabled={si === C.kanban.stages.length - 1} onClick={() => moveStage(r, 1)} aria-label="다음 단계">›</button>
                       </div>
                     </div>))}
@@ -211,7 +206,6 @@ export default function ToolView({ area, cat, group, config: C }) {
             <tr key={r.id}>
               {showCols.map(f => <td key={f.k} className={f.type === 'money' || f.type === 'number' ? 'num' : ''}>
                 {editing ? <Field f={f} value={r[f.k]} onChange={v => upd(r.id, { [f.k]: v })} compact />
-                  : f.type === 'phone' && r[f.k] ? <a className="tv-tel" href={`tel:${telOf(r[f.k])}`}>{r[f.k]}</a>
                   : f === titleF ? <b>{fmtVal(f, r[f.k])}</b> : fmtVal(f, r[f.k])}</td>)}
               <td className="nowrap">{C.kanban && !editing && <><button className="tl-del" onClick={() => moveStage(r, 1)} title="다음 단계">다음 단계</button> </>}
                 <button className="tl-del" onClick={() => del(r.id)}>삭제</button></td>

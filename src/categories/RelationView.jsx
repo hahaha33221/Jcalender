@@ -4,13 +4,17 @@ import { WEEK, areaVar, useCtx } from '../shared.jsx';
 import CardScan, { GROUPS, shrinkImage } from './CardScan.jsx';
 import ContactImport, { undoImport } from './ContactImport.jsx';
 
-/* 개인 › 인맥 관리 전용 화면: 명함 촬영(AI 분석 · 온보딩) · 바로 전화하기 · 생일/기념일 · 명함
+/* 개인 › 인맥 관리 전용 화면: 명함 촬영(AI 분석 · 온보딩) · 영역(개인·근로·사업, 여러 개 가능) · 생일/기념일 · 명함
    people: [{ id, name, group, phone, company, title, email, address, birthday('YYYY-MM-DD'), annivName, annivDate,
               card(명함 이미지 data URL),
+              areas: ['P','W','B'] 중 여러 개 (없으면 관계가 업무이거나 엑셀로 가져온 사람은 근로, 나머지는 개인),
               엑셀로 가져온 사람은 dept(소속), phone2, tel(회사 전화), fax, email2, note(비고), check(번호 확인 필요), src(시트), importId 도 가짐 }]  (예전 memo · notes 는 쓰지 않음) */
 export { GROUPS };
 const uid = () => Math.random().toString(36).slice(2, 10);
-const telOf = p => (p || '').replace(/[^0-9+]/g, '');
+export const AREA_KEYS = [['P', '개인'], ['W', '근로'], ['B', '사업']];
+const AREA_NAME = Object.fromEntries(AREA_KEYS);
+/** 사람의 영역 (저장된 값이 없으면 관계로 추정) */
+export const areasOf = p => (Array.isArray(p.areas) ? p.areas : p.group === '업무' || p.importId ? ['W'] : ['P']);
 
 /** 다음 생일·기념일 (올해 지났으면 내년) */
 function nextDay(dateStr, today) {
@@ -67,9 +71,10 @@ export default function RelationView({ area, cat }) {
   const people = store.people || seedPeople(now);
   const setPeople = fn => setStore(s => ({ ...s, people: fn(s.people || seedPeople(now)) }));
   const [grp, setGrp] = useState('ALL');
+  const [ar, setAr] = useState('ALL');                      // 영역 거르기: ALL · P · W · B · NONE
   const [q, setQ] = useState('');
   const [openId, setOpenId] = useState(null);
-  const blank = { name: '', group: '친구', phone: '', company: '', birthday: '', annivName: '', annivDate: '', card: '' };
+  const blank = { name: '', group: '친구', phone: '', company: '', birthday: '', annivName: '', annivDate: '', card: '', areas: ['P'] };
   const [form, setForm] = useState(blank);
 
   // 다가오는 생일·기념일 (30일 이내)
@@ -83,10 +88,18 @@ export default function RelationView({ area, cat }) {
   const [showImport, setShowImport] = useState(false);
   const companies = Object.entries(people.reduce((m, p) => { if (p.company) m[p.company] = (m[p.company] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'));
   const ql = q.trim().toLowerCase();
-  const matched = people.filter(p => (grp === 'ALL' || p.group === grp) && (!co || p.company === co)
+  const inArea = p => { const a = areasOf(p); return ar === 'ALL' || (ar === 'NONE' ? !a.length : a.includes(ar)); };
+  const matched = people.filter(p => (grp === 'ALL' || p.group === grp) && inArea(p) && (!co || p.company === co)
     && (!ql || [p.name, p.company, p.dept, p.title, p.phone, p.phone2, p.tel, p.email, p.email2, p.note].join(' ').toLowerCase().includes(ql)));
   const shown = matched.slice(0, limit);
-  useEffect(() => { setLimit(24); }, [grp, co, q]);
+  useEffect(() => { setLimit(24); }, [grp, ar, co, q]);
+  const noArea = people.filter(p => !areasOf(p).length).length;
+  // 지금 보이는(거른) 사람 전체의 영역을 한 번에 넣거나 빼기
+  const [bulk, setBulk] = useState(false);
+  const bulkSet = (k, on) => {
+    const ids = new Set(matched.map(p => p.id));
+    setPeople(ps => ps.map(p => { if (!ids.has(p.id)) return p; const a = areasOf(p).filter(x => x !== k); return { ...p, areas: on ? AREA_KEYS.map(([x]) => x).filter(x => a.includes(x) || x === k) : a }; }));
+  };
   const last = store.peopleImport;
 
   const upd = (id, patch) => setPeople(ps => ps.map(p => (p.id === id ? { ...p, ...patch } : p)));
@@ -126,6 +139,10 @@ export default function RelationView({ area, cat }) {
           <div className="chips" role="group" aria-label="관계">
             {[['ALL', '전체'], ...GROUPS.map(g => [g, g])].map(([k, n]) => <button key={k} aria-pressed={grp === k} onClick={() => setGrp(k)}>{n}</button>)}
           </div>
+          <div className="chips rv-areas" role="group" aria-label="영역">
+            {[['ALL', '영역 전체'], ...AREA_KEYS, ...(noArea ? [['NONE', '미지정']] : [])].map(([k, n]) => (
+              <button key={k} aria-pressed={ar === k} onClick={() => setAr(k)}>{n}{k !== 'ALL' && <small> {k === 'NONE' ? noArea : people.filter(p => areasOf(p).includes(k)).length}</small>}</button>))}
+          </div>
           {companies.length > 1 && <select value={co} onChange={e => setCo(e.target.value)} aria-label="회사" className="rv-co">
             <option value="">회사 전체</option>{companies.map(([c, n]) => <option key={c} value={c}>{c} ({n})</option>)}</select>}
           <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="이름·회사·소속·번호·이메일 검색" aria-label="연락처 검색" className="jv-q" />
@@ -133,7 +150,11 @@ export default function RelationView({ area, cat }) {
         {last && <p className="ci-last">마지막 가져오기: {last.file} · {last.at} · {last.added.length}명 추가{last.patched?.length ? ` · ${last.patched.length}명 보완` : ''}
           <button className="btn sm" onClick={() => setStore(undoImport)}>되돌리기</button></p>}
         {showImport && <ContactImport people={people} setStore={setStore} now={now} onClose={() => setShowImport(false)} />}
-        <p className="muted rv-count">{matched.length}명{matched.length > shown.length ? ` 중 ${shown.length}명 표시` : ''}</p>
+        <div className="rv-countbar"><span className="muted rv-count">{matched.length}명{matched.length > shown.length ? ` 중 ${shown.length}명 표시` : ''}</span>
+          {matched.length > 0 && <button className="btn sm" onClick={() => setBulk(v => !v)} aria-expanded={bulk}>영역 한꺼번에 설정</button>}</div>
+        {bulk && matched.length > 0 && <div className="rv-bulk"><span>지금 보이는 <b>{matched.length}명</b>을</span>
+          {AREA_KEYS.map(([k, n]) => <span key={k} className="rv-bulk-a"><b>{n}</b><button className="btn sm" onClick={() => bulkSet(k, true)}>넣기</button><button className="btn sm" onClick={() => bulkSet(k, false)}>빼기</button></span>)}
+          <span className="muted">여러 영역에 함께 넣을 수 있습니다</span></div>}
         <div className="rv-grid">{shown.map(p => {
           const b = nextDay(p.birthday, today), a = nextDay(p.annivDate, today);
           return (
@@ -143,13 +164,8 @@ export default function RelationView({ area, cat }) {
                 <span className="rv-dn"><b>{p.name}{p.check && <span className="ci-flag" title={p.note}>확인</span>}</b><small>{p.group}{p.company ? ` · ${p.company}` : ''}{p.title ? ` ${p.title}` : ''}</small>
                   {p.dept && <small className="rv-dept">{p.dept}</small>}</span>
               </div>
-              <div className="rv-call">
-                {p.phone ? <>
-                  <a className="btn primary rv-tel" href={`tel:${telOf(p.phone)}`}>전화하기</a>
-                  <a className="btn" href={`sms:${telOf(p.phone)}`}>문자</a>
-                  <span className="rv-num">{p.phone}</span>
-                </> : <span className="muted">전화번호 없음</span>}
-              </div>
+              <div className="rv-tags">{areasOf(p).length ? areasOf(p).map(k => <span key={k} className={`rv-area a-${k}`}>{AREA_NAME[k]}</span>) : <span className="rv-area none">영역 미지정</span>}</div>
+              <div className="rv-call">{p.phone ? <span className="rv-num">휴대폰 {p.phone}</span> : <span className="muted">전화번호 없음</span>}</div>
               <ul className="rv-days">
                 <li><span>생일</span>{b ? <><b>{fmt(b.date)}</b><em className={b.dday <= 7 ? 'soon' : ''}>{dd(b.dday)}</em></> : <i className="muted">미등록</i>}</li>
                 {p.annivDate && <li><span>{p.annivName || '기념일'}</span><b>{fmt(a.date)}</b><em className={a.dday <= 7 ? 'soon' : ''}>{dd(a.dday)}</em></li>}
@@ -172,6 +188,8 @@ export default function RelationView({ area, cat }) {
           <input value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="회사 (선택)" aria-label="회사" />
           <label className="rv-lbl">생일<input type="date" value={form.birthday} onChange={e => setForm({ ...form, birthday: e.target.value })} /></label>
           <input value={form.annivName} onChange={e => setForm({ ...form, annivName: e.target.value })} placeholder="기념일 이름 (선택)" aria-label="기념일 이름" />
+          <span className="rv-achk" role="group" aria-label="영역">{AREA_KEYS.map(([k, n]) => <label key={k}><input type="checkbox" checked={form.areas.includes(k)}
+            onChange={e => setForm({ ...form, areas: AREA_KEYS.map(([x]) => x).filter(x => (x === k ? e.target.checked : form.areas.includes(x))) })} />{n}</label>)}</span>
           <label className="rv-lbl">기념일<input type="date" value={form.annivDate} onChange={e => setForm({ ...form, annivDate: e.target.value })} /></label>
           <label className="btn rv-file">{form.card ? '명함 선택됨' : '명함 사진'}<input type="file" accept="image/*" onChange={e => pickCard(e.target.files[0], card => setForm(f => ({ ...f, card })))} hidden /></label>
           <button className="btn primary" disabled={!form.name.trim()}>추가</button>
@@ -207,9 +225,9 @@ function PersonDetail({ p, onClose, upd, onDelete, pickCard }) {
           <label className="btn sm">{p.card ? '명함 바꾸기' : '명함 사진 올리기'}<input type="file" accept="image/*" hidden onChange={e => pickCard(e.target.files[0])} /></label>
           {p.card && <button className="btn sm" onClick={() => upd({ card: '' })}>명함 삭제</button>}
         </div>
-        {p.phone && <div className="rv-call big">
-          <a className="btn primary rv-tel" href={`tel:${telOf(p.phone)}`}>전화하기 {p.phone}</a>
-          <a className="btn" href={`sms:${telOf(p.phone)}`}>문자</a></div>}
+        <div className="rv-achk big" role="group" aria-label="영역"><b>영역</b>{AREA_KEYS.map(([k, n]) => <label key={k}><input type="checkbox" checked={areasOf(p).includes(k)}
+          onChange={e => upd({ areas: AREA_KEYS.map(([x]) => x).filter(x => (x === k ? e.target.checked : areasOf(p).includes(x))) })} />{n}</label>)}
+          <span className="muted">여러 개 고를 수 있습니다</span></div>
         <div className="rv-fields">
           <label>전화번호<input value={p.phone} onChange={e => upd({ phone: e.target.value })} inputMode="tel" /></label>
           <label>관계<select value={p.group} onChange={e => upd({ group: e.target.value })}>{GROUPS.map(g => <option key={g}>{g}</option>)}</select></label>
