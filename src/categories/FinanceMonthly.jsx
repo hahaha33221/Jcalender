@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CARD_COMPANIES, mergeCard, parseCardRows, readTable } from '../cardImport.js';
-import { catsOf, guessCatBy, won } from './finance.js';
+import { catsOf, clearExpenses, guessCatBy, won } from './finance.js';
 import BarChart from './BarChart.jsx';
 
 /* 개인 재무 › 카드 이용내역 가져오기(미리보기 → 반영 완료) · 월별 누적 · 반영 기록
@@ -121,6 +121,9 @@ export function CardImport({ f, update, now, onMonth }) {
 export function MonthlyLedger({ f, update, month, onMonth }) {
   const [all, setAll] = useState(false);
   const [arm, setArm] = useState(null);
+  const [wipe, setWipe] = useState(false);                // 전체 지우기 확인
+  const [undo, setUndo] = useState(null);                 // 전체 지우기 되돌리기
+  const wipeAll = () => { setUndo(f); update(x => clearExpenses(x)); setWipe(false); };
   const cards = [...new Set([...CARD_COMPANIES, ...f.expenses.map(e => e.card).filter(Boolean)])];
   const src = e => e.card || '직접 입력';
   const cols = [...cards.filter(c => f.expenses.some(e => e.card === c)), ...(f.expenses.some(e => !e.card) ? ['직접 입력'] : [])];
@@ -136,7 +139,13 @@ export function MonthlyLedger({ f, update, month, onMonth }) {
 
   return (
     <section className="panel fm">
-      <div className="csum-h"><h2>월별 누적</h2><span className="muted">반영한 카드 지출을 달마다 모읍니다. 줄을 누르면 그 달 내역을 봅니다.</span></div>
+      <div className="csum-h"><h2>월별 누적</h2><span className="muted">반영한 카드 지출을 달마다 모읍니다. 줄을 누르면 그 달 내역을 봅니다.</span>
+        <span className="grow-r fc-top">
+          {undo && <button className="btn sm" onClick={() => { update(() => undo); setUndo(null); }}>되돌리기</button>}
+          {f.expenses.length > 0 && <button className={`btn sm ${wipe ? 'danger' : ''}`} onClick={() => { if (wipe) wipeAll(); else { setWipe(true); setTimeout(() => setWipe(false), 4000); } }}>
+            {wipe ? `지출 ${f.expenses.length}건을 모두 지울까요?` : '지출 전체 지우기'}</button>}
+        </span></div>
+      {undo && !f.expenses.length && <p className="sh-msg" role="status">지출 내역과 반영 기록을 모두 지웠습니다. 카드 파일을 다시 올려 반영하세요. (카테고리 설정 · 연계 프로젝트 · 예산은 그대로)</p>}
       {keys.length ? <>
         <BarChart data={chart} color="var(--viz-sl)" fmt={v => won(v)} tickFmt={v => (v >= 10000 ? `${Math.round(v / 10000)}만` : `${v}`)} label="월별 지출 합계" height={190} />
         <div className="tablewrap"><table className="prog fm-table">

@@ -47,6 +47,11 @@ export function seedFinance() {
 /** 한 번만: 예전에 들어 있던 개인 재무 정보(지출·구매 목록·예산·카드 가져오기 기록)를 모두 비운다.
     지출 카테고리 설정(cats)은 남긴다. 개인 재무 목표 보드도 비운다. store.financeCleared 로 한 번만 실행 */
 export function clearFinanceOnce(st) {
+  // 2차(한 번만): 개인 재무를 처음 상태로 전부 비운다 (지출 · 반영 기록 · 카테고리 설정 · 연계 프로젝트 · 예산 · 개인 재무 목표)
+  if (st.financeCleared && !st.financeCleared2) {
+    const b2 = st.goals?.boards ? { ...st.goals.boards, 'P|개인 재무': { items: [], miles: [] } } : undefined;
+    return { ...st, finance: seedFinance(), goals: b2 ? { ...st.goals, boards: b2 } : st.goals, financeCleared2: true };
+  }
   if (st.financeCleared) return st;
   const boards = st.goals?.boards ? { ...st.goals.boards, 'P|개인 재무': { items: [], miles: [] } } : undefined;
   return {
@@ -54,8 +59,11 @@ export function clearFinanceOnce(st) {
     finance: { ...seedFinance(), ...(st.finance?.cats ? { cats: st.finance.cats } : {}) },
     goals: boards ? { ...st.goals, boards } : st.goals,
     financeCleared: true,
+    financeCleared2: true,
   };
 }
+/** 지출 내역 · 반영 기록 · 마지막 반영 표시를 모두 비운다 (설정과 연계 프로젝트는 남김) */
+export const clearExpenses = f => { const { cardImport, ...rest } = f; return { ...rest, expenses: [], imports: [] }; };
 
 /* ── 상태 변경 함수 (finance → 새 finance) ── */
 export const addShop = (f, item) => ({ ...f, shopping: [...f.shopping, { id: uid(), qty: 1, ...item }] });
