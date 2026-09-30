@@ -5,6 +5,8 @@ import { areaVar, useCtx } from '../shared.jsx';
 import { daysBetween } from './goals.js';
 import { ViewToggle } from './ToolView.jsx';
 import PlanApiImport from './PlanApiImport.jsx';
+import { toTrash } from '../schema.js';
+import { AttachList, ProjectSelect, TagChips, TagPicker } from '../common.jsx';
 
 /* 근로 › 기획·조사 전용 화면 (탭 2개)
    plan = {
@@ -87,6 +89,7 @@ export default function PlanResearchView({ area, cat }) {
 
 /* ───────── 조사 탭 ───────── */
 function Research({ P, set, today, toPlan }) {
+  const { setStore } = useCtx();
   const [sel, setSel] = useState(P.topics[P.topics.length - 1]?.id || null);
   const [nt, setNt] = useState({ title: '', purpose: '', due: '' });
   const topic = P.topics.find(t => t.id === sel) || null;
@@ -100,7 +103,13 @@ function Research({ P, set, today, toPlan }) {
   const updTopic = patch => set(x => ({ ...x, topics: x.topics.map(t => (t.id === sel ? { ...t, ...patch } : t)) }));
   const [arm, setArm] = useState(null);
   const delTopic = () => {
-    set(x => ({ ...x, topics: x.topics.filter(t => t.id !== sel), sources: x.sources.filter(s => s.topicId !== sel), plans: x.plans.map(p => ({ ...p, topicIds: (p.topicIds || []).filter(i => i !== sel) })) }));
+    // 휴지통으로: 주제와 딸린 자료를 함께 보관 (기획의 참고 연결은 풀어 둔다)
+    setStore(s => {
+      const pl = { ...EMPTY, ...(s.plan || {}) };
+      const srcs = pl.sources.filter(x => x.topicId === sel);
+      const moved = toTrash({ ...s, plan: pl }, 'topic', sel, null, { sources: srcs });
+      return { ...moved, plan: { ...moved.plan, sources: moved.plan.sources.filter(x => x.topicId !== sel), plans: moved.plan.plans.map(p => ({ ...p, topicIds: (p.topicIds || []).filter(i => i !== sel) })) } };
+    });
     setSel(null); setArm(null);
   };
   const count = id => P.sources.filter(s => s.topicId === id).length;
@@ -270,6 +279,7 @@ function Plans({ P, set, today, openId, setOpenId, view, setView }) {
                       {d != null && <span className={`pr-dd ${live && d < 0 ? 'late' : live && d <= 3 ? 'soon' : ''}`}>{live ? ddayText(d) : md(p.due)}</span>}
                       {(p.topicIds || []).length > 0 && <span className="muted">조사 {p.topicIds.length}</span>}
                       {p.ext && <span className="pa-badge" title="API로 가져온 기획">API</span>}
+                      <TagChips ids={p.tagIds} />
                       <span className="grow" />
                       {live && <><button className="btn xs" onClick={() => move(p, -1)} disabled={st === '아이디어'} aria-label="이전 단계">◀</button>
                         <button className="btn xs" onClick={() => move(p, 1)} aria-label="다음 단계">▶</button></>}
@@ -327,11 +337,12 @@ function PlanList({ P, today, openId, setOpenId, upd }) {
 }
 
 function Editor({ P, plan, upd, set, close, onPrint }) {
+  const { setStore } = useCtx();
   const [arm, setArm] = useState(false);
   const sec = plan.sec || {};
   const refs = P.sources.filter(s => (plan.topicIds || []).includes(s.topicId)).sort((a, b) => b.star - a.star);
   const toggleTopic = id => upd({ topicIds: (plan.topicIds || []).includes(id) ? plan.topicIds.filter(i => i !== id) : [...(plan.topicIds || []), id] });
-  const del = () => { set(x => ({ ...x, plans: x.plans.filter(p => p.id !== plan.id) })); close(); };
+  const del = () => { setStore(s => toTrash({ ...s, plan: { ...EMPTY, ...(s.plan || {}) } }, 'plan', plan.id)); close(); };   // 휴지통으로
   return (
     <section className="panel pr-editor" id="pr-editor" aria-label="기획서">
       <div className="csum-h">
@@ -344,12 +355,17 @@ function Editor({ P, plan, upd, set, close, onPrint }) {
         <label className="pr-due">마감<input type="date" value={plan.due || ''} onChange={e => upd({ due: e.target.value })} /></label>
         <span className="muted">작성 {md(plan.created)} · 수정 {md(plan.updated)}</span>
       </div>
+      <div className="pr-meta2">
+        <ProjectSelect value={plan.projectId} onChange={v => upd({ projectId: v })} />
+        <TagPicker value={plan.tagIds || []} onChange={v => upd({ tagIds: v })} />
+      </div>
       <div className="pr-secs">{SECTIONS.map(([k, name], i) => (
         <label key={k} className="pr-sec"><b>{i + 1}. {name}</b>
           <textarea rows={k === 's3' ? 6 : 3} value={sec[k] || ''} onChange={e => upd({ sec: { ...sec, [k]: e.target.value } })} placeholder={HINTS[k]} /></label>))}</div>
       <h3 className="pr-h3">참고 조사</h3>
       {P.topics.length ? <div className="chips pr-links">{P.topics.map(t => <button key={t.id} aria-pressed={(plan.topicIds || []).includes(t.id)} onClick={() => toggleTopic(t.id)}>{t.title}</button>)}</div>
         : <p className="muted">조사 탭에서 주제를 만들면 여기서 연결할 수 있습니다.</p>}
+      <AttachList owner={{ type: 'plan', id: plan.id }} />
       {refs.length > 0 && <ul className="pr-refs">{refs.map(s => <li key={s.id}><span className="pr-stars">{stars(s.star)}</span> {s.title}{s.from ? ` · ${s.from}` : ''}</li>)}</ul>}
       <div className="pr-foot">
         {arm ? <><button className="btn danger sm" onClick={del}>정말 이 기획을 삭제할까요?</button><button className="btn sm" onClick={() => setArm(false)}>취소</button></>

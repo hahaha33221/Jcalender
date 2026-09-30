@@ -10,7 +10,10 @@ import { EXTRA_MILES, GOAL_EXAMPLES } from './goalExamples.js';
 export const boardKey = (area, cat) => `${area}|${cat}`;
 /** 목표 보드를 두지 않는 카테고리 (상세 화면·통합 보기·예시 모두 제외) */
 export const NO_GOAL = new Set(['P|기념일 관리', 'P|개인 목표 관리', 'P|인맥 관리', 'W|근태', 'W|성과 기록', 'W|커리어 목표 관리', 'W|업무 인맥/네트워킹', 'W|성과 기록·회고', 'W|급여/복지', 'W|회의/업무 일정', 'W|직무 학습', 'W|업무 연락처']);
-export const hasGoals = (area, cat) => !NO_GOAL.has(boardKey(area, cat));
+/** 카테고리 표(store.categories)에서 "목표 보드 사용"을 끈 카테고리 (App 이 렌더 전에 채운다) */
+let USER_NO_GOAL = new Set();
+export const setUserNoGoal = keys => { USER_NO_GOAL = new Set(keys); };
+export const hasGoals = (area, cat) => !NO_GOAL.has(boardKey(area, cat)) && !USER_NO_GOAL.has(boardKey(area, cat));
 /** 저장된 목표 데이터에서 목표를 두지 않는 카테고리의 보드를 지운다 */
 export const dropNoGoal = g => { if (!g?.boards || ![...NO_GOAL].some(k => g.boards[k])) return g; const boards = { ...g.boards }; NO_GOAL.forEach(k => delete boards[k]); return { ...g, boards }; };
 export const EMPTY = { items: [], miles: [] };

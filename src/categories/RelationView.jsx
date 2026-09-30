@@ -3,6 +3,7 @@ import { iso } from '../data.js';
 import { WEEK, areaVar, useCtx } from '../shared.jsx';
 import CardScan, { GROUPS, shrinkImage } from './CardScan.jsx';
 import ContactImport, { undoImport } from './ContactImport.jsx';
+import { toTrash } from '../schema.js';
 
 /* 개인 › 인맥 관리 전용 화면: 명함 촬영(AI 분석 · 온보딩) · 영역(개인·근로·사업, 여러 개 가능) · 생일/기념일 · 명함
    people: [{ id, name, group, phone, company, title, email, address, birthday('YYYY-MM-DD'), annivName, annivDate,
@@ -65,16 +66,17 @@ export function migratePeople(people, today) {
   return people.map(({ cycle, last, ...p }) => ({ birthday: '', annivName: '', annivDate: '', company: '', title: '', email: '', address: '', card: '', ...p }));
 }
 
-export default function RelationView({ area, cat }) {
+/** fixedArea: 근로 › 업무 연락처처럼 한 영역의 사람만 먼저 보여 줄 때 (같은 인맥 데이터를 쓴다) */
+export default function RelationView({ area, cat, fixedArea }) {
   const { store, setStore, now } = useCtx();
   const today = iso(now);
   const people = store.people || seedPeople(now);
   const setPeople = fn => setStore(s => ({ ...s, people: fn(s.people || seedPeople(now)) }));
   const [grp, setGrp] = useState('ALL');
-  const [ar, setAr] = useState('ALL');                      // 영역 거르기: ALL · P · W · B · NONE
+  const [ar, setAr] = useState(fixedArea || 'ALL');                      // 영역 거르기: ALL · P · W · B · NONE
   const [q, setQ] = useState('');
   const [openId, setOpenId] = useState(null);
-  const blank = { name: '', group: '친구', phone: '', company: '', birthday: '', annivName: '', annivDate: '', card: '', areas: ['P'] };
+  const blank = { name: '', group: fixedArea === 'W' ? '업무' : '친구', phone: '', company: '', birthday: '', annivName: '', annivDate: '', card: '', areas: [fixedArea || 'P'] };
   const [form, setForm] = useState(blank);
 
   // 다가오는 생일·기념일 (30일 이내)
@@ -199,7 +201,7 @@ export default function RelationView({ area, cat }) {
 
 
       {open && <PersonDetail p={open} onClose={() => setOpenId(null)} upd={patch => upd(open.id, patch)}
-        onDelete={() => { setPeople(ps => ps.filter(x => x.id !== open.id)); setOpenId(null); }}
+        onDelete={() => { setStore(s => toTrash({ ...s, people: s.people || seedPeople(now) }, 'person', open.id)); setOpenId(null); }}
         pickCard={file => pickCard(file, card => { upd(open.id, { card }); })} />}
     </div>
   );

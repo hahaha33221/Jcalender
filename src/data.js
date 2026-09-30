@@ -201,6 +201,8 @@ export const AREAS = { P: { n: '개인', v: '--a1' }, B: { n: '사업', v: '--a2
 export const CYCLES = { D: '일일체크-루틴', S: '수시체크', W: '주간체크', M: '월간체크', Y: '년간체크' };
 export const TY = { A: 'API', I: 'AI', N: '없음' };
 export const ROWS = [];
+/** 모든 줄 (숨김 포함, 카테고리 표를 만들 때 사용) */
+export const ALL_ROWS = [];
 /** 쓰지 않는 카테고리. 목록에서만 빼고, 다른 항목의 id(체크 기록)가 바뀌지 않도록 데이터 줄은 남겨 둔다 */
 export const HIDDEN_CATS = new Set(['P|개인 일정/캘린더', 'P|습관/루틴 관리', 'P|개인 목표 관리', 'W|근태', 'W|성과 기록', 'W|커리어 목표 관리', 'W|업무 인맥/네트워킹', 'W|성과 기록·회고', 'W|급여/복지', 'W|회의/업무 일정', 'W|직무 학습']);
 (() => {
@@ -210,10 +212,22 @@ export const HIDDEN_CATS = new Set(['P|개인 일정/캘린더', 'P|습관/루�
     const [ct, it, ac, ty, de] = line.split('|');
     if (ct) cat = ct; if (it) item = it;
     const id = `${a}${c}${n++}`;                      // 줄 순서로 id 를 매기므로 숨긴 줄도 번호는 센다
+    const row = { id, a, c, cat, item, action: ac, ty: TY[ty], code: ty, detail: de };
+    ALL_ROWS.push(row);
     if (HIDDEN_CATS.has(`${a}|${cat}`)) continue;
-    ROWS.push({ id, a, c, cat, item, action: ac, ty: TY[ty], code: ty, detail: de });
+    ROWS.push(row);
   }
 })();
+/* 카테고리 표(store.categories)의 "숨김"을 ROWS 에 반영한다. ROWS 는 여러 화면이 같은 배열을 보므로 제자리에서 다시 채운다 */
+let catSig = '';
+export function applyCategories(cats) {
+  const hide = new Set((cats || []).filter(c => c.hidden).map(c => c.key));
+  const sig = [...hide].sort().join(',');
+  if (sig === catSig) return;
+  catSig = sig;
+  ROWS.length = 0;
+  ALL_ROWS.forEach(r => { const k = `${r.a}|${r.cat}`; if (!HIDDEN_CATS.has(k) && !hide.has(k)) ROWS.push(r); });
+}
 
 
 export const pad = n => String(n).padStart(2, '0');

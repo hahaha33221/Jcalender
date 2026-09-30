@@ -5,6 +5,7 @@ import { WEEK, areaVar, useCtx } from '../shared.jsx';
 import { download, excelDate, readXlsx, writeXlsx } from '../xlsx.js';
 import { parseCsv } from './samsungHealth.js';
 import DdayPanel from './DdayPanel.jsx';
+import { toTrash } from '../schema.js';
 
 /* 개인 › 기념일 관리 전용 화면: 다가오는 기념일, D-day 관리(DdayPanel), 월별 달력형 목록, 기념일 편집 */
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -139,7 +140,10 @@ function AnnivManager() {
   const [f, setF] = useState(blank);
   const setDays = v => setStore(s => ({ ...s, annivDays: Math.max(0, Math.min(365, Number(v) || 0)) }));
   const upd = (id, patch) => setStore(s => ({ ...s, anniv: s.anniv.map(a => (a.id === id ? { ...a, ...patch } : a)) }));
-  const del = id => setStore(s => ({ ...s, anniv: s.anniv.filter(a => a.id !== id) }));
+  const del = id => setStore(s => toTrash(s, 'anniv', id));   // 휴지통으로
+  // 관련 인물 ↔ 인맥 연결: 이름이 인맥의 사람과 같으면 personId 로 이어 둔다
+  const people = store.people || [];
+  const personOf = v => people.find(p => p.name === v || p.name.replace(/\s*\(.*\)$/, '') === v);
   const add = e => {
     e.preventDefault();
     if (!f.name.trim() || !f.date) return;
@@ -160,7 +164,8 @@ function AnnivManager() {
             return (
               <tr key={a.id}>
                 <td><input value={a.name} onChange={e => upd(a.id, { name: e.target.value })} aria-label="이름" /></td>
-                <td><input value={a.person || ''} onChange={e => upd(a.id, { person: e.target.value })} placeholder="관련 인물" aria-label="관련 인물" /></td>
+                <td><span className="an-person"><input list="an-people" value={a.person || ''} onChange={e => upd(a.id, { person: e.target.value, personId: personOf(e.target.value)?.id || null })} placeholder="관련 인물" aria-label="관련 인물" />
+                  {a.personId && people.some(p => p.id === a.personId) && <small className="an-link" title="인맥 관리의 사람과 연결됨">인맥 연결</small>}</span></td>
                 <td><select value={a.lunar ? (a.leap ? 'L2' : 'L') : 'S'} onChange={e => upd(a.id, { lunar: e.target.value !== 'S', leap: e.target.value === 'L2' })} aria-label="양력/음력">
                   <option value="S">양력</option><option value="L">음력</option><option value="L2">음력 윤달</option></select></td>
                 <td><DateCell a={a} onChange={patch => upd(a.id, patch)} /></td>
@@ -173,9 +178,10 @@ function AnnivManager() {
           })}</tbody>
         </table>
       </div>
+      <datalist id="an-people">{people.map(p => <option key={p.id} value={p.name} />)}</datalist>
       <form className="anniv-add" onSubmit={add}>
         <input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="기념일 이름 (예: 아버지 생신)" aria-label="새 기념일 이름" />
-        <input value={f.person} onChange={e => setF({ ...f, person: e.target.value })} placeholder="관련 인물 (예: 어머니)" aria-label="새 기념일 관련 인물" className="anniv-person" />
+        <input list="an-people" value={f.person} onChange={e => setF({ ...f, person: e.target.value, personId: personOf(e.target.value)?.id || null })} placeholder="관련 인물 (예: 어머니)" aria-label="새 기념일 관련 인물" className="anniv-person" />
         <select value={f.lunar ? 'L' : 'S'} onChange={e => setF({ ...f, lunar: e.target.value === 'L' })} aria-label="새 기념일 양력/음력"><option value="S">양력</option><option value="L">음력</option></select>
         <DateCell a={f} onChange={patch => setF({ ...f, ...patch })} />
         <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} aria-label="새 기념일 종류">{ANNIV_KINDS.map(k => <option key={k}>{k}</option>)}</select>

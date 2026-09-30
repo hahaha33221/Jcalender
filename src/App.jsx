@@ -6,19 +6,24 @@ import WorkLog from './WorkLog.jsx';
 import { hasCustomView, isFirstReviewed, viewFor } from './categories/index.js';
 import { seedHealth } from './categories/health.js';
 import { clearFinanceOnce, seedFinance } from './categories/finance.js';
-import { addExampleGoals, boardForYear, boardKey, dropNoGoal, hasGoals, migrateGoals, seedGoals } from './categories/goals.js';
+import { addExampleGoals, boardForYear, boardKey, dropNoGoal, hasGoals, migrateGoals, seedGoals, setUserNoGoal } from './categories/goals.js';
 import { DashYearGantt, GoalBoard } from './categories/GoalView.jsx';
 import ShoppingList from './categories/Shopping.jsx';
 import { migratePeople, seedPeople } from './categories/RelationView.jsx';
 import { seedLeisure } from './categories/LeisureView.jsx';
 import { seedJournal } from './categories/ReviewView.jsx';
-import { AREAS, CYCLES, DEFAULT_RULES, ROWS, PRIO, defaultPrio, dueRule, isDue, iso, nextDue, pad, periodKey, setRules } from './data.js';
+import { AREAS, CYCLES, DEFAULT_RULES, ROWS, PRIO, applyCategories, defaultPrio, dueRule, isDue, iso, nextDue, pad, periodKey, setRules } from './data.js';
 import { mockAi, mockApi } from './mock.js';
 import { SpeechRec, parseKoEvent } from './voice.js';
 import { HOLIDAYS } from './holidays.js';
 import { annivOn, lunarTag, nextAnniv, replaceAnnivOnce, seedAnniv } from './anniv.js';
 import { FREQ, expandEvents, repeatText, skipDate } from './recur.js';
 import { ddaysOn } from './dday.js';
+import { SECRETS_KEY, mergeSecrets, migrate, purgeTrash, readSecrets, splitSecrets, toTrash } from './schema.js';
+import { sourcesOn } from './calendarSources.js';
+import { dueNotifications, recordSent, showOsNotification } from './notify.js';
+import DataSettings from './DataSettings.jsx';
+import { AttachList, ProjectSelect, TagChips, TagPicker } from './common.jsx';
 import { DdayStrip } from './categories/DdayPanel.jsx';
 import { ddayText, planDueSoon } from './categories/PlanResearchView.jsx';
 
@@ -50,18 +55,24 @@ function renameCats(st) {
   const mv = o => { if (!o) return o; const r = { ...o }; Object.entries(RENAMED_CATS).forEach(([a, b]) => { if (a in r) { if (!(b in r)) r[b] = r[a]; delete r[a]; } }); return r; };
   return { ...st, reviewed: mv(st.reviewed), goals: st.goals?.boards ? { ...st.goals, boards: mv(st.goals.boards) } : st.goals };
 }
-const seedAll = () => ({ ...INIT, financeCleared: true, financeCleared2: true, annivV2: true, events: seedEvents(), anniv: seedAnniv(), health: seedHealth(), finance: seedFinance(), goals: seedGoals(), people: seedPeople(), leisure: seedLeisure(), journal: seedJournal() });
+const seedAll = () => migrate({ ...INIT, financeCleared: true, financeCleared2: true, annivV2: true, events: seedEvents(), anniv: seedAnniv(), health: seedHealth(), finance: seedFinance(), goals: seedGoals(), people: seedPeople(), leisure: seedLeisure(), journal: seedJournal() });
 
 function useStore() {
   const [store, setStore] = useState(() => {
     let v = null;
     try { v = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* 저장소 사용 불가 또는 손상 */ }
     const merged = renameCats({ ...INIT, ...(v || {}) });
-    return replaceAnnivOnce(clearFinanceOnce({ ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: dropNoGoal(merged.goals ? addExampleGoals(migrateGoals(merged.goals)) : seedGoals()), people: merged.people ? migratePeople(merged.people, new Date()) : seedPeople(), leisure: merged.leisure ?? seedLeisure(), journal: merged.journal ?? seedJournal() }));
+    const base = replaceAnnivOnce(clearFinanceOnce({ ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: dropNoGoal(merged.goals ? addExampleGoals(migrateGoals(merged.goals)) : seedGoals()), people: merged.people ? migratePeople(merged.people, new Date()) : seedPeople(), leisure: merged.leisure ?? seedLeisure(), journal: merged.journal ?? seedJournal() }));
+    // 저장 구조를 현재 버전으로 올리고(schema.js), 따로 둔 비밀 정보를 붙이고, 오래된 휴지통을 비운다
+    return purgeTrash(mergeSecrets(migrate(base), readSecrets()));
   });
   const [persist, setPersist] = useState(true);
   useEffect(() => {
-    try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) { setPersist(false); }
+    try {
+      const { data, secrets } = splitSecrets(store);            // API 키 · 토큰은 앱 데이터와 다른 키에
+      localStorage.setItem(KEY, JSON.stringify(data));
+      localStorage.setItem(SECRETS_KEY, JSON.stringify(secrets));
+    } catch (e) { setPersist(false); }
   }, [store]);
   return [store, setStore, persist];
 }
@@ -71,6 +82,8 @@ function useStore() {
 export default function App() {
   const [store, setStore, persist] = useStore();
   setRules(store.rules);                           // 도래 규칙을 저장된 설정으로 맞춘다 (렌더 전에)
+  applyCategories(store.categories);               // 카테고리 표에서 숨긴 카테고리를 목록에서 뺀다
+  setUserNoGoal((store.categories || []).filter(c => c.hasGoal === false).map(c => c.key));
   const [route, setRoute] = useState(readHash);    // 주소 #/페이지/카테고리 와 연동 (브라우저 뒤로가기 지원)
   const { page, cat } = route;
   const [checkInit, setCheckInit] = useState(null);   // 대시보드에서 체크리스트로 이동할 때 적용할 필터
@@ -93,6 +106,20 @@ export default function App() {
     setPushes(p => [...p, { id, title, body }]);
     setTimeout(() => setPushes(p => p.filter(x => x.id !== id)), 4800);
   };
+
+  // 알림: 앱이 열려 있는 동안 1분마다 확인 (notify.js)
+  const storeRef = useRef(store); storeRef.current = store;
+  useEffect(() => {
+    const tick = () => {
+      const due = dueNotifications(storeRef.current);
+      if (!due.length) return;
+      due.forEach(n => { showOsNotification(n); pushToast(n.title, n.body); });
+      setStore(s => recordSent(s, due));
+    };
+    tick();
+    const t = setInterval(tick, 60000);
+    return () => clearInterval(t);
+  }, []);
 
   const finish = (row, out) => {
     setStore(s => {
@@ -457,7 +484,7 @@ function Calendar({ sel, setSel }) {
     setAdding(null);
   };
   /** 삭제: 반복 회차는 이 날만 빼고(all 이면 반복 전체), 보통 일정은 그대로 삭제 */
-  const delEvent = (e, all) => setStore(s => ({ ...s, events: e.sid && !all ? skipDate(s.events, e.sid, e.date) : s.events.filter(x => x.id !== (e.sid || e.id)) }));
+  const delEvent = (e, all) => setStore(s => (e.sid && !all ? { ...s, events: skipDate(s.events, e.sid, e.date) } : toTrash(s, 'event', e.sid || e.id, e.title)));   // 통째 삭제는 휴지통으로
   // 끌어서 옮기기 + 방금 옮긴 것 되돌리기
   // moved = { msg, events, notes, back } : 옮기기 직전의 일정·노트 (되돌리기용)
   const [moved, setMoved] = useState(null);
@@ -531,8 +558,7 @@ function Calendar({ sel, setSel }) {
                 <span className="cal-top"><span className="cal-n">{d.getDate()}</span>
                   {['Y', 'M', 'W'].filter(c => isDue(c, d)).map(c => <span key={c} className={`cal-due ${c}`}>{CYCLES[c].slice(0, 2)}</span>)}</span>
                 {HOLIDAYS[k] && <span className="cal-hol">{HOLIDAYS[k]}</span>}
-                {annivOn(store.anniv, k).map(a => <span key={a.id} className="cal-anniv">{a.name}</span>)}
-                {ddaysOn(store.ddays, k).map(x => <span key={x.id} className="cal-anniv cal-dd">{x.label}</span>)}
+                {sourcesOn(store, k).map(x => <span key={x.key} className={`cal-anniv ${x.cls}`} title={x.kind}>{x.label}</span>)}
                 {evs.slice(0, 2).map(e => <span key={e.id} className={`cal-ev ${drag?.ev.id === e.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(e.area) }} onPointerDown={ev => startDrag(ev, e)}
                   onClick={ev => { ev.stopPropagation(); openEdit(e); }} title={`${e.sid ? `${repeatText(e)} · ` : ''}누르면 수정 · 끌어서 옮기기`}>{e.sid && <i className="cal-rep" aria-hidden="true">↻</i>}{e.time && <small>{e.time}</small>} {e.title}</span>)}
                 {evs.length > 2 && <span className="cal-more">+{evs.length - 2}건</span>}
@@ -543,7 +569,7 @@ function Calendar({ sel, setSel }) {
       </div>
       {adding ? <EventDialog key={adding.id || `${adding.date}|${adding.time}|${adding.fromNote || ''}|${adding.heard || ''}`} init={adding} onSave={saveEvent} onClose={() => setAdding(null)}
         onDelete={adding.id ? all => { delEvent(adding, all); setAdding(null); } : null} onToNote={adding.id ? () => toNote(adding) : null} />
-      : <DayTimeline date={selDate} isToday={sel === todayStr} list={list} dueCycles={dueCycles} holiday={HOLIDAYS[sel]} anniv={[...annivOn(store.anniv, sel), ...ddaysOn(store.ddays, sel).map(x => ({ id: x.id, kind: 'D-day', name: x.label }))]}
+      : <DayTimeline date={selDate} isToday={sel === todayStr} list={list} dueCycles={dueCycles} holiday={HOLIDAYS[sel]} anniv={sourcesOn(store, sel).map(x => ({ id: x.key, kind: x.kind, name: x.label }))}
         onAdd={time => setAdding({ date: sel, time })} onDelete={delEvent} startDrag={startDrag} drag={drag} onEdit={openEdit} />}
       {drag && createPortal(<div className="cal-ghost" style={{ left: drag.x, top: drag.y, '--ac': areaVar(drag.ev.area) }}>
         {drag.ev.time && <small>{drag.ev.time}</small>} {drag.ev.title}
@@ -568,7 +594,7 @@ function EventNotes({ notes, setStore, startDrag, drag, dragged, onSchedule }) {
     setStore(s => ({ ...s, eventNotes: [...(s.eventNotes || []), { id: uid(), title: t.trim(), area, time: '', memo: '' }] }));
     setT('');
   };
-  const del = id => setStore(s => ({ ...s, eventNotes: (s.eventNotes || []).filter(n => n.id !== id) }));
+  const del = id => setStore(s => toTrash(s, 'eventNote', id));
   return (
     <section className={`panel ev-notes ${drag && !drag.ev._note ? 'drop-ready' : ''} ${drag?.over?.note ? 'drop' : ''}`} data-drop-note="1" aria-label="일정 노트">
       <div className="csum-h"><h2>일정 노트</h2><span className="muted">날짜가 정해지면 달력으로 끌어 넣으세요 · 누르면 날짜를 골라 넣기</span></div>
@@ -641,7 +667,7 @@ function DayTimeline({ date, isToday, list, dueCycles, holiday, anniv, onAdd, on
 function TimelineEvent({ e, onDelete, startDrag, drag, onEdit }) {
   return (
     <div className={`tl-ev ${drag?.ev.id === e.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(e.area) }} onPointerDown={ev => { if (!ev.target.closest('.tl-del')) startDrag?.(ev, e); }}>
-      <button className="grow tl-open" onClick={() => onEdit?.(e)} title="누르면 수정 · 끌어서 옮기기"><small>{e.time || '종일'}</small> {e.title}{e.sid && <span className="tl-rep">{repeatText(e)}</span>}</button>
+      <button className="grow tl-open" onClick={() => onEdit?.(e)} title="누르면 수정 · 끌어서 옮기기"><small>{e.time || '종일'}</small> {e.title}{e.sid && <span className="tl-rep">{repeatText(e)}</span>}<TagChips ids={e.tagIds} /></button>
       <button className="tl-del" onClick={() => onDelete(e)} aria-label={`${e.title} 삭제`} title={e.sid ? '반복 중 이 날만 삭제' : '삭제'}>{e.sid ? '이 날 삭제' : '삭제'}</button>
     </div>
   );
@@ -653,7 +679,7 @@ function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
   const box = useRef(null);
   useEffect(() => { box.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, []);
   const [f, setF] = useState({ title: init.title || '', date: init.date || '', time: init.time || '', area: init.area || 'P', memo: init.memo || '',
-    freq: init.repeat?.freq || '', until: init.repeat?.until || '' });
+    freq: init.repeat?.freq || '', until: init.repeat?.until || '', projectId: init.projectId || null, tagIds: init.tagIds || [], remind: init.remind ?? '' });
   const [arm, setArm] = useState(false);
   const edit = !!init.id, series = !!init.sid;
   useEffect(() => {
@@ -664,7 +690,7 @@ function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
   const save = scope => {
     if (!f.title.trim() || !f.date) return;
     const repeat = f.freq ? { freq: f.freq, until: f.until && f.until >= f.date ? f.until : '', skip: init.repeat?.skip || [] } : null;
-    onSave({ id: init.id, sid: init.sid, occ: init.occ, scope, fromNote: init.fromNote, date: f.date, time: f.time, title: f.title.trim(), area: f.area, memo: f.memo.trim(), repeat });
+    onSave({ id: init.id, sid: init.sid, occ: init.occ, scope, fromNote: init.fromNote, date: f.date, time: f.time, title: f.title.trim(), area: f.area, memo: f.memo.trim(), repeat, projectId: f.projectId, tagIds: f.tagIds, remind: f.remind });
   };
   const submit = e => { e.preventDefault(); save(series ? 'all' : undefined); };
   return (
@@ -688,6 +714,13 @@ function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
         {f.freq && <p className="note">{repeatText({ date: f.date || init.date, repeat: { freq: f.freq, until: f.until } })}{f.until ? '' : ' · 끝나는 날 없음'}</p>}
         {series && <p className="note ev-series">반복 일정의 {Number(init.occ.slice(5, 7))}/{Number(init.occ.slice(8, 10))} 회차입니다. "이 날만 저장"은 이 날만 따로 바꾸고, "반복 전체 저장"은 모든 회차에 적용합니다.</p>}
         <label>메모<textarea rows={2} value={f.memo} onChange={e => setF({ ...f, memo: e.target.value })} placeholder="장소, 준비물 등 (선택)" /></label>
+        <div className="row2">
+          <ProjectSelect value={f.projectId} onChange={v => setF({ ...f, projectId: v })} />
+          <label>알림<select value={f.remind} onChange={e => setF({ ...f, remind: e.target.value })} disabled={!f.time}>
+            <option value="">기본 (설정값)</option><option value="off">알림 없음</option><option value="0">정각</option><option value="10">10분 전</option><option value="30">30분 전</option><option value="60">1시간 전</option><option value="1440">하루 전</option></select></label>
+        </div>
+        <TagPicker value={f.tagIds} onChange={v => setF({ ...f, tagIds: v })} />
+        {edit ? <AttachList owner={{ type: 'event', id: init.sid || init.id }} /> : <p className="note">첨부는 저장한 뒤 이 일정을 다시 열어 추가할 수 있습니다.</p>}
         <p className="note">시간을 비우면 종일 일정으로 등록됩니다.</p>
         <div className="btns">
           {onDelete && (series
@@ -852,7 +885,7 @@ function Checklist({ init }) {
 /** 상세 내용 화면 순서: 앞으로 올릴 카테고리(FIRST 앞에서부터), 맨 뒤로 보낼 카테고리 */
 const CAT_ORDER = { P: { last: ['개인 재무'] } };
 /** 영역의 카테고리 목록. 카테고리마다 세부 항목, 주기별 개수, 오늘 남은 개수를 모은다 */
-function categoriesOf(area, now, isDone) {
+function categoriesOf(area, now, isDone, cats = []) {
   const m = new Map();
   ROWS.filter(r => r.a === area).forEach(r => {
     if (!m.has(r.cat)) m.set(r.cat, { cat: r.cat, rows: [], items: [], cyc: {} });
@@ -864,7 +897,8 @@ function categoriesOf(area, now, isDone) {
   const list = [...m.values()];
   // 화면 순서 바꾸기 (액션 id 가 원본 순서에 묶여 있어 표시 순서만 바꾼다)
   const last = CAT_ORDER[area]?.last || [];
-  list.sort((x, y) => last.indexOf(x.cat) - last.indexOf(y.cat));   // 목록에 없는 카테고리(-1)는 원래 순서 유지
+  const ord = new Map(cats.filter(c => c.area === area).map(c => [c.name, c.order]));
+  list.sort((x, y) => (ord.size ? (ord.get(x.cat) ?? 500) - (ord.get(y.cat) ?? 500) : last.indexOf(x.cat) - last.indexOf(y.cat)));   // 카테고리 표 순서 (없으면 예전 규칙)
   return list.map(g => {
     const due = g.rows.filter(r => isDue(r.c, now));
     return { ...g, due: due.length, left: due.filter(r => !isDone(r)).length, done: g.rows.filter(isDone).length };
@@ -875,7 +909,7 @@ function AreaPage({ area }) {
   const { store, isDone, now, openCat } = useCtx();
   const boards = store.goals?.boards || {};
   const goalsOf = c => (hasGoals(area, c) && boards[boardKey(area, c)] ? boardForYear(boards[boardKey(area, c)], now.getFullYear()).items.filter(i => !i.parent).length : 0);
-  const cats = categoriesOf(area, now, isDone);
+  const cats = categoriesOf(area, now, isDone, store.categories);
   return (
     <>
       <header className="page-h" style={{ '--ac': areaVar(area) }}>
@@ -994,9 +1028,10 @@ function Settings() {
       </div>
       <div className="panel">
         <h2>데이터</h2>
-        <p className="muted">체크 상태, 일정, 기념일, 건강 기록, 설정은 이 브라우저에만 저장됩니다.</p>
+        <p className="muted">체크 상태, 일정, 기념일, 건강 기록, 설정은 이 브라우저에만 저장됩니다. 아래 "백업"으로 파일을 내려받아 두세요.</p>
         <button className={`btn ${arm ? 'danger' : ''}`} onClick={reset}>{arm ? '정말 초기화할까요?' : '모든 데이터 초기화'}</button>
       </div>
+      <DataSettings />
     </>
   );
 }

@@ -341,23 +341,5 @@ export const TOOL_CONFIGS = {
       { label: '기한 지남', value: `${rs.filter(r => r.stage !== '완료' && r.due && r.due < c.today).length}건`, tone: rs.some(r => r.stage !== '완료' && r.due && r.due < c.today) ? 'over' : 'sl' },
       { label: '높은 우선순위', value: `${rs.filter(r => r.stage !== '완료' && r.prio === '높음').length}건` }],
   },
-  'W|업무 연락처': {
-    intro: '업무 연락처를 회사·부서별로 모으고 바로 전화합니다.', noun: '연락처', title: 'name', tick: '연락처 등록',
-    fields: [
-      { k: 'name', label: '이름', type: 'text', req: true },
-      { k: 'company', label: '회사', type: 'text' },
-      { k: 'dept', label: '부서·직함', type: 'text' },
-      { k: 'phone', label: '전화', type: 'phone' },
-      { k: 'email', label: '메일', type: 'text' },
-      { k: 'last', label: '마지막 연락', type: 'date' },
-    ],
-    seed: now => ids('wc', [
-      { name: '김지훈 (예시)', company: '고객사 A', dept: '구매팀 과장', phone: '010-3333-0001', email: 'kim@example.com', last: D(now, -3) },
-      { name: '이서연 (예시)', company: '협력사 B', dept: '개발팀 팀장', phone: '010-3333-0002', email: 'lee@example.com', last: D(now, -12) },
-      { name: '박준호 (예시)', company: '사내', dept: '인사팀', phone: '02-000-1234', email: 'park@example.com', last: D(now, -30) },
-    ]),
-    sort: (a, b) => String(b.last).localeCompare(String(a.last)),
-    breakdown: { label: '회사별 연락처', by: 'company', fmt: 'count' },
-    stats: rs => [{ label: '연락처', value: `${rs.length}명` }, { label: '회사', value: `${new Set(rs.map(r => r.company)).size}곳` }],
-  },
+
 };

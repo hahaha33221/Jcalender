@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { iso } from '../data.js';
 import { useCtx } from '../shared.jsx';
 import { ddayInfo } from '../dday.js';
+import { toTrash } from '../schema.js';
 
 /* 개인 › 기념일 관리 › D-day 관리
    - 목표일까지(D-): 시험, 여행, 마감처럼 다가오는 날
@@ -28,7 +29,7 @@ export default function DdayPanel() {
     setF({ ...blank, mode: f.mode });
   };
   const upd = (id, patch) => set(l => l.map(x => (x.id === id ? { ...x, ...patch } : x)));
-  const del = id => { set(l => l.filter(x => x.id !== id)); setArm(null); setEdit(null); };
+  const del = id => { setStore(s => toTrash({ ...s, ddays: s.ddays || [] }, 'dday', id)); setArm(null); setEdit(null); };   // 휴지통으로
 
   const rows = list.map(x => ({ x, i: ddayInfo(x, now) }));
   // 순서: 다가오는 목표일(가까운 순) → 지난 날 세기(다음 기념 가까운 순) → 지난 목표일

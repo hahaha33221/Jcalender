@@ -6,9 +6,14 @@ import { ACT_EXPENSE, addShop, catsOf, buyShop, delShop, seedFinance, unbuyShop,
 /** 재무 데이터와 변경 함수 */
 export function useFinance() {
   const { store, setStore, now, isDone, finish } = useCtx();
-  const f = store.finance || seedFinance(now);
+  // 연계 프로젝트는 공통 프로젝트 표(store.projects)에 있다. 재무 화면에는 합쳐서 보여 주고, 바뀐 것은 나눠 저장한다
+  const f = { ...(store.finance || seedFinance(now)), projects: store.projects || [] };
   const update = (fn, todayMemo) => {
-    setStore(s => ({ ...s, finance: fn(s.finance || seedFinance(now)) }));
+    setStore(s => {
+      const next = fn({ ...(s.finance || seedFinance(now)), projects: s.projects || [] });
+      const { projects, ...fin } = next;
+      return { ...s, finance: fin, projects: (projects || []).map(p => ({ status: '진행', start: '', end: '', areas: ['P'], ...p })) };
+    });
   };
   return [f, update, now];
 }

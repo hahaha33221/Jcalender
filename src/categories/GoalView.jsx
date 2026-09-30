@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AREAS, CYCLES, ROWS, iso, periodKeysBetween } from '../data.js';
 import { areaVar, useCtx } from '../shared.jsx';
 import {
-  EMPTY, NO_GOAL, addItem, addMile, boardForYear, boardKey, checkProgress, daysBetween, delItem, delMile, flatten, progressOf, seedGoals, statusOf, toDate, updItem, updMile,
+  EMPTY, NO_GOAL, hasGoals, addItem, addMile, boardForYear, boardKey, checkProgress, daysBetween, delItem, delMile, flatten, progressOf, seedGoals, statusOf, toDate, updItem, updMile,
 } from './goals.js';
 
 /* 목표 관리 (연 단위 WBS + 마일스톤)
@@ -224,7 +224,7 @@ export default function GoalView({ area, cat, group }) {
   const order = ['목표 관리', ...new Set(ROWS.filter(r => r.a === area && r.cat !== '목표 관리').map(r => r.cat))];
   const groups = order.map((c, ci) => {
     const b = boards[boardKey(area, c)];
-    if (!b || NO_GOAL.has(boardKey(area, c))) return null;
+    if (!b || !hasGoals(area, c)) return null;
     const leaf = leafFor(area, c, store.done);
     const yb0 = boardForYear(b, year), yb = { ...yb0, miles: withDone(yb0.miles, b.items, leaf) };
     const rows = flatten(yb.items);
@@ -413,7 +413,7 @@ export function DashYearGantt() {
     const order = ['목표 관리', ...new Set(ROWS.filter(r => r.a === a && r.cat !== '목표 관리').map(r => r.cat))];
     const goals = order.flatMap(c => {
       const b = boards[boardKey(a, c)];
-      if (!b || NO_GOAL.has(boardKey(a, c))) return [];
+      if (!b || !hasGoals(a, c)) return [];
       const leaf = leafFor(a, c, store.done), yb = boardForYear(b, year);
       return yb.items.filter(i => !i.parent).map(it => { const p = progressOf(yb.items, it.id, leaf); return { c, it, p, st: statusOf(it, p, today) }; });
     });

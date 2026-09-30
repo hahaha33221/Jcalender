@@ -34,6 +34,7 @@ export const CATEGORY_VIEWS = {
   'W|목표 관리': GoalView,
   'W|기획·조사': PlanResearchView,
   'W|업무 문서': DocsView,
+  'W|업무 연락처': props => createElement(RelationView, { ...props, fixedArea: 'W' }),   // 인맥 관리와 같은 사람 데이터 (영역 근로)
   ...Object.fromEntries(Object.entries(TOOL_CONFIGS).map(([k, c]) => [k, withConfig(c)])),
 };
 
