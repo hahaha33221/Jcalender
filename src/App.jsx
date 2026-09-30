@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ActionRow, Ctx, WEEK, areaVar, num, useCtx } from './shared.jsx';
 import NeedsPanel from './Needs.jsx';
 import { hasCustomView, isFirstReviewed, viewFor } from './categories/index.js';
@@ -358,6 +359,53 @@ function CheckPage({ init }) {
 /* 일정관리 캘린더 */
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
+/* 일정 끌어서 옮기기 (마우스 · 터치 공용, pointer 이벤트)
+   - 마우스: 누른 채 4px 넘게 움직이면 시작 / 터치: 0.3초 길게 누른 뒤 움직이면 시작 (그냥 밀면 화면 스크롤)
+   - 놓은 곳: 달력 칸[data-drop-date] → 그 날짜(시간 유지), 시간 줄[data-drop-h] → 선택한 날짜의 그 시각, 종일[data-drop-allday] → 종일
+   - 끌기가 끝난 직후의 클릭(칸 선택)은 무시한다 (dragged.current) */
+function useEventDrag(onDrop) {
+  const [drag, setDrag] = useState(null);                  // { ev, x, y, over: { date?, h?, allDay? } }
+  const dragged = useRef(false);
+  const cur = useRef(null);
+  const targetAt = (x, y) => {
+    const el = document.elementFromPoint(x, y);
+    const d = el?.closest('[data-drop-date]'), h = el?.closest('[data-drop-h]'), a = el?.closest('[data-drop-allday]');
+    return d ? { date: d.dataset.dropDate } : h ? { h: Number(h.dataset.dropH) } : a ? { allDay: true } : null;
+  };
+  const start = (e, ev) => {
+    if (e.button && e.button !== 0) return;
+    const touch = e.pointerType === 'touch';
+    const x0 = e.clientX, y0 = e.clientY;
+    let on = false, timer = null, ok = !touch;
+    if (touch) timer = setTimeout(() => { ok = true; }, 300);
+    const move = m => {
+      if (!on) {
+        const far = Math.abs(m.clientX - x0) + Math.abs(m.clientY - y0) > 4;
+        if (!far) return;
+        if (!ok) { cleanup(); return; }                     // 터치를 바로 밀면 스크롤로 둔다
+        on = true;
+      }
+      m.preventDefault?.();
+      cur.current = { ev, x: m.clientX, y: m.clientY, over: targetAt(m.clientX, m.clientY) };
+      setDrag(cur.current);
+    };
+    const noScroll = t => { if (on) t.preventDefault(); };
+    const up = () => {
+      if (on && cur.current?.over) onDrop(ev, cur.current.over);
+      if (on) { dragged.current = true; setTimeout(() => { dragged.current = false; }, 50); }
+      cleanup();
+    };
+    const cleanup = () => {
+      clearTimeout(timer); cur.current = null; setDrag(null);
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up); window.removeEventListener('touchmove', noScroll);
+    };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up); window.addEventListener('touchmove', noScroll, { passive: false });
+  };
+  return { drag, start, dragged };
+}
+
 function Calendar({ sel, setSel }) {
   const { store, setStore, now, todayStr } = useCtx();
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
@@ -380,6 +428,29 @@ function Calendar({ sel, setSel }) {
     setAdding(null);
   };
   const delEvent = id => setStore(s => ({ ...s, events: s.events.filter(x => x.id !== id) }));
+  // 끌어서 옮기기 + 방금 옮긴 것 되돌리기
+  const [moved, setMoved] = useState(null);                  // { id, title, prev: { date, time }, next }
+  const moveEvent = (ev, over) => {
+    const next = over.date ? { date: over.date, time: ev.time || '' }
+      : over.allDay ? { date: sel, time: '' }
+      : { date: sel, time: `${pad(over.h)}:${ev.time ? ev.time.slice(3, 5) : '00'}` };
+    if (next.date === ev.date && next.time === (ev.time || '')) return;
+    setStore(s => ({ ...s, events: s.events.map(x => (x.id === ev.id ? { ...x, ...next } : x)) }));
+    setMoved({ id: ev.id, title: ev.title, prev: { date: ev.date, time: ev.time || '' }, next });
+    if (over.date) pick(over.date);
+  };
+  const undoMove = () => { if (!moved) return; setStore(s => ({ ...s, events: s.events.map(x => (x.id === moved.id ? { ...x, ...moved.prev } : x)) })); pick(moved.prev.date); setMoved(null); };
+  const { drag, start: startDrag, dragged } = useEventDrag(moveEvent);
+  // 날짜 두 번 누르기 → 그 날짜에 일정 추가 (다른 달 칸이면 첫 클릭에 달이 바뀌므로 첫 클릭한 날짜를 기억해 둔다)
+  const lastClick = useRef(null);
+  const clickDay = k => {
+    if (dragged.current) return;
+    const t = Date.now(), l = lastClick.current;
+    if (l && t - l.t < 450) { lastClick.current = null; setAdding({ date: l.k, time: '' }); return; }
+    lastClick.current = { k, t };
+    pick(k);
+  };
+  const mdTxt = (d, t) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}${t ? ` ${t}` : ' 종일'}`;
   const selDate = new Date(sel + 'T00:00:00');
   const dueCycles = Object.keys(CYCLES).filter(c => c !== 'S' && isDue(c, selDate));
   const list = byDate[sel] || [];
@@ -395,17 +466,21 @@ function Calendar({ sel, setSel }) {
             <button className="btn sm" onClick={() => setVoice(true)}>음성으로 추가</button>
           </div>
         </div>
-        <div className="cal-grid" role="grid">
+        {moved ? <p className="cal-moved" role="status">"{moved.title}" 일정을 {mdTxt(moved.prev.date, moved.prev.time)} → {mdTxt(moved.next.date, moved.next.time)}로 옮겼습니다.
+          <button className="btn sm" onClick={undoMove}>되돌리기</button><button className="btn sm" onClick={() => setMoved(null)}>닫기</button></p>
+          : <p className="cal-tip">일정을 끌어서 다른 날짜나 오른쪽 시간표의 다른 시각으로 옮길 수 있습니다 (휴대폰은 길게 누른 뒤 이동). 날짜를 두 번 누르면 그 날에 일정을 추가합니다.</p>}
+        <div className={`cal-grid ${drag ? 'dragging' : ''}`} role="grid">
           {WEEK.map((w, i) => <div key={w} className={`cal-dow ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}`}>{w}</div>)}
           {cells.map(d => {
             const k = iso(d), evs = byDate[k] || [];
             return (
-              <button key={k} role="gridcell" className={`cal-cell ${d.getMonth() !== ym.m ? 'out' : ''} ${k === todayStr ? 'today' : ''} ${k === sel ? 'sel' : ''} ${HOLIDAYS[k] || d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''}`} onClick={() => pick(k)} aria-label={`${d.getMonth() + 1}월 ${d.getDate()}일${HOLIDAYS[k] ? ` ${HOLIDAYS[k]}` : ''} 일정 ${evs.length}건`}>
+              <button key={k} role="gridcell" data-drop-date={k} className={`cal-cell ${d.getMonth() !== ym.m ? 'out' : ''} ${k === todayStr ? 'today' : ''} ${k === sel ? 'sel' : ''} ${HOLIDAYS[k] || d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''} ${drag?.over?.date === k ? 'drop' : ''}`}
+                onClick={() => clickDay(k)} aria-label={`${d.getMonth() + 1}월 ${d.getDate()}일${HOLIDAYS[k] ? ` ${HOLIDAYS[k]}` : ''} 일정 ${evs.length}건`}>
                 <span className="cal-top"><span className="cal-n">{d.getDate()}</span>
                   {['Y', 'M', 'W'].filter(c => isDue(c, d)).map(c => <span key={c} className={`cal-due ${c}`}>{CYCLES[c].slice(0, 2)}</span>)}</span>
                 {HOLIDAYS[k] && <span className="cal-hol">{HOLIDAYS[k]}</span>}
                 {annivOn(store.anniv, k).map(a => <span key={a.id} className="cal-anniv">{a.name}</span>)}
-                {evs.slice(0, 2).map(e => <span key={e.id} className="cal-ev" style={{ '--ac': areaVar(e.area) }}>{e.time && <small>{e.time}</small>} {e.title}</span>)}
+                {evs.slice(0, 2).map(e => <span key={e.id} className={`cal-ev ${drag?.ev.id === e.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(e.area) }} onPointerDown={ev => startDrag(ev, e)} title="끌어서 옮기기">{e.time && <small>{e.time}</small>} {e.title}</span>)}
                 {evs.length > 2 && <span className="cal-more">+{evs.length - 2}건</span>}
               </button>
             );
@@ -413,7 +488,10 @@ function Calendar({ sel, setSel }) {
         </div>
       </div>
       <DayTimeline date={selDate} isToday={sel === todayStr} list={list} dueCycles={dueCycles} holiday={HOLIDAYS[sel]} anniv={annivOn(store.anniv, sel)}
-        onAdd={time => setAdding({ date: sel, time })} onDelete={delEvent} />
+        onAdd={time => setAdding({ date: sel, time })} onDelete={delEvent} startDrag={startDrag} drag={drag} />
+      {drag && createPortal(<div className="cal-ghost" style={{ left: drag.x, top: drag.y, '--ac': areaVar(drag.ev.area) }}>
+        {drag.ev.time && <small>{drag.ev.time}</small>} {drag.ev.title}
+        <em>{drag.over ? (drag.over.date ? `${Number(drag.over.date.slice(5, 7))}/${Number(drag.over.date.slice(8, 10))}로` : drag.over.allDay ? '종일로' : `${pad(drag.over.h)}시로`) : '놓을 곳을 고르세요'}</em></div>, document.body)}
       {adding && <EventDialog init={adding} onSave={addEvent} onClose={() => setAdding(null)} />}
       {voice && <VoiceDialog now={now} onDone={ev => { setVoice(false); setAdding(ev); }} onClose={() => setVoice(false)} />}
     </section>
@@ -421,7 +499,7 @@ function Calendar({ sel, setSel }) {
 }
 
 /* 선택한 날짜의 1시간 단위 일정 */
-function DayTimeline({ date, isToday, list, dueCycles, holiday, anniv, onAdd, onDelete }) {
+function DayTimeline({ date, isToday, list, dueCycles, holiday, anniv, onAdd, onDelete, startDrag, drag }) {
   const box = useRef(null);
   const allDay = list.filter(e => !e.time);
   const byHour = {};
@@ -445,31 +523,32 @@ function DayTimeline({ date, isToday, list, dueCycles, holiday, anniv, onAdd, on
         {holiday && <span className="cal-hol">{holiday}</span>}
         {anniv.map(a => <span key={a.id} className="cal-anniv">{a.kind} · {a.name}</span>)}</div>}
       {dueCycles.length > 1 && <p className="due-note">이 날은 {dueCycles.filter(c => c !== 'D').map(c => CYCLES[c]).join(', ')}일입니다.</p>}
-      {allDay.length > 0 && (
-        <div className="allday"><span className="tl-h">종일</span>
-          <div className="tl-evs">{allDay.map(e => <TimelineEvent key={e.id} e={e} onDelete={onDelete} />)}</div></div>)}
+      {/* 종일 줄은 늘 보여 준다 (끌기 도중 줄이 생기며 시간표가 밀리지 않도록) */}
+      <div className={`allday ${drag?.over?.allDay ? 'drop' : ''} ${allDay.length ? '' : 'ad-empty'}`} data-drop-allday="1"><span className="tl-h">종일</span>
+        <div className="tl-evs">{allDay.length ? allDay.map(e => <TimelineEvent key={e.id} e={e} onDelete={onDelete} startDrag={startDrag} drag={drag} />)
+          : <span className="tl-none">{drag ? '여기에 놓으면 종일 일정' : '없음'}</span>}</div></div>
       <div className="tl" ref={box} aria-label="시간대별 일정">
         {HOURS.map(h => {
           const evs = byHour[h] || [];
           return (
-            <div key={h} data-h={h} className={`tl-row ${isToday && h === nowH ? 'now' : ''}`}>
+            <div key={h} data-h={h} data-drop-h={h} className={`tl-row ${isToday && h === nowH ? 'now' : ''} ${drag?.over?.h === h ? 'drop' : ''}`}>
               <span className="tl-h">{pad(h)}:00</span>
               <div className="tl-evs">
-                {evs.map(e => <TimelineEvent key={e.id} e={e} onDelete={onDelete} />)}
+                {evs.map(e => <TimelineEvent key={e.id} e={e} onDelete={onDelete} startDrag={startDrag} drag={drag} />)}
                 <button className="tl-add" onClick={() => onAdd(`${pad(h)}:00`)} aria-label={`${h}시에 일정 추가`}>{evs.length ? '+' : ''}</button>
               </div>
             </div>
           );
         })}
       </div>
-      <p className="note">빈 시간을 누르면 그 시각으로 일정을 추가합니다.</p>
+      <p className="note">빈 시간을 누르면 그 시각으로 일정을 추가합니다. 일정을 끌어 다른 시각으로 옮길 수 있습니다.</p>
     </div>
   );
 }
 
-function TimelineEvent({ e, onDelete }) {
+function TimelineEvent({ e, onDelete, startDrag, drag }) {
   return (
-    <div className="tl-ev" style={{ '--ac': areaVar(e.area) }}>
+    <div className={`tl-ev ${drag?.ev.id === e.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(e.area) }} onPointerDown={ev => { if (!ev.target.closest('button')) startDrag?.(ev, e); }} title="끌어서 옮기기">
       <span className="grow"><small>{e.time || '종일'}</small> {e.title}</span>
       <button className="tl-del" onClick={() => onDelete(e.id)} aria-label={`${e.title} 삭제`}>삭제</button>
     </div>

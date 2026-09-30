@@ -1190,3 +1190,16 @@ body.report-open { overflow: hidden; }
 .rv-countbar .rv-count { margin: 0; }
 .rv-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; margin-bottom: 10px; font-size: 13px; }
 .rv-bulk-a { display: inline-flex; align-items: center; gap: 4px; }
+/* 대시보드 캘린더 › 일정 끌어서 옮기기 */
+.cal-ev, .tl-ev { cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.cal-ev.ghosted, .tl-ev.ghosted { opacity: .35; }
+.cal-grid.dragging { cursor: grabbing; }
+.cal-cell.drop { outline: 2px dashed var(--ac, var(--a1)); outline-offset: -3px; background: var(--oksoft); }
+.tl-row.drop, .allday.drop { background: var(--oksoft); box-shadow: inset 3px 0 0 var(--ok); }
+.cal-ghost { position: fixed; z-index: 90; pointer-events: none; transform: translate(12px, 12px); background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--ac); border-radius: 6px; padding: 5px 10px; font-size: 12.5px; box-shadow: 0 8px 24px rgba(0,0,0,.25); display: flex; flex-direction: column; gap: 1px; max-width: 240px; }
+.cal-ghost small { color: var(--ink3); }
+.cal-ghost em { font-style: normal; font-size: 11.5px; color: var(--ok); font-weight: 700; }
+.cal-tip { margin: 0 0 6px; font-size: 12px; color: var(--ink3); }
+.cal-moved { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 6px; font-size: 12.5px; color: var(--ok); font-weight: 700; }
+.allday.ad-empty { min-height: 30px; } .tl-none { font-size: 12px; color: var(--ink3); padding: 3px 0; }
+.allday { flex: none; } .allday.ad-empty { align-items: center; } .allday.ad-empty .tl-evs { padding-top: 0; padding-bottom: 0; }
