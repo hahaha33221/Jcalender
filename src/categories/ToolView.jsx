@@ -58,6 +58,10 @@ export default function ToolView({ area, cat, group, config: C }) {
   const [form, setForm] = useState(blank);
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState(false);
+  // 단계 보드 보기 방식: 칸반 / 게시판 (store.boardView['영역|카테고리'] 에 저장)
+  const bview = store.boardView?.[key] || 'kanban';
+  const setBview = v => setStore(s => ({ ...s, boardView: { ...(s.boardView || {}), [key]: v } }));
+  const [bst, setBst] = useState('ALL');
   const c = { today, month: today.slice(0, 7), year: today.slice(0, 4), now };
   const fieldOf = k => C.fields.find(f => f.k === k);
   const tickRow = C.tick && ROWS.find(r => r.a === area && r.cat === cat && r.action === C.tick);
@@ -141,8 +145,26 @@ export default function ToolView({ area, cat, group, config: C }) {
 
       {C.kanban && (
         <section className="panel">
-          <div className="csum-h"><h2>{C.kanban.label || '단계별 보드'}</h2><span className="muted">‹ › 버튼으로 단계를 옮깁니다</span></div>
-          <div className="tv-board" style={{ '--cols': C.kanban.stages.length }}>
+          <div className="csum-h"><h2>{C.kanban.label || '단계별 보드'}</h2><span className="muted">{bview === 'kanban' ? '‹ › 버튼으로 단계를 옮깁니다' : '단계 칸에서 바로 바꿀 수 있습니다'}</span>
+            <span className="grow" /><ViewToggle value={bview} onChange={setBview} /></div>
+          {bview === 'list' ? (() => {
+            const F = C.kanban.field, st = C.kanban.stages;
+            const list = rows.filter(r => bst === 'ALL' || r[F] === bst).sort((a, b) => st.indexOf(a[F]) - st.indexOf(b[F]));
+            const cols = (C.card || []).map(fieldOf).filter(Boolean);
+            return <>
+              <div className="chips bd-chips">{[['ALL', `전체 ${rows.length}`], ...st.map(x => [x, `${x} ${rows.filter(r => r[F] === x).length}`])].map(([k, n]) => <button key={k} aria-pressed={bst === k} onClick={() => setBst(k)}>{n}</button>)}</div>
+              <div className="tablewrap"><table className="fv-table bd-table">
+                <thead><tr><th className="fv-no">No.</th><th>단계</th><th>{titleF?.label || '제목'}</th>{cols.map(f => <th key={f.k}>{f.label}</th>)}<th /></tr></thead>
+                <tbody>{list.map((r, i) => (
+                  <tr key={r.id}><td className="fv-no">{i + 1}</td>
+                    <td><select className="bd-st" value={r[F]} onChange={e => upd(r.id, { [F]: e.target.value })} aria-label="단계">{st.map(x => <option key={x}>{x}</option>)}</select></td>
+                    <td className="bd-title"><b>{r[C.title]}</b></td>
+                    {cols.map(f => <td key={f.k}>{r[f.k] !== '' && r[f.k] != null ? fmtVal(f, r[f.k]) : '-'}</td>)}
+                    <td className="nowrap">{phoneF && r[phoneF.k] && <a className="btn sm" href={`tel:${telOf(r[phoneF.k])}`}>전화</a>}</td></tr>))}</tbody>
+              </table></div>
+              {!list.length && <p className="muted">해당 단계에 항목이 없습니다.</p>}
+            </>;
+          })() : <div className="tv-board" style={{ '--cols': C.kanban.stages.length }}>
             {C.kanban.stages.map((st, si) => {
               const list = rows.filter(r => r[C.kanban.field] === st);
               return (
@@ -162,7 +184,7 @@ export default function ToolView({ area, cat, group, config: C }) {
                 </div>
               );
             })}
-          </div>
+          </div>}
         </section>
       )}
 
@@ -204,5 +226,15 @@ export default function ToolView({ area, cat, group, config: C }) {
       </section>
 
     </div>
+  );
+}
+
+/** 칸반 / 게시판 보기 전환 */
+export function ViewToggle({ value, onChange }) {
+  return (
+    <span className="chips bd-toggle" role="group" aria-label="보기 방식">
+      <button aria-pressed={value === 'kanban'} onClick={() => onChange('kanban')}>칸반</button>
+      <button aria-pressed={value === 'list'} onClick={() => onChange('list')}>게시판</button>
+    </span>
   );
 }

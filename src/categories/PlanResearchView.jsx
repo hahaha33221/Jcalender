@@ -3,10 +3,11 @@ import { createPortal } from 'react-dom';
 import { iso } from '../data.js';
 import { areaVar, useCtx } from '../shared.jsx';
 import { daysBetween } from './goals.js';
+import { ViewToggle } from './ToolView.jsx';
 
 /* 근로 › 기획·조사 전용 화면 (탭 2개)
    plan = {
-     ui: { tab: 'research' | 'plan' },
+     ui: { tab: 'research' | 'plan', view: 'kanban' | 'list' (기획 보드 보기 방식) },
      topics:  [{ id, title, purpose, due, status('조사 중'|'정리 완료'), summary, created }],
      sources: [{ id, topicId, title, url, from(출처), date, memo, tags: [], star(1~3) }],
      plans:   [{ id, title, status, due, topicIds: [], sec: { s1..s6 }, created, updated }],
@@ -77,7 +78,7 @@ export default function PlanResearchView({ area, cat }) {
 
       {tab === 'research'
         ? <Research P={P} set={set} today={today} toPlan={toPlan} />
-        : <Plans P={P} set={set} today={today} openId={openPlan} setOpenId={setOpenPlan} />}
+        : <Plans P={P} set={set} today={today} openId={openPlan} setOpenId={setOpenPlan} view={P.ui?.view || 'kanban'} setView={v => set(x => ({ ...x, ui: { ...(x.ui || {}), view: v } }))} />}
     </div>
   );
 }
@@ -225,7 +226,7 @@ function Sources({ P, set, topic, today }) {
 }
 
 /* ───────── 기획 탭 ───────── */
-function Plans({ P, set, today, openId, setOpenId }) {
+function Plans({ P, set, today, openId, setOpenId, view, setView }) {
   const [nt, setNt] = useState({ title: '', due: '' });
   const [printing, setPrinting] = useState(false);
   const plan = P.plans.find(p => p.id === openId) || null;
@@ -243,13 +244,14 @@ function Plans({ P, set, today, openId, setOpenId }) {
   return (
     <>
       <section className="panel">
-        <div className="csum-h"><h2>기획 보드</h2><span className="muted">카드를 누르면 기획서를 엽니다 · ◀ ▶ 로 단계 이동</span></div>
+        <div className="csum-h"><h2>기획 보드</h2><span className="muted">{view === 'kanban' ? '카드를 누르면 기획서를 엽니다 · ◀ ▶ 로 단계 이동' : '제목을 누르면 기획서를 엽니다 · 상태 칸에서 바로 변경'}</span>
+          <span className="grow" /><ViewToggle value={view} onChange={setView} /></div>
         <div className="pr-add pr-add-row">
           <input value={nt.title} onChange={e => setNt({ ...nt, title: e.target.value })} onKeyDown={e => e.key === 'Enter' && add()} placeholder="새 기획 제목" aria-label="새 기획 제목" />
           <label className="pr-due">마감<input type="date" value={nt.due} onChange={e => setNt({ ...nt, due: e.target.value })} aria-label="기획 마감" /></label>
           <button className="btn primary" onClick={add} disabled={!nt.title.trim()}>기획 추가</button>
         </div>
-        <div className="pr-board">{PLAN_STATUS.map(st => {
+        {view === 'list' ? <PlanList P={P} today={today} openId={openId} setOpenId={setOpenId} upd={upd} /> : <div className="pr-board">{PLAN_STATUS.map(st => {
           const col = P.plans.filter(p => p.status === st).sort((a, b) => (a.due || '9').localeCompare(b.due || '9'));
           return (
             <div key={st} className={`pr-col ${st === '보류' ? 'hold' : ''}`} aria-label={st}>
@@ -269,12 +271,51 @@ function Plans({ P, set, today, openId, setOpenId }) {
                   </div>);
               })}
             </div>);
-        })}</div>
+        })}</div>}
         {!P.plans.length && <p className="muted">아직 기획이 없습니다. 제목을 적어 추가하거나, 조사 탭에서 "기획안으로 만들기"를 누르세요.</p>}
       </section>
 
       {plan && <Editor key={plan.id} P={P} plan={plan} upd={patch => upd(plan.id, patch)} set={set} close={() => setOpenId(null)} onPrint={() => setPrinting(true)} />}
       {plan && printing && <PlanPrint P={P} plan={plan} today={today} onClose={() => setPrinting(false)} />}
+    </>
+  );
+}
+
+/** 기획 게시판: 번호 · 상태 · 제목 · 마감 · 참고 조사 · 작성일 · 수정일 (머리글로 정렬, 상태 칩으로 거르기, 검색) */
+function PlanList({ P, today, openId, setOpenId, upd }) {
+  const [st, setSt] = useState('ALL');
+  const [q, setQ] = useState('');
+  const [sort, setSort] = useState({ k: 'due', dir: 1 });
+  const val = {
+    status: p => PLAN_STATUS.indexOf(p.status), title: p => p.title, due: p => p.due || '9999',
+    refs: p => (p.topicIds || []).length, created: p => p.created || '', updated: p => p.updated || '',
+  };
+  const cmp = (a, b) => { const x = val[sort.k](a), y = val[sort.k](b); return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'ko')) * sort.dir; };
+  const list = P.plans.filter(p => (st === 'ALL' || p.status === st) && (!q || `${p.title} ${Object.values(p.sec || {}).join(' ')}`.toLowerCase().includes(q.toLowerCase())))
+    .sort((a, b) => cmp(a, b) || (a.created || '').localeCompare(b.created || ''));
+  const th = (k, label, cls = '') => (
+    <th className={`fv-sort ${cls}`} aria-sort={sort.k === k ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}>
+      <button onClick={() => setSort(s => ({ k, dir: s.k === k ? -s.dir : 1 }))}>{label}<i>{sort.k === k ? (sort.dir > 0 ? '▲' : '▼') : '↕'}</i></button></th>);
+  return (
+    <>
+      <div className="bd-bar">
+        <span className="chips">{[['ALL', `전체 ${P.plans.length}`], ...PLAN_STATUS.map(x => [x, `${x} ${P.plans.filter(p => p.status === x).length}`])].map(([k, n]) =>
+          <button key={k} aria-pressed={st === k} onClick={() => setSt(k)}>{n}</button>)}</span>
+        <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="제목·내용 검색" aria-label="기획 검색" />
+      </div>
+      {list.length > 0 && <div className="tablewrap"><table className="fv-table bd-table">
+        <thead><tr><th className="fv-no">No.</th>{th('status', '상태')}{th('title', '제목')}{th('due', '마감')}{th('refs', '참고 조사', 'c')}{th('created', '작성일')}{th('updated', '수정일')}</tr></thead>
+        <tbody>{list.map((p, i) => {
+          const d = ddayOf(p.due, today), live = p.status !== '확정' && p.status !== '보류';
+          return (
+            <tr key={p.id} className={p.id === openId ? 'bd-on' : ''}><td className="fv-no">{i + 1}</td>
+              <td><select className="bd-st" value={p.status} onChange={e => upd(p.id, { status: e.target.value })} aria-label="상태">{PLAN_STATUS.map(x => <option key={x}>{x}</option>)}</select></td>
+              <td className="bd-title"><button className="linkish" onClick={() => setOpenId(p.id === openId ? null : p.id)}>{p.title}</button></td>
+              <td className="nw">{p.due ? <>{md(p.due)} {live && <span className={`pr-dd ${d < 0 ? 'late' : d <= 3 ? 'soon' : ''}`}>{ddayText(d)}</span>}</> : '-'}</td>
+              <td className="c">{(p.topicIds || []).length || '-'}</td>
+              <td className="nw">{p.created ? md(p.created) : '-'}</td><td className="nw">{p.updated ? md(p.updated) : '-'}</td></tr>);
+        })}</tbody></table></div>}
+      {P.plans.length > 0 && !list.length && <p className="muted">조건에 맞는 기획이 없습니다.</p>}
     </>
   );
 }
