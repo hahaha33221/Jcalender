@@ -1016,3 +1016,12 @@ body.report-open { overflow: hidden; }
 .rp-proj .rp-two .rp-box { margin: 0 !important; }
 .nd-chips { margin: 2px 0 8px; } .nd-chips small { opacity: .7; margin-left: 2px; }
 .nd-sort { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 8px; font-size: 12.5px; color: var(--ink2); } .nd-sort label { display: inline-flex; align-items: center; gap: 6px; } .nd-sort select { width: auto; padding: 2px 6px; font-size: 12.5px; }
+/* 개인 재무 › 수입관리 · 지출관리 탭 */
+.fv-tabs { display: flex; gap: 0; margin: 0 0 16px; border-bottom: 2px solid var(--line); }
+.fv-tabs button { border: 0; background: none; padding: 10px 22px; font: inherit; font-size: 15px; font-weight: 700; color: var(--ink3); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+.fv-tabs button:hover { color: var(--ink); }
+.fv-tabs button.on { color: var(--ink); border-bottom-color: var(--ac); }
+.fi-chk { flex: 1 1 100%; flex-direction: row !important; align-items: center; }
+.fi-fixed { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.fi-fixed li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line2); }
+.fi-table td:nth-child(4), .fi-table td:nth-child(5) { text-align: left; }

@@ -6,6 +6,7 @@ import { catsOf, delExpense, setExpenseCat, setExpenseProject, won } from './fin
 import FinanceCats from './FinanceCats.jsx';
 import { CardImport, MonthlyLedger } from './FinanceMonthly.jsx';
 import ProjectReport from './ProjectReport.jsx';
+import FinanceIncome from './FinanceIncome.jsx';
 
 /* 개인 › 개인 재무 전용 화면: 지출 관리 + 구매해야 할 물품 (대시보드와 같은 데이터)
    "지출 카테고리 설정" 버튼 → FinanceCats 상세 페이지 (카테고리 이름 · 월 예산 · 포함 범위) */
@@ -20,6 +21,7 @@ export default function FinanceView({ area, cat }) {
   const firstMonth = f.expenses.some(e => e.date.startsWith(ym)) ? ym : f.expenses.map(e => e.date.slice(0, 7)).sort().pop() || ym;
   const month = ui.month || firstMonth;
   const setMonth = m => setUi({ month: m });
+  const tab = ui.tab || 'expense';                        // 상단 탭: income 수입관리 · expense 지출관리
   const view = ui.view || 'date';
   const setView = v => setUi({ view: v });
   const closed = new Set(ui.closed || []);
@@ -94,9 +96,15 @@ export default function FinanceView({ area, cat }) {
     <div className="catv fv" style={{ '--ac': areaVar(area) }}>
       <header className="page-h fv-head">
         <h1 className="area-title">{cat}</h1>
-        <button className="btn" onClick={() => setPage('cats')}>지출 카테고리 설정</button>
+        {tab === 'expense' && <button className="btn" onClick={() => setPage('cats')}>지출 카테고리 설정</button>}
       </header>
 
+      <div className="fv-tabs" role="tablist" aria-label="개인 재무 보기">
+        {[['income', '수입관리'], ['expense', '지출관리']].map(([k, n]) => (
+          <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setUi({ tab: k })}>{n}</button>))}
+      </div>
+
+      {tab === 'income' ? <FinanceIncome f={f} update={update} today={today} month={month} setMonth={setMonth} months={months} /> : <>
       <div className="hv-stats">
         <div className="hv-stat sl"><span className="muted">{month === ym ? '이번 달' : month.replace('-', '년 ') + '월'} 지출</span><b>{won(total)}</b><span className="hv-sub">{monthExp.length}건</span></div>
         <div className={`hv-stat ${ratio > 1 ? 'over' : 'sl'}`}>
@@ -159,6 +167,7 @@ export default function FinanceView({ area, cat }) {
       </section>
 
       <LinkedProjects f={f} update={update} now={now} />
+      </>}
     </div>
   );
 }

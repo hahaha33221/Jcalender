@@ -401,37 +401,4 @@ export const TOOL_CONFIGS = {
     breakdown: { label: '회사별 연락처', by: 'company', fmt: 'count' },
     stats: rs => [{ label: '연락처', value: `${rs.length}명` }, { label: '회사', value: `${new Set(rs.map(r => r.company)).size}곳` }],
   },
-  'W|성과 기록·회고': {
-    intro: '주간·분기 회고로 목표 대비 결과를 정리하고 평가 자료를 준비합니다.', noun: '회고', title: 'period', tick: '한 주 돌아보기',
-    fields: [
-      { k: 'period', label: '기간', type: 'text', req: true, def: t => `${t.slice(0, 7)} 주간` },
-      { k: 'kind', label: '구분', type: 'select', options: ['주간', '분기', '연간'] },
-      { k: 'goal', label: '목표', type: 'text' },
-      { k: 'result', label: '결과', type: 'text' },
-      { k: 'score', label: '자기 평가', type: 'rating', def: 3 },
-    ],
-    seed: now => { const q = Math.floor(now.getMonth() / 3); return ids('wr', [
-      { period: `${now.getFullYear()} ${q}분기 (예시)`, kind: '분기', goal: '프로젝트 A 설계 완료', result: '설계 완료, 일정 1주 지연', score: 4 },
-      { period: '지난주 (예시)', kind: '주간', goal: '보고서 자동화', result: '70% 진행', score: 3 },
-      { period: '2주 전 (예시)', kind: '주간', goal: '요구사항 확정', result: '확정 완료', score: 5 },
-    ]); },
-    breakdown: { label: '구분별 평균 자기 평가', by: 'kind', value: 'score', fmt: v => `${v}점` },
-    stats: rs => [{ label: '회고', value: `${rs.length}건` }, { label: '평균 자기 평가', value: rs.length ? `${(sum(rs, 'score') / rs.length).toFixed(1)}점` : '-' }],
-  },
-  'W|급여/복지': {
-    intro: '월별 급여 명세와 복지 포인트를 기록하고 추이를 봅니다.', noun: '급여 명세', title: 'month', tick: '급여 명세 확인',
-    fields: [
-      { k: 'month', label: '지급일', type: 'date', req: true },
-      { k: 'gross', label: '세전', type: 'money' },
-      { k: 'deduct', label: '공제', type: 'money' },
-      { k: 'net', label: '실수령', type: 'money' },
-      { k: 'point', label: '복지 포인트 잔액', type: 'money' },
-    ],
-    seed: now => ids('wy', Array.from({ length: 6 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - i, 25); const gross = 4200000 + (i === 2 ? 600000 : 0);
-      return { month: iso(d) <= iso(now) ? iso(d) : iso(new Date(now.getFullYear(), now.getMonth() - i - 1, 25)), gross, deduct: Math.round(gross * 0.16), net: Math.round(gross * 0.84), point: 800000 - i * 60000 }; }).filter((r, i, a) => a.findIndex(x => x.month === r.month) === i)),
-    sort: (a, b) => b.month.localeCompare(a.month),
-    trend: { label: '월별 실수령액', date: 'month', value: 'net', unit: 'month', span: 6, fmt: 'money', tick: v => `${Math.round(v / 10000)}만` },
-    stats: (rs, c) => { const last = [...rs].sort((a, b) => b.month.localeCompare(a.month))[0] || {};
-      return [{ label: '최근 실수령', value: won(last.net), sub: last.month || '' }, { label: '올해 실수령 합', value: won(sum(rs.filter(r => r.month.startsWith(c.year)), 'net')) }, { label: '복지 포인트 잔액', value: won(last.point), sub: '연말 소멸 전 사용' }]; },
-  },
 };
