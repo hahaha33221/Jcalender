@@ -435,7 +435,8 @@ pre { margin: 6px 0 0; background: var(--code); border: 1px solid var(--line2); 
 /* 개인 재무 › 카테고리 예산 표시 · 지출 분류 바로 바꾸기 */
 .fv-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .fv-head .btn { margin-left: auto; }
-.fv-cbars li { grid-template-columns: 64px minmax(0, 1fr) auto; }
+.fv-cbars li { grid-template-columns: 84px minmax(0, 1fr) auto; }
+.fv-cbars .fv-bl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fv-cbars .fv-track { position: relative; overflow: visible; }
 .fv-cbars .fv-bv small { color: var(--ink3); font-weight: 400; }
 .fv-cap { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); margin-left: -1px; }

@@ -15,13 +15,28 @@ function decode(buf) {
   if (!/\uFFFD/.test(u)) return u.replace(/^\uFEFF/, '');
   try { return new TextDecoder('euc-kr').decode(buf); } catch (e) { return u; }
 }
-/** HTML 표(확장자만 .xls 인 파일) → 가장 큰 표의 행 */
+/** HTML 표 → 칸 배열. 병합 칸(rowspan·colspan)은 같은 글자로 풀어서 열 위치를 맞춘다 */
+function gridOf(t) {
+  const out = [];
+  [...t.rows].forEach((r, ri) => {
+    out[ri] ||= [];
+    let ci = 0;
+    [...r.cells].forEach(cell => {
+      while (out[ri][ci] !== undefined) ci++;
+      const v = cell.textContent.replace(/\s+/g, ' ').trim(), rs = cell.rowSpan || 1, cs = cell.colSpan || 1;
+      for (let y = 0; y < rs; y++) for (let x = 0; x < cs; x++) { (out[ri + y] ||= [])[ci + x] = v; }
+      ci += cs;
+    });
+  });
+  return out.map(r => Array.from(r, x => x ?? ''));
+}
+/** HTML 표(확장자만 .xls 인 파일) → 이용일·금액 머리글이 있는 표 중 가장 큰 표
+    (롯데카드 이용대금명세서: 요약 표 · 이용 내역 표 · 해외 이용 표 중 이용 내역 표. 해외 이용은 이용 내역에도 들어 있다) */
 function htmlRows(text) {
   const doc = new DOMParser().parseFromString(text, 'text/html');
-  const tables = [...doc.querySelectorAll('table')];
-  if (!tables.length) return null;
-  const t = tables.sort((a, b) => b.rows.length - a.rows.length)[0];
-  return [...t.rows].map(r => [...r.cells].map(c => c.textContent.replace(/\s+/g, ' ').trim()));
+  const grids = [...doc.querySelectorAll('table')].map(gridOf).sort((a, b) => b.length - a.length);
+  if (!grids.length) return null;
+  return grids.find(g => findHeader(g)) || grids[0];
 }
 
 /** 파일 → 표 [[셀...]] */
@@ -38,21 +53,30 @@ const H = {
   date: /^(이용|거래|승인|매출)(일|일자|일시|날짜)|^이용 ?일자?$|^날짜$/,
   time: /(이용|승인|거래)시간/,
   merchant: /가맹점|이용 ?하신 ?곳|이용처|사용처|상호|이용내역/,
-  amount: /(이용|승인|거래|결제)금액|^금액$|^이용 ?금액/,
+  amount: /(이용|승인|거래|결제)금액|^금액$|^이용 ?금액|이용총액/,
   status: /상태|취소|승인구분|결제구분|^구분$/,
   approval: /승인번호/,
   card: /이용카드|카드명|카드구분|카드번호/,
   plan: /할부|결제방법|이용구분/,
+  // 이용대금명세서 전용: 회차 · 이번 달 청구 원금 · 수수료
+  round: /^회차$/,
+  principal: /원금/,
+  fee: /수수료/,
 };
-const BAD = { merchant: /번호|정보|업종|주소|코드|전화/, amount: /할인|포인트|수수료|예정|잔액|원금|해외|환율|외화|이자|적립/ };
+const BAD = { merchant: /번호|정보|업종|주소|코드|전화/, amount: /할인|포인트|수수료|예정|잔액|원금|해외|환율|외화|이자|적립/, plan: /회차/, fee: /해외/ };
 
-/** 머리글 줄과 열 위치 찾기 (처음 40줄 안에서 날짜·금액 머리글이 함께 있는 줄) */
+/** 머리글 줄과 열 위치 찾기 (처음 40줄 안에서 날짜·금액 머리글이 함께 있는 줄)
+    바로 아래 줄이 날짜가 아닌 작은 머리글(예: 이번 달 입금하실 금액 → 원금 · 수수료)이면 합쳐서 본다 */
 function findHeader(rows) {
   for (let i = 0; i < Math.min(40, rows.length); i++) {
-    const h = rows[i].map(x => String(x ?? '').replace(/\s+/g, ' ').trim());
+    const clean = r => (r || []).map(x => String(x ?? '').replace(/\s+/g, ' ').trim());
+    let h = clean(rows[i]), skip = 0;
+    const sub = clean(rows[i + 1]);
+    const isData = (rows[i + 1] || []).some(x => (typeof x === 'number' ? x > 20000 && x < 80000 : cardDate(x, 2000)));   // 날짜(엑셀 날짜 숫자 포함)가 있으면 자료 줄
+    if (sub.length && !isData && sub.some((x, k) => x && x !== h[k])) { h = h.map((x, k) => (sub[k] && sub[k] !== x ? `${x} ${sub[k]}` : x)); skip = 1; }
     const col = k => h.findIndex(x => x && H[k].test(x.replace(/\s/g, '')) && !(BAD[k] && BAD[k].test(x)));
     const c = Object.fromEntries(Object.keys(H).map(k => [k, col(k)]));
-    if (c.date >= 0 && c.amount >= 0) return { i, c };
+    if (c.date >= 0 && (c.amount >= 0 || c.principal >= 0)) return { i: i + skip, c };
   }
   return null;
 }
@@ -76,34 +100,55 @@ const money = v => (typeof v === 'number' ? v : Number(String(v ?? '').replace(/
 function detectCompany(pick, fileName, rows) {
   if (pick && pick !== 'auto') return pick;
   const hay = `${fileName} ${rows.slice(0, 10).flat().join(' ')}`;
-  if (/롯데|lotte/i.test(hay)) return '롯데카드';
+  if (/롯데카드|lotte|로카|LOCA/i.test(hay)) return '롯데카드';
   if (/국민|KB|kbcard/i.test(hay)) return 'KB국민카드';
   return '카드';
 }
 
-/** 표 → { company, items: [{ key, date, amount, merchant, cat, card, plan }], cancelled, skipped } */
-export function parseCardRows(rows, { pick = 'auto', fileName = '', year = new Date().getFullYear(), guess = () => '기타' } = {}) {
+/** 표 → { company, statement, billTotal, stmtDate, items: [{ key, date, amount, merchant, cat, card, plan }], cancelled, skipped }
+    이용대금명세서(원금 열이 있는 표)는 줄마다 이렇게 넣는다
+    - 일시불: 원금 (이번 달 청구 금액 = 이용 금액)
+    - 할부 installment='bill' (기본): 이번 달 청구분 = 원금 + 수수료, 날짜는 명세서 기준일(표에서 가장 늦은 이용일), 회차마다 따로
+      → 가져온 합계가 명세서 청구 합계와 같다
+    - 할부 installment='use': 이용총액 전체를 이용일에 한 번만 (다음 달 명세서의 같은 할부는 중복으로 건너뜀) */
+export function parseCardRows(rows, { pick = 'auto', fileName = '', year = new Date().getFullYear(), guess = () => '기타', installment = 'bill' } = {}) {
   const found = findHeader(rows);
   if (!found) throw new Error('이용일·이용금액 머리글을 찾지 못했습니다. 카드사 이용내역 엑셀 파일인지 확인해 주세요');
   const { i, c } = found, company = detectCompany(pick, fileName, rows);
+  const statement = c.principal >= 0;
   const get = (r, k) => (c[k] >= 0 ? r[c[k]] ?? '' : '');
-  const items = [], seen = new Set();
-  let cancelled = 0, skipped = 0;
-  rows.slice(i + 1).forEach(r => {
+  const body = rows.slice(i + 1).filter(r => {
     const first = String(r.find(x => String(x ?? '').trim()) ?? '');
-    if (!first || /합계|소계|총계|총 ?이용/.test(first)) return;
-    const date = cardDate(get(r, 'date'), year), amount = money(get(r, 'amount'));
-    if (!date || !amount) { if (r.some(x => String(x ?? '').trim())) skipped++; return; }
-    const st = `${get(r, 'status')} ${get(r, 'plan')}`;
-    if (amount < 0 || /취소|거절|승인거절|환불/.test(st)) { cancelled++; return; }
-    const merchant = String(get(r, 'merchant') || '').trim() || '카드 결제';
-    const appr = String(get(r, 'approval') || '').trim();
-    const key = `${company}|${appr || `${date}|${amount}|${merchant}`}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    items.push({ key, date, amount: Math.round(amount), merchant, cat: guess(merchant), card: String(get(r, 'card') || '').trim(), plan: String(get(r, 'plan') || '').trim() });
+    return first && !/합계|소계|총계|총 ?이용/.test(first);
   });
-  return { company, items, cancelled, skipped };
+  const stmtDate = body.map(r => cardDate(get(r, 'date'), year)).filter(Boolean).sort().pop() || '';
+  const items = [], used = {};
+  let cancelled = 0, skipped = 0, billTotal = 0;
+  body.forEach(r => {
+    const useDate = cardDate(get(r, 'date'), year);
+    const merchant = String(get(r, 'merchant') || '').trim() || '카드 결제';
+    const round = money(get(r, 'round')), months = money(get(r, 'plan'));
+    const inst = statement && round > 0;
+    const bill = statement ? money(get(r, 'principal')) + money(get(r, 'fee')) : 0;
+    let date = useDate, amount, tag = '';
+    if (!statement) amount = money(get(r, 'amount'));
+    else if (!inst) amount = money(get(r, 'principal')) || money(get(r, 'amount'));
+    else if (installment === 'use') { amount = money(get(r, 'amount')); tag = ` (할부 ${months}개월)`; }
+    else { amount = bill; date = stmtDate || useDate; tag = ` (할부 ${round}/${months}회차)`; }
+    if (!useDate || !amount) { if (r.some(x => String(x ?? '').trim())) skipped++; return; }
+    const st = `${get(r, 'status')} ${statement ? '' : get(r, 'plan')}`;
+    if (amount < 0 || /취소|거절|승인거절|환불/.test(st)) { cancelled++; return; }
+    billTotal += bill;
+    // 중복 방지 key: 승인번호, 없으면 이용일·금액·가맹점(할부 청구분은 회차까지)
+    // 같은 날 같은 곳에서 같은 금액을 여러 번 쓴 경우는 #2, #3 … 으로 구분 (같은 파일을 다시 올려도 같은 key)
+    const appr = String(get(r, 'approval') || '').trim();
+    const base = `${company}|${appr || `${useDate}|${inst && installment !== 'use' ? `${money(get(r, 'amount'))}|${round}` : amount}|${merchant}`}`;
+    used[base] = (used[base] || 0) + 1;
+    if (inst && installment === 'use' && used[base] > 1) return;
+    const key = used[base] > 1 ? `${base}#${used[base]}` : base;
+    items.push({ key, date, amount: Math.round(amount), merchant: merchant + tag, cat: guess(merchant), card: String(get(r, 'card') || '').trim(), plan: String(get(r, 'plan') || '').trim() });
+  });
+  return { company, statement, billTotal: Math.round(billTotal), stmtDate, items, cancelled, skipped };
 }
 
 /** 지출 내역에 합치기: 이미 있는 key 는 건너뛰고, 처음 가져올 때 예시 지출은 지운다 */
