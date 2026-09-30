@@ -33,26 +33,25 @@ export default function FinanceView({ area, cat }) {
 
   const setBudget = v => update(x => ({ ...x, budget: Math.max(0, Number(v) || 0) }));
 
-  // 지출 내역 필터: 기간(선택한 달 / 전체) · 검색어 · 분류 · 카드 · 연계 프로젝트 · 금액 범위
-  const F0 = { period: 'month', q: '', cat: '', card: '', proj: '', min: '', max: '' };
-  const [flt, setFlt] = useState(F0);
-  const fset = patch => setFlt(x => ({ ...x, ...patch }));
-  const filtering = Object.keys(F0).some(k => k !== 'period' && flt[k] !== '');
-  const base = flt.period === 'all' ? [...f.expenses].sort((a, b) => b.date.localeCompare(a.date)) : monthExp;
-  const q = flt.q.trim().toLowerCase();
-  const list = base.filter(e => (!q || `${e.memo || ''} ${e.card || ''}`.toLowerCase().includes(q))
-    && (!flt.cat || e.cat === flt.cat)
-    && (!flt.card || (flt.card === '직접 입력' ? !e.card : e.card === flt.card))
-    && (!flt.proj || (flt.proj === 'none' ? !e.projectId : e.projectId === flt.proj))
-    && (flt.min === '' || e.amount >= Number(flt.min)) && (flt.max === '' || e.amount <= Number(flt.max)));
-  const listTotal = list.reduce((a, e) => a + e.amount, 0);
-  const cardOpts = [...new Set(f.expenses.map(e => e.card || '직접 입력'))];
-  const catOpts = [...new Set([...cats.map(c => c.name), ...base.map(e => e.cat)])];
+  // 지출 내역 정렬: 머리글(날짜 · 분류 · 내용 · 연계 프로젝트 · 금액)을 누르면 오름차순 ↔ 내림차순
+  const [sort, setSort] = useState({ key: 'date', dir: 'desc' });
+  const sortBy = key => setSort(x => (x.key === key ? { key, dir: x.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'date' || key === 'amount' ? 'desc' : 'asc' }));
+  const pname = e => (f.projects || []).find(p => p.id === e.projectId)?.name || '';
+  const val = { date: e => e.date, cat: e => e.cat, memo: e => e.memo || '', proj: pname, amount: e => e.amount };
+  const cmp = (a, b) => {
+    const x = val[sort.key](a), y = val[sort.key](b);
+    if (sort.key === 'proj' && !x !== !y) return !x ? 1 : -1;                      // 프로젝트 없는 줄은 항상 아래
+    const r = typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'ko');
+    return (sort.dir === 'asc' ? r : -r) || b.date.localeCompare(a.date);
+  };
+  const list = [...monthExp].sort(cmp);
+  const listTotal = total;
+  const catOpts = [...new Set([...cats.map(c => c.name), ...monthExp.map(e => e.cat)])];
   // 지출 내역: 날짜순 / 카테고리별(분류마다 모아 합계 · 비율, 접고 펴기)
   const groups = catOpts.map(c => { const g = list.filter(e => e.cat === c); return { c, list: g, v: g.reduce((t, e) => t + e.amount, 0) }; })
     .filter(g => g.list.length).sort((a, b) => b.v - a.v);
   const showCat = c => {                                   // 분류별 지출 막대를 누르면 그 분류 묶음으로
-    setView('cat'); setFocus(c); setFlt(x => ({ ...x, cat: '' })); setClosed(s0 => { const n = new Set(s0); n.delete(c); return n; });
+    setView('cat'); setFocus(c); setClosed(s0 => { const n = new Set(s0); n.delete(c); return n; });
     setTimeout(() => document.getElementById(`fv-g-${c}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   };
   // 연계 프로젝트: 줄마다 고르기, "+ 새 프로젝트…" 로 바로 만들어 붙이기
@@ -64,8 +63,8 @@ export default function FinanceView({ area, cat }) {
     const id = Math.random().toString(36).slice(2, 10);
     update(x => setExpenseProject({ ...x, projects: [...(x.projects || []), { id, name, note: '', updated: today }] }, e.id, id));
   };
-  const row = e => (
-    <tr key={e.id}><td>{flt.period === 'all' ? e.date.slice(2).replace(/-/g, '/') : e.date.slice(5).replace('-', '/')}</td>
+  const row = (e, i) => (
+    <tr key={e.id}><td className="fv-no">{i + 1}</td><td>{e.date.slice(5).replace('-', '/')}</td>
       <td><select className="fv-cat" value={e.cat} onChange={ev => update(x => setExpenseCat(x, e.id, ev.target.value))} aria-label={`${e.memo || '지출'} 분류`}>
         {[...new Set([...cats.map(c => c.name), e.cat])].map(c => <option key={c}>{c}</option>)}</select></td>
       <td>{e.memo || '-'}{e.shopId && <span className="tag">구매 목록</span>}{e.card && <span className="tag">{e.card}</span>}</td>
@@ -75,6 +74,12 @@ export default function FinanceView({ area, cat }) {
       <td><button className="tl-del" onClick={() => update(x => delExpense(x, e.id))}>{e.shopId ? '구매 취소' : '삭제'}</button></td></tr>
   );
 
+  const COLS = [['date', '날짜'], ['cat', '분류'], ['memo', '내용'], ['proj', '연계 프로젝트'], ['amount', '금액']];
+  const head = (
+    <tr><th className="fv-no">No.</th>{COLS.map(([k, n]) => (
+      <th key={k} aria-sort={sort.key === k ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'} className={`fv-sort ${k === 'amount' ? 'r' : ''}`}>
+        <button onClick={() => sortBy(k)} title={`${n} ${sort.key === k && sort.dir === 'asc' ? '내림차순' : '오름차순'}으로 정렬`}>{n}<i aria-hidden="true">{sort.key === k ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}</i></button></th>))}<th /></tr>
+  );
   if (page === 'cats') return <FinanceCats area={area} cat={cat} month={month} onBack={() => setPage('main')} />;
   return (
     <div className="catv fv" style={{ '--ac': areaVar(area) }}>
@@ -113,24 +118,15 @@ export default function FinanceView({ area, cat }) {
         <div className="csum-h"><h2>지출 내역</h2>
           <select value={month} onChange={e => setMonth(e.target.value)} aria-label="월 선택" className="fv-month">
             {months.map(m => <option key={m} value={m}>{m.replace('-', '년 ')}월</option>)}</select>
-          <span className="muted">{filtering || flt.period === 'all' ? `${list.length}건 · 합계 ${won(listTotal)}` : `합계 ${won(total)}`}</span>
+          <span className="muted">{monthExp.length}건 · 합계 {won(total)}</span>
           <div className="chips grow-r" role="group" aria-label="보기 방식">
             <button aria-pressed={view === 'date'} onClick={() => setView('date')}>날짜순</button>
             <button aria-pressed={view === 'cat'} onClick={() => setView('cat')}>카테고리별</button>
           </div></div>
-        <div className="fv-filter" role="search" aria-label="지출 내역 필터">
-          <select value={flt.period} onChange={e => fset({ period: e.target.value })} aria-label="기간"><option value="month">선택한 달</option><option value="all">전체 기간</option></select>
-          <input type="search" value={flt.q} onChange={e => fset({ q: e.target.value })} placeholder="내용 검색 (가맹점)" aria-label="내용 검색" className="fv-fq" />
-          <select value={flt.cat} onChange={e => fset({ cat: e.target.value })} aria-label="분류 필터"><option value="">분류 전체</option>{catOpts.map(c => <option key={c}>{c}</option>)}</select>
-          <select value={flt.card} onChange={e => fset({ card: e.target.value })} aria-label="카드 필터"><option value="">카드 전체</option>{cardOpts.map(c => <option key={c}>{c}</option>)}</select>
-          <select value={flt.proj} onChange={e => fset({ proj: e.target.value })} aria-label="연계 프로젝트 필터"><option value="">프로젝트 전체</option><option value="none">프로젝트 없음</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
-          <span className="fv-frange"><MoneyInput value={flt.min} onChange={v => fset({ min: v })} placeholder="최소 금액" aria-label="최소 금액" />~<MoneyInput value={flt.max} onChange={v => fset({ max: v })} placeholder="최대 금액" aria-label="최대 금액" /></span>
-          {(filtering || flt.period === 'all') && <button className="btn sm" onClick={() => setFlt(F0)}>필터 초기화</button>}
-        </div>
-        {!list.length ? <p className="muted">{base.length ? '필터에 맞는 지출이 없습니다.' : '이 달의 지출 내역이 없습니다.'}</p>
+        {!list.length ? <p className="muted">이 달의 지출 내역이 없습니다.</p>
           : view === 'date' ? (
             <div className="tablewrap"><table className="prog fv-table">
-              <thead><tr><th>날짜</th><th>분류</th><th>내용</th><th>연계 프로젝트</th><th>금액</th><th /></tr></thead>
+              <thead>{head}</thead>
               <tbody>{list.map(row)}</tbody>
             </table></div>
           ) : (
@@ -144,6 +140,7 @@ export default function FinanceView({ area, cat }) {
                   <b className="fv-gsum">{won(g.v)}</b>
                 </summary>
                 <div className="tablewrap"><table className="prog fv-table">
+                  <thead>{head}</thead>
                   <tbody>{g.list.map(row)}</tbody>
                 </table></div>
               </details>))}

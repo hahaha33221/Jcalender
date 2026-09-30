@@ -466,7 +466,7 @@ b.fc-name { padding: 0 6px; }
 .fc-new > input { flex: 1 1 180px; width: auto; }
 @media (max-width: 700px) { .fc-kw { padding-left: 0; } .fc-name { width: 120px; } }
 .fv-table td.num { text-align: right; white-space: nowrap; }
-.fv-table td:nth-child(3) { text-align: left; }
+.fv-table td:nth-child(4) { text-align: left; }
 .fv-table .tag { margin-left: 6px; }
 @media (max-width: 1100px) { .fv-grid { grid-template-columns: minmax(0, 1fr); } }
 
@@ -942,10 +942,10 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .fv-proj { width: auto; max-width: 150px; padding: 2px 6px; font-size: 12.5px; color: var(--ink3); }
 .fv-proj.on { color: var(--ink); font-weight: 700; border-color: var(--ac); }
 .fp-sum { font-size: 12.5px; color: var(--ink2); white-space: nowrap; }
-/* 지출 내역 필터 */
-.fv-filter { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 12px; padding: 8px 10px; background: var(--paper); border-radius: 8px; }
-.fv-filter select, .fv-filter input { width: auto; padding: 4px 8px; font-size: 13px; }
-.fv-fq { flex: 1 1 160px; min-width: 120px; }
-.fv-frange { display: inline-flex; align-items: center; gap: 4px; color: var(--ink3); }
-.fv-frange input { width: 100px; text-align: right; }
-@media (max-width: 600px) { .fv-filter select { flex: 1 1 45%; min-width: 0; } .fv-frange { flex: 1 1 100%; min-width: 0; } .fv-frange input { flex: 1 1 0; width: 0; min-width: 0; } }
+/* 지출 내역 정렬 머리글 · 번호 */
+.fv-sort button { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.fv-sort button:hover { color: var(--ac); }
+.fv-sort i { font-style: normal; font-size: 10px; color: var(--ink3); }
+.fv-sort[aria-sort="ascending"] i, .fv-sort[aria-sort="descending"] i { color: var(--ac); }
+.fv-sort.r { text-align: right; }
+.fv-no { width: 40px; text-align: center; color: var(--ink3); font-variant-numeric: tabular-nums; }
