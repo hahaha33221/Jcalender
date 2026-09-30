@@ -120,17 +120,6 @@ export default function RelationView({ area, cat }) {
         <div className="hv-stat sl"><span className="muted">명함 등록</span><b>{people.filter(p => p.card).length}장</b><span className="hv-sub">명함을 누르면 크게 봅니다</span></div>
       </div>
 
-      <section className="panel">
-        <div className="csum-h"><h2>다가오는 생일·기념일</h2><span className="muted">30일 이내 · 가까운 순</span></div>
-        {soon.length ? (
-          <ul className="rv-ev">{soon.map((e, i) => (
-            <li key={`${e.p.id}-${i}`} className={e.dday <= 3 ? 'hot' : ''}>
-              <b className="rv-dd">{dd(e.dday)}</b>
-              <span className="rv-dn"><b>{e.p.name}</b><small>{e.kind}{e.years > 0 ? ` ${e.years}주년` : ''} · {fmt(e.date)}</small></span>
-              {e.p.phone && <a className="btn sm primary" href={`tel:${telOf(e.p.phone)}`}>전화하기</a>}
-            </li>))}</ul>
-        ) : <p className="muted">30일 이내 생일·기념일이 없습니다.</p>}
-      </section>
 
       <section className="panel">
         <div className="csum-h"><h2>연락처</h2>
