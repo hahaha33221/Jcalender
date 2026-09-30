@@ -401,25 +401,6 @@ export const TOOL_CONFIGS = {
     breakdown: { label: '회사별 연락처', by: 'company', fmt: 'count' },
     stats: rs => [{ label: '연락처', value: `${rs.length}명` }, { label: '회사', value: `${new Set(rs.map(r => r.company)).size}곳` }],
   },
-  'W|업무 인맥/네트워킹': {
-    intro: '행사·모임에서 만난 사람과 후속 연락 계획을 관리합니다.', noun: '만남', title: 'name', tick: '만남 후 메모',
-    fields: [
-      { k: 'name', label: '이름', type: 'text', req: true },
-      { k: 'where', label: '만난 곳', type: 'text' },
-      { k: 'date', label: '만난 날', type: 'date' },
-      { k: 'follow', label: '후속 연락일', type: 'date', def: '' },
-      { k: 'phone', label: '전화', type: 'phone' },
-      { k: 'memo', label: '메모', type: 'text' },
-    ],
-    seed: now => ids('wn', [
-      { name: '정민재 (예시)', where: '업계 세미나', date: D(now, -10), follow: D(now, 3), phone: '010-4444-0001', memo: '데이터 분석 관심' },
-      { name: '한수진 (예시)', where: '스터디 모임', date: D(now, -25), follow: D(now, 10), phone: '010-4444-0002', memo: '이직 정보 공유' },
-      { name: '오태경 (예시)', where: '컨퍼런스', date: D(now, -60), follow: D(now, -5), phone: '010-4444-0003', memo: '' },
-    ]),
-    sort: (a, b) => String(b.date).localeCompare(String(a.date)),
-    upcoming: { field: 'follow', days: 30, past: 30, label: '후속 연락 예정', sub: r => r.where || '' },
-    stats: (rs, c) => [{ label: '올해 만난 사람', value: `${rs.filter(r => String(r.date).startsWith(c.year)).length}명` }, { label: '후속 연락 지남', value: `${rs.filter(r => r.follow && r.follow < c.today).length}명`, tone: rs.some(r => r.follow && r.follow < c.today) ? 'over' : 'sl' }],
-  },
   'W|성과 기록·회고': {
     intro: '주간·분기 회고로 목표 대비 결과를 정리하고 평가 자료를 준비합니다.', noun: '회고', title: 'period', tick: '한 주 돌아보기',
     fields: [
@@ -436,25 +417,6 @@ export const TOOL_CONFIGS = {
     ]); },
     breakdown: { label: '구분별 평균 자기 평가', by: 'kind', value: 'score', fmt: v => `${v}점` },
     stats: rs => [{ label: '회고', value: `${rs.length}건` }, { label: '평균 자기 평가', value: rs.length ? `${(sum(rs, 'score') / rs.length).toFixed(1)}점` : '-' }],
-  },
-  'W|커리어 목표 관리': {
-    intro: '필요한 역량의 현재 수준과 목표 수준을 비교하고 준비 계획을 세웁니다.', noun: '역량', title: 'skill', tick: '진행률 갱신',
-    fields: [
-      { k: 'skill', label: '역량', type: 'text', req: true },
-      { k: 'cur', label: '현재 수준', type: 'rating', def: 2 },
-      { k: 'target', label: '목표 수준', type: 'rating', def: 4 },
-      { k: 'plan', label: '준비 방법', type: 'text' },
-      { k: 'due', label: '목표 시점', type: 'date' },
-    ],
-    seed: now => ids('wk', [
-      { skill: '데이터 분석 (예시)', cur: 3, target: 5, plan: '온라인 강의 + 사내 프로젝트', due: D(now, 180) },
-      { skill: '리더십 (예시)', cur: 2, target: 4, plan: '파트 리드 맡기', due: D(now, 365) },
-      { skill: '영어 커뮤니케이션 (예시)', cur: 3, target: 4, plan: '주 2회 회화', due: D(now, 120) },
-      { skill: '프로젝트 관리 (예시)', cur: 4, target: 4, plan: '자격증 유지', due: '' },
-    ]),
-    progress: { label: '목표 수준 대비 현재', name: 'skill', cur: 'cur', target: 'target', fmt: (c, t) => `${c} / ${t}단계` },
-    upcoming: { field: 'due', days: 200, label: '목표 시점', sub: r => r.plan || '' },
-    stats: rs => [{ label: '역량', value: `${rs.length}개` }, { label: '목표 도달', value: `${rs.filter(r => Number(r.cur) >= Number(r.target)).length}개`, tone: 'ex' }, { label: '남은 격차', value: `${rs.reduce((a, r) => a + Math.max(0, Number(r.target) - Number(r.cur)), 0)}단계` }],
   },
   'W|급여/복지': {
     intro: '월별 급여 명세와 복지 포인트를 기록하고 추이를 봅니다.', noun: '급여 명세', title: 'month', tick: '급여 명세 확인',
