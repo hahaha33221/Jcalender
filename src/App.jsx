@@ -15,6 +15,7 @@ import { mockAi, mockApi } from './mock.js';
 import { SpeechRec, parseKoEvent } from './voice.js';
 import { HOLIDAYS } from './holidays.js';
 import { annivOn, nextAnniv, seedAnniv } from './anniv.js';
+import { ddayText, planDueSoon } from './categories/PlanResearchView.jsx';
 
 /* ───────────────────────── 공통 ───────────────────────── */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -214,10 +215,27 @@ function Home() {
       </div>
       <Calendar sel={sel} setSel={setSel} />
       <AnnivStrip />
+      <PlanDueStrip />
       <ShoppingList compact />
       {dueToday.map(c => <CycleSummary key={c} c={c} hot title={`오늘은 ${CYCLES[c]}일입니다`} note={`${dueRule(c)} 도래 · 기간 ${periodKey(c, now)}`} />)}
       <DashYearGantt />
     </>
+  );
+}
+
+/* 마감 임박 기획·조사 (7일 이내, 지난 것 포함). 없으면 숨긴다 */
+function PlanDueStrip() {
+  const { store, now, openCat } = useCtx();
+  const list = planDueSoon(store.plan, iso(now));
+  if (!list.length) return null;
+  return (
+    <section className="panel dash-plan" aria-label="마감 임박 기획·조사">
+      <div className="csum-h"><h2>마감 임박 기획·조사</h2><span className="muted">D-7 이내 · {list.length}건</span>
+        <button className="btn sm" onClick={() => openCat('W', '기획·조사')}>기획·조사</button></div>
+      <ul>{list.map(x => (
+        <li key={x.id}><b className={`pr-dd ${x.d < 0 ? 'late' : x.d <= 3 ? 'soon' : ''}`}>{ddayText(x.d)}</b>
+          <span className="tag">{x.kind}</span><span className="grow">{x.title}</span><span className="muted">{x.status}</span></li>))}</ul>
+    </section>
   );
 }
 
