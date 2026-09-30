@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { iso } from '../data.js';
-import { ANNIV_HEAD, ANNIV_KINDS, mergeAnniv, nextAnniv, parseAnnivRows, replaceAnniv } from '../anniv.js';
+import { ANNIV_HEAD, ANNIV_KINDS, annivDateText, lunarTag, mergeAnniv, nextAnniv, parseAnnivRows, replaceAnniv } from '../anniv.js';
 import { WEEK, areaVar, useCtx } from '../shared.jsx';
 import { download, excelDate, readXlsx, writeXlsx } from '../xlsx.js';
 import { parseCsv } from './samsungHealth.js';
@@ -31,7 +31,7 @@ export default function AnnivView({ area, cat, group }) {
             <div key={a.id} className={`anniv-card ${n.dday === 0 ? 'hot' : n.dday <= 3 ? 'soon' : ''}`}>
               <b className="anniv-d">{n.dday === 0 ? '오늘' : `D-${n.dday}`}</b>
               <span className="anniv-n">{a.name}</span>
-              <span className="anniv-m">{a.kind} · {fmtMD(n.date)}{a.kind === '기념일' && n.years > 0 ? ` · ${n.years}주년` : ''}{a.person ? ` · ${a.person}` : ''}</span>
+              <span className="anniv-m">{a.kind} · {fmtMD(n.date)}{lunarTag(a)}{a.kind === '기념일' && n.years > 0 ? ` · ${n.years}주년` : ''}{a.person ? ` · ${a.person}` : ''}</span>
             </div>))}</div>
         ) : <p className="muted anniv-empty">{store.annivDays}일 이내에 다가오는 기념일이 없습니다.</p>}
       </section>
@@ -42,7 +42,7 @@ export default function AnnivView({ area, cat, group }) {
           <div key={m.getMonth()} className={`anniv-month ${list.length ? '' : 'none'}`}>
             <b>{m.getFullYear() !== now.getFullYear() ? `${m.getFullYear()}년 ` : ''}{m.getMonth() + 1}월</b>
             {list.length ? list.map(({ a, n }) => (
-              <span key={a.id}><em>{n.date.getDate()}일</em> {a.name}<small>{a.person ? ` · ${a.person}` : ''} · D-{n.dday}</small></span>
+              <span key={a.id}><em>{n.date.getDate()}일</em> {a.name}<small>{lunarTag(a)}{a.person ? ` · ${a.person}` : ''} · D-{n.dday}</small></span>
             )) : <span className="muted">없음</span>}
           </div>))}</div>
       </section>
@@ -64,12 +64,14 @@ function templateFile(list = []) {
     '[날짜] YYYY-MM-DD\n처음 날짜 (예: 1990-09-30)\n1990.9.30, 1990/9/30도 가능',
     '[종류] 생일 또는 기념일\n비우면 생일\n기념일은 처음 연도로 주년 계산',
     '[매년 반복] O 또는 X\nO = 매년 반복, X = 한 번만\n비우면 O',
+    '[양력/음력] 양력 또는 음력\n비우면 양력\n연도를 모르면 날짜에 "10월 1일"',
   ];
   return writeXlsx([{
-    name: '기념일', cols: [30, 30, 30, 30, 26], grid: false, header: 1, blank: 30,
+    name: '기념일', cols: [30, 30, 30, 30, 26, 26], grid: false, header: 1, blank: 30,
     rowStyle: { 0: 2 }, heights: { 0: 54, 1: 22 },
-    rows: [desc, ANNIV_HEAD, ['홍길동 생일 (예시)', '홍길동 (대학 동기)', '1990-09-30', '생일', 'O'], ['결혼기념일 (예시)', '배우자', '2016-10-07', '기념일', 'O'],
-      ...list.filter(a => !/\(예시\)$/.test(a.name)).sort((a, b) => a.date.slice(5).localeCompare(b.date.slice(5))).map(a => [a.name, a.person || '', a.date, a.kind, a.yearly ? 'O' : 'X'])],
+    rows: [desc, ANNIV_HEAD, ['홍길동 생일 (예시)', '홍길동 (대학 동기)', '1990-09-30', '생일', 'O', '양력'], ['어머니 생신 (예시)', '어머니', '10월 1일', '생일', 'O', '음력'],
+      ...list.filter(a => !/\(예시\)$/.test(a.name)).sort((a, b) => a.date.slice(5).localeCompare(b.date.slice(5)))
+        .map(a => [a.name, a.person || '', a.noYear ? `${a.leap ? '윤' : ''}${Number(a.date.slice(5, 7))}월 ${Number(a.date.slice(8, 10))}일` : a.date, a.kind, a.yearly ? 'O' : 'X', a.lunar ? '음력' : '양력'])],
   }]);
 }
 
@@ -122,7 +124,7 @@ function AnnivExcel() {
       <p className="note">{mode === 'replace'
         ? '전체 바꾸기: 기념일 목록이 엑셀 내용과 똑같아집니다. 엑셀에 없는 기념일은 삭제되고(확인 후), 이름과 날짜가 같은 기념일은 엑셀 값으로 수정됩니다.'
         : '추가·수정만: 엑셀에 있는 기념일만 추가하거나 수정하고, 엑셀에 없는 기념일은 그대로 둡니다. 예시 기념일은 지워집니다.'}
-        {' '}양식에는 지금 등록된 기념일이 들어 있으니 고쳐서 그대로 올리면 됩니다. 열: 이름 · 관련 인물 · 날짜 · 종류(생일/기념일) · 매년 반복(O/X).</p>
+        {' '}양식에는 지금 등록된 기념일이 들어 있으니 고쳐서 그대로 올리면 됩니다. 열: 이름 · 관련 인물 · 날짜 · 종류(생일/기념일) · 매년 반복(O/X) · 양력/음력. "양력/음력 · 날짜 · 내용"만 있는 표도 올릴 수 있고, 날짜는 연도 없이 "10월 1일"로 적어도 됩니다.</p>
     </section>
   );
 }
@@ -130,7 +132,7 @@ function AnnivExcel() {
 /* 기념일 목록 편집 (표시 기간, 수정, 삭제, 추가) */
 function AnnivManager() {
   const { store, setStore, now } = useCtx();
-  const blank = { name: '', person: '', date: iso(now), kind: '생일', yearly: true };
+  const blank = { name: '', person: '', date: iso(now), kind: '생일', yearly: true, lunar: false, noYear: false };
   const [f, setF] = useState(blank);
   const setDays = v => setStore(s => ({ ...s, annivDays: Math.max(0, Math.min(365, Number(v) || 0)) }));
   const upd = (id, patch) => setStore(s => ({ ...s, anniv: s.anniv.map(a => (a.id === id ? { ...a, ...patch } : a)) }));
@@ -149,17 +151,19 @@ function AnnivManager() {
         <span><b>D-</b><input type="number" min="0" max="365" value={store.annivDays} onChange={e => setDays(e.target.value)} aria-label="며칠 전부터 표시" />일 전부터 표시</span></label>
       <div className="tablewrap">
         <table className="prog anniv-tb">
-          <thead><tr><th>이름</th><th>관련 인물</th><th>날짜</th><th>종류</th><th>매년</th><th>다음</th><th /></tr></thead>
+          <thead><tr><th>이름</th><th>관련 인물</th><th>양/음</th><th>날짜</th><th>종류</th><th>매년</th><th>다음</th><th /></tr></thead>
           <tbody>{sorted.map(a => {
             const n = nextAnniv(a, now);
             return (
               <tr key={a.id}>
                 <td><input value={a.name} onChange={e => upd(a.id, { name: e.target.value })} aria-label="이름" /></td>
                 <td><input value={a.person || ''} onChange={e => upd(a.id, { person: e.target.value })} placeholder="관련 인물" aria-label="관련 인물" /></td>
-                <td><input type="date" value={a.date} onChange={e => e.target.value && upd(a.id, { date: e.target.value })} aria-label="날짜" /></td>
+                <td><select value={a.lunar ? (a.leap ? 'L2' : 'L') : 'S'} onChange={e => upd(a.id, { lunar: e.target.value !== 'S', leap: e.target.value === 'L2' })} aria-label="양력/음력">
+                  <option value="S">양력</option><option value="L">음력</option><option value="L2">음력 윤달</option></select></td>
+                <td><DateCell a={a} onChange={patch => upd(a.id, patch)} /></td>
                 <td><select value={a.kind} onChange={e => upd(a.id, { kind: e.target.value })} aria-label="종류">{ANNIV_KINDS.map(k => <option key={k}>{k}</option>)}</select></td>
                 <td><input type="checkbox" checked={a.yearly} onChange={e => upd(a.id, { yearly: e.target.checked })} aria-label="매년 반복" /></td>
-                <td className="nowrap">{n ? (n.dday === 0 ? '오늘' : `D-${n.dday}`) : '지남'}</td>
+                <td className="nowrap">{n ? <>{n.dday === 0 ? '오늘' : `D-${n.dday}`}{a.lunar && <small className="muted"> · 양력 {n.date.getMonth() + 1}/{n.date.getDate()}</small>}</> : '지남'}</td>
                 <td><button className="btn sm" onClick={() => del(a.id)}>삭제</button></td>
               </tr>
             );
@@ -169,13 +173,29 @@ function AnnivManager() {
       <form className="anniv-add" onSubmit={add}>
         <input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="기념일 이름 (예: 아버지 생신)" aria-label="새 기념일 이름" />
         <input value={f.person} onChange={e => setF({ ...f, person: e.target.value })} placeholder="관련 인물 (예: 어머니)" aria-label="새 기념일 관련 인물" className="anniv-person" />
-        <input type="date" value={f.date} onChange={e => setF({ ...f, date: e.target.value })} aria-label="새 기념일 날짜" />
+        <select value={f.lunar ? 'L' : 'S'} onChange={e => setF({ ...f, lunar: e.target.value === 'L' })} aria-label="새 기념일 양력/음력"><option value="S">양력</option><option value="L">음력</option></select>
+        <DateCell a={f} onChange={patch => setF({ ...f, ...patch })} />
         <select value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })} aria-label="새 기념일 종류">{ANNIV_KINDS.map(k => <option key={k}>{k}</option>)}</select>
         <label className="chk"><input type="checkbox" checked={f.yearly} onChange={e => setF({ ...f, yearly: e.target.checked })} />매년</label>
         <button className="btn primary" disabled={!f.name.trim()}>추가</button>
       </form>
-      <p className="note">기념일 종류는 처음 날짜의 연도로 몇 주년인지 계산합니다. 매년 반복을 끄면 그 날짜 한 번만 표시됩니다.</p>
+      <p className="note">기념일 종류는 처음 날짜의 연도로 몇 주년인지 계산합니다(연도 모름이면 주년 없음). 매년 반복을 끄면 그 날짜 한 번만 표시됩니다. 음력은 해마다 양력 날짜로 바꿔 달력·D-day에 보여 줍니다.</p>
     </div>
   );
 }
 
+/** 날짜 칸: 연도를 알면 날짜 입력, 모르면 월·일만. "연도 모름" 체크로 바꾼다 */
+function DateCell({ a, onChange }) {
+  const [, m, d] = a.date.split('-').map(Number);
+  const setMD = (mm, dd) => { const dt = new Date(2000, mm - 1, dd); if (dt.getMonth() === mm - 1) onChange({ date: `2000-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}` }); };
+  return (
+    <span className="an-date">
+      {a.noYear
+        ? <span className="an-md"><input type="number" min="1" max="12" value={m} onChange={e => setMD(Number(e.target.value), d)} aria-label="월" />월
+            <input type="number" min="1" max={a.lunar ? 30 : 31} value={d} onChange={e => setMD(m, Number(e.target.value))} aria-label="일" />일</span>
+        : <input type="date" value={a.date} onChange={e => e.target.value && onChange({ date: e.target.value })} aria-label="날짜" />}
+      <label className="an-noyear"><input type="checkbox" checked={!!a.noYear} onChange={e => onChange({ noYear: e.target.checked, date: e.target.checked ? `2000-${a.date.slice(5)}` : `${new Date().getFullYear()}-${a.date.slice(5)}` })} />연도 모름</label>
+      {a.lunar && <small className="muted">{annivDateText(a)}</small>}
+    </span>
+  );
+}

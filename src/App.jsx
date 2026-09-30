@@ -15,7 +15,7 @@ import { AREAS, CYCLES, DEFAULT_RULES, ROWS, PRIO, defaultPrio, dueRule, isDue, 
 import { mockAi, mockApi } from './mock.js';
 import { SpeechRec, parseKoEvent } from './voice.js';
 import { HOLIDAYS } from './holidays.js';
-import { annivOn, nextAnniv, seedAnniv } from './anniv.js';
+import { annivOn, lunarTag, nextAnniv, replaceAnnivOnce, seedAnniv } from './anniv.js';
 import { FREQ, expandEvents, repeatText, skipDate } from './recur.js';
 import { ddayText, planDueSoon } from './categories/PlanResearchView.jsx';
 
@@ -47,14 +47,14 @@ function renameCats(st) {
   const mv = o => { if (!o) return o; const r = { ...o }; Object.entries(RENAMED_CATS).forEach(([a, b]) => { if (a in r) { if (!(b in r)) r[b] = r[a]; delete r[a]; } }); return r; };
   return { ...st, reviewed: mv(st.reviewed), goals: st.goals?.boards ? { ...st.goals, boards: mv(st.goals.boards) } : st.goals };
 }
-const seedAll = () => ({ ...INIT, financeCleared: true, financeCleared2: true, events: seedEvents(), anniv: seedAnniv(), health: seedHealth(), finance: seedFinance(), goals: seedGoals(), people: seedPeople(), leisure: seedLeisure(), journal: seedJournal() });
+const seedAll = () => ({ ...INIT, financeCleared: true, financeCleared2: true, annivV2: true, events: seedEvents(), anniv: seedAnniv(), health: seedHealth(), finance: seedFinance(), goals: seedGoals(), people: seedPeople(), leisure: seedLeisure(), journal: seedJournal() });
 
 function useStore() {
   const [store, setStore] = useState(() => {
     let v = null;
     try { v = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* 저장소 사용 불가 또는 손상 */ }
     const merged = renameCats({ ...INIT, ...(v || {}) });
-    return clearFinanceOnce({ ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: dropNoGoal(merged.goals ? addExampleGoals(migrateGoals(merged.goals)) : seedGoals()), people: merged.people ? migratePeople(merged.people, new Date()) : seedPeople(), leisure: merged.leisure ?? seedLeisure(), journal: merged.journal ?? seedJournal() });
+    return replaceAnnivOnce(clearFinanceOnce({ ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: dropNoGoal(merged.goals ? addExampleGoals(migrateGoals(merged.goals)) : seedGoals()), people: merged.people ? migratePeople(merged.people, new Date()) : seedPeople(), leisure: merged.leisure ?? seedLeisure(), journal: merged.journal ?? seedJournal() }));
   });
   const [persist, setPersist] = useState(true);
   useEffect(() => {
@@ -255,7 +255,7 @@ function AnnivStrip() {
           <div key={a.id} className={`anniv-card ${n.dday === 0 ? 'hot' : n.dday <= 3 ? 'soon' : ''}`}>
             <b className="anniv-d">{n.dday === 0 ? '오늘' : `D-${n.dday}`}</b>
             <span className="anniv-n">{a.name}</span>
-            <span className="anniv-m">{a.kind} · {fmtMD(n.date)}{a.kind === '기념일' && n.years > 0 ? ` · ${n.years}주년` : ''}{a.person ? ` · ${a.person}` : ''}</span>
+            <span className="anniv-m">{a.kind} · {fmtMD(n.date)}{lunarTag(a)}{a.kind === '기념일' && n.years > 0 ? ` · ${n.years}주년` : ''}{a.person ? ` · ${a.person}` : ''}</span>
           </div>))}</div>
       ) : <p className="muted anniv-empty">{days}일 이내에 다가오는 기념일이 없습니다.</p>}
     </section>

@@ -1227,3 +1227,8 @@ body.report-open { overflow: hidden; }
 .cal-rep { font-style: normal; font-size: 10px; color: var(--ink3); margin-right: 2px; }
 .tl-rep { display: inline-block; margin-left: 6px; font-size: 11px; color: var(--ink3); border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; }
 .ev-series { color: var(--ink2); background: var(--paper); border-radius: 6px; padding: 6px 8px; }
+/* 기념일 › 음력 · 연도 모름 */
+.an-date { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.an-md { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.an-md input { width: 52px; padding: 2px 4px; }
+.an-noyear { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--ink2); white-space: nowrap; }
