@@ -1265,3 +1265,16 @@ body.report-open { overflow: hidden; }
 .dd-mini span { font-size: 13px; }
 .dd-mini small { font-size: 11.5px; color: var(--ink3); }
 .cal-anniv.cal-dd { color: var(--ok); background: var(--oksoft); }
+/* 진행 현황 › 작업 기록 */
+.prog-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.prog-col > .panel { margin: 0; }
+.wl-q { flex: 0 1 160px; min-width: 0; width: auto; }
+.wl-g + .wl-g { margin-top: 6px; }
+.wl-h { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: var(--paper); border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 13.5px; color: var(--ink); cursor: pointer; text-align: left; }
+.wl-h i { font-style: normal; color: var(--ink3); width: 12px; }
+.wl-list { list-style: none; margin: 4px 0 0; padding: 0; font-size: 13px; }
+.wl-list li { display: grid; grid-template-columns: 26px auto minmax(0, 1fr); gap: 4px 8px; align-items: baseline; padding: 5px 4px; border-bottom: 1px solid var(--line2); }
+.wl-no { color: var(--ink3); text-align: right; font-variant-numeric: tabular-nums; }
+.wl-r { font-size: 11px; color: var(--ink3); background: var(--code); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+.wl-t { overflow-wrap: anywhere; }
+@media (max-width: 560px) { .wl-list li { grid-template-columns: 26px minmax(0, 1fr); } .wl-r { grid-column: 2; justify-self: start; } .wl-t { grid-column: 2; } }
