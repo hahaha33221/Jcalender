@@ -7,7 +7,7 @@ import { useCtx } from '../shared.jsx';
    2) 분석: 대기열에 들어오는 즉시 AI 로 분석 (설정 store.cardAi, src/cardAi.js)
    3) 온보딩: 명함마다 결과 확인 → 관계 → 생일·기념일 → 완료 순서로 묻고 저장, 다음 명함으로
    onSave(person, annivs) 로 연락처와 기념일 관리에 넣는다 */
-export const GROUPS = ['가족', '친구', '동료', '지인'];
+export const GROUPS = ['가족', '친구', '동료', '지인', '업무'];
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 /** 사진을 긴 변 1,000px 이하 JPEG 로 줄여 data URL 로 (브라우저 저장 공간 절약) */

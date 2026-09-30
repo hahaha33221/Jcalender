@@ -1134,3 +1134,30 @@ body.report-open { overflow: hidden; }
 @media (max-width: 900px) { .od-grid { grid-template-columns: minmax(0, 1fr); } .od-form { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .od-by { display: none; } }
 .od-table th:first-child button { justify-content: flex-start; } .od-table th:first-child { text-align: left; }
+/* 인맥 관리 › 엑셀 가져오기 */
+.ci { margin: 10px 0 14px; border: 1px solid var(--ac); }
+.ci-drop { display: flex; flex-direction: column; gap: 6px; align-items: center; text-align: center; padding: 26px 16px; border: 2px dashed var(--line); border-radius: 10px; cursor: pointer; font-size: 13.5px; }
+.ci-drop:hover, .ci-drop.over { border-color: var(--ac); background: var(--paper); }
+.ci-file { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; overflow-wrap: anywhere; }
+.ci-sheets td input:not([type=checkbox]) { width: 100%; min-width: 160px; }
+.ci-sheets td:nth-child(4) { text-align: right; }
+.ci-off td { color: var(--ink3); }
+.ci-opts { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 10px 0; font-size: 13px; }
+.ci-opts label { display: inline-flex; align-items: center; gap: 6px; }
+.ci-opts select { width: auto; }
+.ci-sum { margin: 6px 0 10px; }
+.ci-prev td { font-size: 12.5px; }
+.ci-prev td:nth-child(4) { text-align: left; }
+.ci-warn td { background: var(--oversoft); }
+.ci-flag { display: inline-block; margin-left: 6px; font-size: 10.5px; font-weight: 700; color: var(--over); border: 1px solid var(--over); border-radius: 8px; padding: 0 5px; vertical-align: middle; }
+.ci-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between; margin-top: 10px; }
+.ci-foot .note { flex: 1 1 260px; margin: 0; }
+.ci-done { color: var(--ok); font-weight: 700; margin: 0 0 8px; }
+.ci-last { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink2); margin: 6px 0; }
+.rv-co { width: auto; max-width: 220px; }
+.rv-count { font-size: 12.5px; margin: 4px 0 8px; }
+.rv-more { display: flex; gap: 8px; justify-content: center; margin: 12px 0 4px; }
+.rv-dept { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-wide { grid-column: 1 / -1; }
+.rv-chk { flex-direction: row !important; align-items: center; color: var(--over) !important; }
+.ci-prev .nw { white-space: nowrap; } .ci-prev td:last-child { font-size: 11.5px; }

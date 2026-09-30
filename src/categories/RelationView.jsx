@@ -2,10 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { iso } from '../data.js';
 import { WEEK, areaVar, useCtx } from '../shared.jsx';
 import CardScan, { GROUPS, shrinkImage } from './CardScan.jsx';
+import ContactImport, { undoImport } from './ContactImport.jsx';
 
 /* 개인 › 인맥 관리 전용 화면: 명함 촬영(AI 분석 · 온보딩) · 바로 전화하기 · 생일/기념일 · 명함
    people: [{ id, name, group, phone, company, title, email, address, birthday('YYYY-MM-DD'), annivName, annivDate,
-              card(명함 이미지 data URL) }]  (예전 memo · notes 는 쓰지 않음) */
+              card(명함 이미지 data URL),
+              엑셀로 가져온 사람은 dept(소속), phone2, tel(회사 전화), fax, email2, note(비고), check(번호 확인 필요), src(시트), importId 도 가짐 }]  (예전 memo · notes 는 쓰지 않음) */
 export { GROUPS };
 const uid = () => Math.random().toString(36).slice(2, 10);
 const telOf = p => (p || '').replace(/[^0-9+]/g, '');
@@ -76,7 +78,16 @@ export default function RelationView({ area, cat }) {
     p.annivDate && { p, kind: p.annivName || '기념일', ...nextDay(p.annivDate, today), years: nextDay(p.annivDate, today).date.getFullYear() - Number(p.annivDate.slice(0, 4)) },
   ].filter(Boolean)).sort((a, b) => a.dday - b.dday);
   const soon = events.filter(e => e.dday <= 30);
-  const shown = people.filter(p => (grp === 'ALL' || p.group === grp) && (!q || `${p.name} ${p.company} ${p.phone} ${p.email || ''}`.includes(q)));
+  const [co, setCo] = useState('');
+  const [limit, setLimit] = useState(24);
+  const [showImport, setShowImport] = useState(false);
+  const companies = Object.entries(people.reduce((m, p) => { if (p.company) m[p.company] = (m[p.company] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'));
+  const ql = q.trim().toLowerCase();
+  const matched = people.filter(p => (grp === 'ALL' || p.group === grp) && (!co || p.company === co)
+    && (!ql || [p.name, p.company, p.dept, p.title, p.phone, p.phone2, p.tel, p.email, p.email2, p.note].join(' ').toLowerCase().includes(ql)));
+  const shown = matched.slice(0, limit);
+  useEffect(() => { setLimit(24); }, [grp, co, q]);
+  const last = store.peopleImport;
 
   const upd = (id, patch) => setPeople(ps => ps.map(p => (p.id === id ? { ...p, ...patch } : p)));
   const pickCard = async (file, done) => {
@@ -105,6 +116,7 @@ export default function RelationView({ area, cat }) {
         <div className="hv-stat sl"><span className="muted">등록한 사람</span><b>{people.length}명</b><span className="hv-sub">{GROUPS.map(g => `${g} ${people.filter(p => p.group === g).length}`).join(' · ')}</span></div>
         <div className={`hv-stat ${soon.some(e => e.dday <= 7) ? 'over' : 'ex'}`}><span className="muted">30일 이내 생일·기념일</span><b>{soon.length}건</b>
           <span className="hv-sub">{soon[0] ? `${soon[0].p.name} ${soon[0].kind} ${dd(soon[0].dday)}` : '없음'}</span></div>
+        {people.some(p => p.check) && <div className="hv-stat over"><span className="muted">번호 확인 필요</span><b>{people.filter(p => p.check).length}명</b><span className="hv-sub">엑셀에서 번호가 깨진 사람 · 검색창에 "확인" 입력</span></div>}
         <div className="hv-stat sl"><span className="muted">명함 등록</span><b>{people.filter(p => p.card).length}장</b><span className="hv-sub">명함을 누르면 크게 봅니다</span></div>
       </div>
 
@@ -125,14 +137,22 @@ export default function RelationView({ area, cat }) {
           <div className="chips" role="group" aria-label="관계">
             {[['ALL', '전체'], ...GROUPS.map(g => [g, g])].map(([k, n]) => <button key={k} aria-pressed={grp === k} onClick={() => setGrp(k)}>{n}</button>)}
           </div>
-          <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="이름·회사·번호 검색" aria-label="연락처 검색" className="jv-q" /></div>
+          {companies.length > 1 && <select value={co} onChange={e => setCo(e.target.value)} aria-label="회사" className="rv-co">
+            <option value="">회사 전체</option>{companies.map(([c, n]) => <option key={c} value={c}>{c} ({n})</option>)}</select>}
+          <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="이름·회사·소속·번호·이메일 검색" aria-label="연락처 검색" className="jv-q" />
+          <button className="btn sm" onClick={() => setShowImport(v => !v)} aria-expanded={showImport}>엑셀 가져오기</button></div>
+        {last && <p className="ci-last">마지막 가져오기: {last.file} · {last.at} · {last.added.length}명 추가{last.patched?.length ? ` · ${last.patched.length}명 보완` : ''}
+          <button className="btn sm" onClick={() => setStore(undoImport)}>되돌리기</button></p>}
+        {showImport && <ContactImport people={people} setStore={setStore} now={now} onClose={() => setShowImport(false)} />}
+        <p className="muted rv-count">{matched.length}명{matched.length > shown.length ? ` 중 ${shown.length}명 표시` : ''}</p>
         <div className="rv-grid">{shown.map(p => {
           const b = nextDay(p.birthday, today), a = nextDay(p.annivDate, today);
           return (
             <article key={p.id} className="rv-card">
               <div className="rv-top">
                 <span className="rv-av" aria-hidden="true">{p.name.slice(0, 1)}</span>
-                <span className="rv-dn"><b>{p.name}</b><small>{p.group}{p.company ? ` · ${p.company}` : ''}{p.title ? ` ${p.title}` : ''}</small></span>
+                <span className="rv-dn"><b>{p.name}{p.check && <span className="ci-flag" title={p.note}>확인</span>}</b><small>{p.group}{p.company ? ` · ${p.company}` : ''}{p.title ? ` ${p.title}` : ''}</small>
+                  {p.dept && <small className="rv-dept">{p.dept}</small>}</span>
               </div>
               <div className="rv-call">
                 {p.phone ? <>
@@ -152,6 +172,8 @@ export default function RelationView({ area, cat }) {
           );
         })}</div>
         {!shown.length && <p className="muted">해당하는 사람이 없습니다.</p>}
+        {matched.length > shown.length && <div className="rv-more"><button className="btn" onClick={() => setLimit(l => l + 48)}>더 보기 ({matched.length - shown.length}명 남음)</button>
+          <button className="btn" onClick={() => setLimit(matched.length)}>전체 보기</button></div>}
 
         <h3 className="lv-h3">사람 추가</h3>
         <form className="rv-add" onSubmit={add}>
@@ -207,9 +229,17 @@ function PersonDetail({ p, onClose, upd, onDelete, pickCard }) {
           <label>생일<input type="date" value={p.birthday || ''} onChange={e => upd({ birthday: e.target.value })} /></label>
           <label>기념일 이름<input value={p.annivName || ''} onChange={e => upd({ annivName: e.target.value })} placeholder="예: 결혼기념일" /></label>
           <label>기념일 날짜<input type="date" value={p.annivDate || ''} onChange={e => upd({ annivDate: e.target.value })} /></label>
+          <label>소속<input value={p.dept || ''} onChange={e => upd({ dept: e.target.value })} /></label>
+          <label>휴대폰 2<input value={p.phone2 || ''} onChange={e => upd({ phone2: e.target.value })} inputMode="tel" /></label>
+          <label>회사 전화<input value={p.tel || ''} onChange={e => upd({ tel: e.target.value })} inputMode="tel" /></label>
+          <label>팩스<input value={p.fax || ''} onChange={e => upd({ fax: e.target.value })} inputMode="tel" /></label>
           <label>이메일<input value={p.email || ''} onChange={e => upd({ email: e.target.value })} inputMode="email" /></label>
+          <label>이메일 2<input value={p.email2 || ''} onChange={e => upd({ email2: e.target.value })} inputMode="email" /></label>
           <label>주소<input value={p.address || ''} onChange={e => upd({ address: e.target.value })} /></label>
+          <label className="rv-wide">메모<textarea rows={2} value={p.note || ''} onChange={e => upd({ note: e.target.value })} /></label>
+          {p.check && <label className="rv-wide rv-chk"><input type="checkbox" checked onChange={() => upd({ check: false })} />번호 확인 필요 (확인했으면 체크 해제)</label>}
         </div>
+        {p.src && <p className="note">엑셀에서 가져옴 · {p.src}</p>}
         <div className="rv-mf"><button className={`btn sm ${arm ? 'danger' : ''}`} onClick={() => (arm ? onDelete() : (setArm(true), setTimeout(() => setArm(false), 3000)))}>{arm ? '정말 삭제할까요?' : '이 사람 삭제'}</button></div>
       </div>
       {zoom && <div className="rv-zoom" onClick={e => { e.stopPropagation(); setZoom(false); }}><img src={p.card} alt={`${p.name} 명함 원본`} /></div>}

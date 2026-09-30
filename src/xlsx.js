@@ -71,6 +71,48 @@ export function readXlsx(buf) {
   });
 }
 
+/** 모든 시트 읽기 → [{ name, rows: [[셀...]] }]
+    - 행 번호(r)를 그대로 지켜 빈 줄도 자리를 차지한다
+    - 병합된 칸은 왼쪽 위 값으로 채운다 (세로 병합된 부서·팀 이름이 줄마다 들어가도록) */
+export function readXlsxBook(buf) {
+  const z = unzipSync(buf);
+  const xml = p => (z[p] ? new DOMParser().parseFromString(strFromU8(z[p]), 'application/xml') : null);
+  const text = el => [...el.getElementsByTagName('t')].map(t => t.textContent).join('');
+  const wb = xml('xl/workbook.xml'), rels = xml('xl/_rels/workbook.xml.rels');
+  const sst = xml('xl/sharedStrings.xml');
+  const shared = sst ? [...sst.getElementsByTagName('si')].map(text) : [];
+  const RID = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  return [...(wb?.getElementsByTagName('sheet') || [])].map((sh, n) => {
+    const id = sh.getAttribute('r:id') || sh.getAttributeNS(RID, 'id');
+    const rel = rels && [...rels.getElementsByTagName('Relationship')].find(r => r.getAttribute('Id') === id);
+    const t = rel ? rel.getAttribute('Target').replace(/^\//, '') : `worksheets/sheet${n + 1}.xml`;
+    const doc = xml(t.startsWith('xl/') ? t : `xl/${t}`);
+    const rows = [];
+    if (doc) {
+      [...doc.getElementsByTagName('row')].forEach((row, k) => {
+        const ri = row.getAttribute('r') ? Number(row.getAttribute('r')) - 1 : k;
+        const out = [];
+        [...row.getElementsByTagName('c')].forEach((c, j) => {
+          const i = c.getAttribute('r') ? colIndex(c.getAttribute('r')) : j, ty = c.getAttribute('t');
+          const v = c.getElementsByTagName('v')[0]?.textContent ?? '';
+          out[i] = ty === 's' ? shared[Number(v)] ?? '' : ty === 'inlineStr' ? text(c) : ty === 'str' || ty === 'e' ? v : ty === 'b' ? (v === '1' ? 'TRUE' : 'FALSE') : v === '' ? '' : Number(v);
+        });
+        rows[ri] = Array.from(out, x => (x == null ? '' : x));
+      });
+      for (let i = 0; i < rows.length; i++) if (!rows[i]) rows[i] = [];
+      [...doc.getElementsByTagName('mergeCell')].forEach(m => {
+        const [a, b = a] = m.getAttribute('ref').split(':');
+        const r1 = Number(a.replace(/\D/g, '')) - 1, r2 = Number(b.replace(/\D/g, '')) - 1, c1 = colIndex(a), c2 = colIndex(b);
+        const v = rows[r1]?.[c1] ?? '';
+        if (v === '') return;
+        for (let r = r1; r <= r2; r++) { rows[r] = rows[r] || []; for (let c = c1; c <= c2; c++) if (!(r === r1 && c === c1)) rows[r][c] = v; }
+      });
+      rows.forEach((r, i) => { rows[i] = Array.from(r, x => (x == null ? '' : x)); });
+    }
+    return { name: sh.getAttribute('name') || `시트${n + 1}`, rows };
+  });
+}
+
 /** 엑셀 날짜 일련번호 → 'YYYY-MM-DD' */
 export function excelDate(n) {
   const d = new Date(Date.UTC(1899, 11, 30) + Math.round(n) * 864e5);
