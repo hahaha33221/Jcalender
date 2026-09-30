@@ -162,8 +162,8 @@ export default function App() {
     { id: 'check', label: '체크리스트' },
     { sec: '상세 내용' },
     { id: 'P', label: AREAS.P.n, color: areaVar('P') },
-    { id: 'B', label: AREAS.B.n, color: areaVar('B') },
     { id: 'W', label: AREAS.W.n, color: areaVar('W') },
+    { id: 'B', label: AREAS.B.n, color: areaVar('B') },
     { sec: '관리' },
     { id: 'settings', label: '설정' },
   ];
