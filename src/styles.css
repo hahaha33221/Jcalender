@@ -1014,3 +1014,4 @@ body.report-open { overflow: hidden; }
 .rp-foot { margin: 14px 0 0; font-size: 8.5pt; text-align: right; }
 @media print { .rp-proj { break-before: page; } .rp-kpis { break-inside: avoid; } .rp-table tr { break-inside: avoid; } }
 .rp-proj .rp-two .rp-box { margin: 0 !important; }
+.nd-chips { margin: 2px 0 8px; } .nd-chips small { opacity: .7; margin-left: 2px; }

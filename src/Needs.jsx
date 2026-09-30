@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AREAS, ROWS } from './data.js';
 import { useCtx } from './shared.jsx';
 import { LEARN_APPS, LEISURE_APPS } from './categories/LearnHubView.jsx';
@@ -40,7 +40,12 @@ export default function NeedsPanel() {
   const { openCat } = useCtx();
   const list = useIntegrations();
   const cnt = k => list.filter(x => x.st === k).length;
-  const need = ROWS.filter(r => r.code === 'A' || r.code === 'I');
+  // 분류 고르기: 연동 현황은 전체 / 연결됨 / 설정 필요 / 미개발, 체크리스트 기준은 전체 / API / AI
+  const [st, setSt] = useState('all');
+  const [ty, setTy] = useState('all');
+  const shown = st === 'all' ? list : list.filter(x => x.st === st);
+  const need = ROWS.filter(r => (r.code === 'A' || r.code === 'I') && (ty === 'all' || r.code === ty));
+  const needAll = ROWS.filter(r => r.code === 'A' || r.code === 'I');
   const byArea = Object.keys(AREAS).map(a => {
     const rows = need.filter(r => r.a === a);
     const cats = [...new Set(rows.map(r => r.cat))].map(cat => ({ cat, rows: rows.filter(r => r.cat === cat) }));
@@ -49,8 +54,13 @@ export default function NeedsPanel() {
   return (
     <div className="panel needs">
       <h2>필요한 API · 기능</h2>
-      <h3 className="lv-h3">연동 현황 <small className="muted">연결됨 {cnt('ok')} · 설정 필요 {cnt('part')} · 미개발 {cnt('todo')}</small></h3>
-      <ul className="nd-list">{list.map(x => (
+      <h3 className="lv-h3">연동 현황</h3>
+      <div className="chips nd-chips" role="group" aria-label="연동 상태로 보기">
+        {[['all', '전체', list.length], ['ok', '연결됨', cnt('ok')], ['part', '설정 필요', cnt('part')], ['todo', '미개발', cnt('todo')]].map(([k, n, c]) => (
+          <button key={k} aria-pressed={st === k} onClick={() => setSt(k)}>{n} <small>{c}</small></button>))}
+      </div>
+      {!shown.length && <p className="muted">해당하는 항목이 없습니다.</p>}
+      <ul className="nd-list">{shown.map(x => (
         <li key={x.name}>
           <span className="nd-h"><b>{x.name}</b><span className={`st ${ST[x.st][1]}`}>{ST[x.st][0]}</span>
             <button className="nd-go" onClick={() => openCat('P', x.cat)}>{x.where} › {x.cat}</button></span>
@@ -58,7 +68,11 @@ export default function NeedsPanel() {
           <small className="muted">필요: {x.need}</small>
         </li>))}</ul>
 
-      <h3 className="lv-h3">체크리스트 기준 <small className="muted">API {need.filter(r => r.code === 'A').length} · AI {need.filter(r => r.code === 'I').length}개 항목</small></h3>
+      <h3 className="lv-h3">체크리스트 기준</h3>
+      <div className="chips nd-chips" role="group" aria-label="API · AI 로 보기">
+        {[['all', '전체', needAll.length], ['A', 'API', needAll.filter(r => r.code === 'A').length], ['I', 'AI', needAll.filter(r => r.code === 'I').length]].map(([k, n, c]) => (
+          <button key={k} aria-pressed={ty === k} onClick={() => setTy(k)}>{n} <small>{c}</small></button>))}
+      </div>
       {byArea.map(({ a, rows, cats }) => (
         <details key={a} className="nd-area">
           <summary><b>{AREAS[a].n}</b> <span className="muted">API {rows.filter(r => r.code === 'A').length} · AI {rows.filter(r => r.code === 'I').length} · 카테고리 {cats.length}개</span></summary>
