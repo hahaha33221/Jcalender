@@ -39,7 +39,7 @@ const readHash = () => {
 };
 const INIT = { done: {}, outs: {}, prio: {}, events: null, anniv: null, annivDays: 10, health: null, finance: null, goals: null, people: null, leisure: null, journal: null, rules: DEFAULT_RULES, log: [] };
 /** 이름을 바꾼 카테고리: 저장된 검수 표시·목표 보드의 키도 새 이름으로 옮긴다 */
-const RENAMED_CATS = { 'P|인맥/관계 관리': 'P|인맥 관리' };
+const RENAMED_CATS = { 'P|인맥/관계 관리': 'P|인맥 관리', 'P|리뷰/회고, 저널링': 'P|저널링' };
 function renameCats(st) {
   const mv = o => { if (!o) return o; const r = { ...o }; Object.entries(RENAMED_CATS).forEach(([a, b]) => { if (a in r) { if (!(b in r)) r[b] = r[a]; delete r[a]; } }); return r; };
   return { ...st, reviewed: mv(st.reviewed), goals: st.goals?.boards ? { ...st.goals, boards: mv(st.goals.boards) } : st.goals };

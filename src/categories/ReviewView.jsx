@@ -3,7 +3,7 @@ import { ROWS, iso, periodKey } from '../data.js';
 import { WEEK, areaVar, num, useCtx } from '../shared.jsx';
 import { sleepMinutes } from './health.js';
 
-/* 개인 › 리뷰/회고, 저널링 전용 화면
+/* 개인 › 저널링 전용 화면
    journal = {
      entries: [{ id, date, mood(1~5), text, tags: [] }],            하루 하나
      reviews: [{ id, week('2026-W40'), keep, problem, tryNext, saved }], 한 주 하나

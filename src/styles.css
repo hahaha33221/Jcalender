@@ -629,7 +629,7 @@ tr.lv0 .gbar { top: 4px; height: 14px; }
 @media (max-width: 1100px) { .lv-grid, .lv-hobby { grid-template-columns: minmax(0, 1fr); } }
 a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items: center; }
 
-/* 리뷰/회고, 저널링 (기분: 한 가지 색의 5단계, 진할수록 좋음) */
+/* 저널링 (기분: 한 가지 색의 5단계, 진할수록 좋음) */
 .jv-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .jv-grid .panel { min-width: 0; }
 .jv-date { width: auto; padding: 3px 8px; }
