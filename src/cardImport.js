@@ -169,10 +169,11 @@ function summaryTotal(top) {
   return null;
 }
 
-/** 지출 내역에 합치기: 이미 있는 key 는 건너뛰고, 처음 가져올 때 예시 지출은 지운다 */
-export function mergeCard(fin, { company, items }, uid) {
+/** 지출 내역에 합치기: 이미 있는 key 는 건너뛰고, 처음 가져올 때 예시 지출은 지운다
+    importId 를 붙여 두면 반영 기록 단위로 한꺼번에 취소할 수 있다 → { fin, add(새 지출 목록), added, dup, removedExamples } */
+export function mergeCard(fin, { company, items }, uid, importId) {
   const real = fin.expenses.filter(e => !/\(예시\)$/.test(e.memo || ''));
   const have = new Set(real.map(e => e.cardKey).filter(Boolean));
-  const add = items.filter(x => !have.has(x.key)).map(x => ({ id: uid(), date: x.date, amount: x.amount, cat: x.cat, memo: x.merchant, card: company, cardKey: x.key }));
-  return { fin: { ...fin, expenses: [...real, ...add] }, added: add.length, dup: items.length - add.length, removedExamples: fin.expenses.length - real.length };
+  const add = items.filter(x => !have.has(x.key)).map(x => ({ id: uid(), date: x.date, amount: x.amount, cat: x.cat, memo: x.merchant, card: company, cardKey: x.key, ...(importId ? { importId } : {}) }));
+  return { fin: { ...fin, expenses: [...real, ...add] }, add, added: add.length, dup: items.length - add.length, removedExamples: fin.expenses.length - real.length };
 }

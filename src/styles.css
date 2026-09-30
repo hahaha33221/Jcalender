@@ -882,3 +882,30 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .fv-card-guide { margin: 10px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--ink2); }
 .fv-card-guide b { margin-right: 6px; color: var(--ink); }
 .fv-table .tag + .tag { margin-left: 4px; }
+
+/* 개인 재무 › 반영 전 미리보기 · 월별 누적 · 반영 기록 */
+.fm-pre { margin-top: 12px; border: 1px solid var(--ac); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; background: var(--card); }
+.fm-pre-h { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.fm-pre-h b { font-size: 15px; }
+.fm-files { list-style: none; margin: 0; padding: 0; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+.fm-files li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding-bottom: 6px; border-bottom: 1px dashed var(--line); }
+.fm-ok { color: var(--ok); font-weight: 700; }
+.fm-diff { color: var(--over); font-weight: 700; }
+.fm-pre-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.fm-pre-grid h4 { margin: 0 0 4px; font-size: 13px; }
+.fm-kv { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.fm-kv li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+.fm-pre-list { max-height: 260px; overflow-y: auto; }
+.fm-pre-f { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.fm-pre-f .muted { margin-right: auto; }
+.fm-table td.num, .fm-table th { text-align: right; white-space: nowrap; }
+.fm-table th:first-child, .fm-table td.fm-m { text-align: left; }
+.fm-table tbody tr { cursor: pointer; }
+.fm-table tbody tr:hover { background: var(--paper); }
+.fm-table tbody tr.on { background: color-mix(in srgb, var(--ac) 12%, var(--card)); font-weight: 700; }
+.fm-up { color: var(--over); }
+.fm-down { color: var(--ok); }
+.fm-log { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.fm-log li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 7px 0; border-top: 1px solid var(--line2); }
+.fm-log time { color: var(--ink3); }
+@media (max-width: 600px) { .fm-pre-grid { grid-template-columns: minmax(0, 1fr); } }

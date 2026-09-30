@@ -1,10 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { iso } from '../data.js';
-import { MoneyInput, WEEK, areaVar, useCtx } from '../shared.jsx';
+import { MoneyInput, WEEK, areaVar } from '../shared.jsx';
 import ShoppingList, { useFinance } from './Shopping.jsx';
-import { addExpense, catsOf, delExpense, guessCatBy, setExpenseCat, won } from './finance.js';
-import { CARD_COMPANIES, mergeCard, parseCardRows, readTable } from '../cardImport.js';
+import { addExpense, catsOf, delExpense, setExpenseCat, won } from './finance.js';
 import FinanceCats from './FinanceCats.jsx';
+import { CardImport, MonthlyLedger } from './FinanceMonthly.jsx';
 
 /* 개인 › 개인 재무 전용 화면: 지출 관리 + 구매해야 할 물품 (대시보드와 같은 데이터)
    "지출 카테고리 설정" 버튼 → FinanceCats 상세 페이지 (카테고리 이름 · 월 예산 · 포함 범위) */
@@ -58,6 +58,7 @@ export default function FinanceView({ area, cat }) {
       </div>
 
       <CardImport update={update} f={f} now={now} onMonth={setMonth} />
+      <MonthlyLedger f={f} update={update} month={month} onMonth={setMonth} />
 
       <div className="fv-grid">
         <ShoppingList />
@@ -107,68 +108,5 @@ export default function FinanceView({ area, cat }) {
       </section>
 
     </div>
-  );
-}
-
-/* 카드 이용내역 가져오기 (롯데카드 · KB국민카드) — 공식 개인용 API 가 없어 카드사 엑셀 파일을 올린다 */
-const uid = () => Math.random().toString(36).slice(2, 10);
-const GUIDE = {
-  롯데카드: '롯데카드 홈페이지(또는 앱) 로그인 → 이용대금명세서 → 해당 월 → 엑셀 다운로드 (이용내역 조회 엑셀도 가능)',
-  KB국민카드: 'KB국민카드 홈페이지 로그인 → 이용내역 조회(승인내역) → 기간 선택(예: 한 달) → 엑셀 저장. 승인취소 건은 빼고, 파일 위 요약(정상 금액)과 합계를 맞춰 봅니다',
-};
-const wonStr = n => `${Math.round(n || 0).toLocaleString('ko-KR')}원`;
-function CardImport({ f, update, now, onMonth }) {
-  const ref = useRef(null);
-  const [pick, setPick] = useState('auto');
-  const [msg, setMsg] = useState(null);
-  const [undo, setUndo] = useState(null);
-  const last = f.cardImport;
-  const installment = f.cardInstallment || 'bill';        // 명세서 할부: bill 이번 달 청구분 · use 이용일에 전체 금액
-  const upload = async files => {
-    const out = [];
-    let fin = f, total = 0, err = false, lastMonth = null;
-    for (const file of [...(files || [])]) {
-      try {
-        const rows = await readTable(file);
-        const parsed = parseCardRows(rows, { pick, fileName: file.name, year: now.getFullYear(), guess: m => guessCatBy(catsOf(f), m), installment });
-        if (!parsed.items.length) throw new Error('가져올 이용 건이 없습니다');
-        const res = mergeCard(fin, parsed, uid);
-        fin = res.fin; total += res.added;
-        lastMonth = parsed.items.map(x => x.date).sort().pop().slice(0, 7);
-        const sum = parsed.items.reduce((a, x) => a + x.amount, 0);
-        out.push(`${file.name} (${parsed.company}${parsed.statement ? ' 이용대금명세서' : ''}): 새로 ${res.added}건${res.dup ? `, 이미 있음 ${res.dup}건` : ''}${parsed.cancelled ? `, 취소 제외 ${parsed.cancelled}건` : ''}${res.removedExamples ? `, 예시 지출 ${res.removedExamples}건 삭제` : ''}`
-          + (parsed.foreign ? `, 해외 이용 ${parsed.foreign}건 제외(원화 금액 미확정)` : '')
-          + (parsed.statement ? ` · 명세서 청구 합계 ${wonStr(parsed.billTotal)}, 가져온 합계 ${wonStr(sum)}` : '')
-          + (!parsed.statement && parsed.fileTotal != null ? ` · 파일 요약 국내 정상 ${wonStr(parsed.fileTotal)}, 가져온 합계 ${wonStr(sum)}${parsed.fileTotal === sum ? ' (일치)' : ''}` : ''));
-      } catch (e) { err = true; out.push(`${file.name}: 읽지 못했습니다 (${e.message})`); }
-    }
-    if (fin !== f) {
-      const before = f;
-      const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      update(() => ({ ...fin, cardImport: { at: stamp, added: total } }));
-      setUndo(before);
-      if (lastMonth) onMonth(lastMonth);
-    }
-    setMsg({ err: err && fin === f, t: out.join(' / ') });
-    if (ref.current) ref.current.value = '';
-  };
-  return (
-    <section className="panel fv-card">
-      <div className="csum-h"><h2>카드 이용내역 가져오기</h2>
-        <span className="muted">{last ? `마지막 가져오기 ${last.at}` : '롯데카드 · KB국민카드 이용내역 엑셀을 올리면 지출 내역에 들어갑니다'}</span></div>
-      <div className="fv-card-row">
-        <label className="fv-card-pick">카드사<select value={pick} onChange={e => setPick(e.target.value)}>
-          <option value="auto">자동 인식</option>{CARD_COMPANIES.map(c => <option key={c}>{c}</option>)}</select></label>
-        <label className="fv-card-pick">명세서 할부<select value={installment} onChange={e => { const v = e.target.value; update(x => ({ ...x, cardInstallment: v })); }}>
-          <option value="bill">이번 달 청구분 (명세서 합계와 같게)</option>
-          <option value="use">이용일에 전체 금액 한 번</option></select></label>
-        <label className="btn primary">이용내역 파일 올리기<input ref={ref} type="file" accept=".xls,.xlsx,.csv,.htm,.html" multiple hidden onChange={e => upload(e.target.files)} /></label>
-        {undo && <button className="btn" onClick={() => { update(() => undo); setUndo(null); setMsg({ t: '가져오기 전으로 되돌렸습니다.' }); }}>되돌리기</button>}
-      </div>
-      {msg && <p className={`sh-msg ${msg.err ? 'err' : ''}`} role="status">{msg.t}</p>}
-      <ul className="fv-card-guide">{CARD_COMPANIES.map(c => <li key={c}><b>{c}</b> {GUIDE[c]}</li>)}</ul>
-      <p className="note">롯데카드 이용대금명세서: 일시불은 이용일에 청구 금액으로, 할부는 위 "명세서 할부" 설정대로 넣습니다(청구분이면 명세서 기준일에 "할부 2/3회차" 로 원금+수수료). 해외 이용 표는 이용 내역에 이미 있어 따로 넣지 않습니다.</p>
-      <p className="note">.xls · .xlsx · .csv 를 읽습니다. 열은 머리글(이용일 · 가맹점 · 이용금액 · 승인번호 …)로 찾고, 취소 건은 빼고, 같은 승인번호는 한 번만 넣습니다. 분류는 "지출 카테고리 설정"의 포함 범위(키워드)로 정하고, 지출 내역에서 바로 바꿀 수 있습니다.</p>
-    </section>
   );
 }
