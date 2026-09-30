@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { iso } from '../data.js';
 import { MoneyInput, WEEK, areaVar } from '../shared.jsx';
 import { useFinance } from './Shopping.jsx';
-import { addExpense, catsOf, delExpense, setExpenseCat, won } from './finance.js';
+import { catsOf, delExpense, setExpenseCat, won } from './finance.js';
 import FinanceCats from './FinanceCats.jsx';
 import { CardImport, MonthlyLedger } from './FinanceMonthly.jsx';
 
@@ -27,15 +27,6 @@ export default function FinanceView({ area, cat }) {
   // 지출이 있는 달 + 이번 달
   const months = [...new Set([ym, ...f.expenses.map(e => e.date.slice(0, 7))])].sort().reverse();
 
-  const [form, setForm] = useState({ date: today, amount: '', cat: '식비', memo: '' });
-  const formCat = cats.some(c => c.name === form.cat) ? form.cat : cats[0]?.name;   // 카테고리를 바꾸거나 지웠을 때
-  const add = e => {
-    e.preventDefault();
-    const amount = Math.max(0, Number(form.amount) || 0);
-    if (!amount) return;
-    update(x => addExpense(x, { date: form.date, amount, cat: formCat, memo: form.memo.trim() }), form.date === today ? `${formCat} ${won(amount)}` : null);
-    setForm({ ...form, amount: '', memo: '' });
-  };
   const setBudget = v => update(x => ({ ...x, budget: Math.max(0, Number(v) || 0) }));
 
   if (page === 'cats') return <FinanceCats area={area} cat={cat} month={month} onBack={() => setPage('main')} />;
@@ -60,18 +51,6 @@ export default function FinanceView({ area, cat }) {
       <CardImport update={update} f={f} now={now} onMonth={setMonth} />
       <MonthlyLedger f={f} update={update} month={month} onMonth={setMonth} />
 
-      <div className="fv-grid fv-grid2">
-          <section className="panel">
-            <h2>지출 입력</h2>
-            <form className="fv-form" onSubmit={add}>
-              <label>날짜<input type="date" value={form.date} max={today} onChange={e => setForm({ ...form, date: e.target.value })} /></label>
-              <label>분류<select value={formCat} onChange={e => setForm({ ...form, cat: e.target.value })}>{cats.map(c => <option key={c.name}>{c.name}</option>)}</select></label>
-              <label>금액(원)<MoneyInput value={form.amount} onChange={v => setForm({ ...form, amount: v })} /></label>
-              <label className="wide">메모<input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} placeholder="예: 점심" /></label>
-              <button className="btn primary" disabled={!Number(form.amount)}>기록</button>
-            </form>
-            
-          </section>
           <section className="panel">
             <div className="hv-ch"><h2>분류별 지출</h2><span className="muted">{month.replace('-', '년 ')}월 · 세로선은 카테고리 예산</span>
               <button className="btn sm grow-r" onClick={() => setPage('cats')}>카테고리 · 범위 수정</button></div>
@@ -83,7 +62,6 @@ export default function FinanceView({ area, cat }) {
                   <span className="fv-bv">{won(x.v)}{x.b > 0 && <small> / {won(x.b)}</small>}</span></li>))}</ul>
             ) : <p className="muted">지출 내역이 없습니다.</p>}
           </section>
-      </div>
 
       <section className="panel">
         <div className="csum-h"><h2>지출 내역</h2>

@@ -119,7 +119,7 @@ export function MonthlyLedger({ f, update, month, onMonth }) {
 
   return (
     <section className="panel fm">
-      <div className="csum-h"><h2>월별 누적</h2><span className="muted">카드 반영 · 직접 입력 · 구매 목록 지출을 달마다 모읍니다. 줄을 누르면 그 달 내역을 봅니다.</span></div>
+      <div className="csum-h"><h2>월별 누적</h2><span className="muted">반영한 카드 지출을 달마다 모읍니다. 줄을 누르면 그 달 내역을 봅니다.</span></div>
       {keys.length ? <>
         <BarChart data={chart} color="var(--viz-sl)" fmt={v => won(v)} tickFmt={v => (v >= 10000 ? `${Math.round(v / 10000)}만` : `${v}`)} label="월별 지출 합계" height={190} />
         <div className="tablewrap"><table className="prog fm-table">
@@ -139,7 +139,7 @@ export function MonthlyLedger({ f, update, month, onMonth }) {
           })}</tbody>
         </table></div>
         {keys.length > 12 && <button className="btn sm" onClick={() => setAll(v => !v)}>{all ? '최근 12개월만' : `전체 ${keys.length}개월 보기`}</button>}
-      </> : <p className="muted">아직 지출이 없습니다. 카드 이용내역을 반영하거나 지출을 입력하면 달마다 쌓입니다.</p>}
+      </> : <p className="muted">아직 지출이 없습니다. 카드 이용내역을 반영하면 달마다 쌓입니다.</p>}
 
       <h3 className="lv-h3">반영 기록 <small className="muted">{imports.length}회</small></h3>
       {imports.length ? <ul className="fm-log">{imports.map(r => (
