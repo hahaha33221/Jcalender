@@ -14,9 +14,16 @@ export default function FinanceView({ area, cat }) {
   const [page, setPage] = useState('main');
   const today = iso(now), ym = today.slice(0, 7);
   // 처음 보여줄 달: 이번 달 지출이 없으면 지출이 있는 가장 최근 달
-  const [month, setMonth] = useState(() => (f.expenses.some(e => e.date.startsWith(ym)) ? ym : f.expenses.map(e => e.date.slice(0, 7)).sort().pop() || ym));
-  const [view, setView] = useState('date');
-  const [closed, setClosed] = useState(() => new Set());
+  // 보기 설정(선택한 달 · 날짜순/카테고리별 · 정렬 · 접은 묶음)은 finance.ui 에 저장해 다시 들어와도 그대로
+  const ui = f.ui || {};
+  const setUi = patch => update(x => { const u = x.ui || {}; return { ...x, ui: { ...u, ...(typeof patch === 'function' ? patch(u) : patch) } }; });
+  const firstMonth = f.expenses.some(e => e.date.startsWith(ym)) ? ym : f.expenses.map(e => e.date.slice(0, 7)).sort().pop() || ym;
+  const month = ui.month || firstMonth;
+  const setMonth = m => setUi({ month: m });
+  const view = ui.view || 'date';
+  const setView = v => setUi({ view: v });
+  const closed = new Set(ui.closed || []);
+  const setClosed = v => setUi(u => ({ closed: [...(typeof v === 'function' ? v(new Set(u.closed || [])) : v)] }));
   const [focus, setFocus] = useState(null);
   const cats = catsOf(f);
   const monthExp = f.expenses.filter(e => e.date.slice(0, 7) === month).sort((a, b) => b.date.localeCompare(a.date));
@@ -35,7 +42,8 @@ export default function FinanceView({ area, cat }) {
   const setBudget = v => update(x => ({ ...x, budget: Math.max(0, Number(v) || 0) }));
 
   // 지출 내역 정렬: 머리글(날짜 · 분류 · 내용 · 연계 프로젝트 · 금액)을 누르면 오름차순 ↔ 내림차순
-  const [sort, setSort] = useState({ key: 'date', dir: 'desc' });
+  const sort = ui.sort || { key: 'date', dir: 'desc' };
+  const setSort = v => setUi(u => ({ sort: typeof v === 'function' ? v(u.sort || { key: 'date', dir: 'desc' }) : v }));
   const sortBy = key => setSort(x => (x.key === key ? { key, dir: x.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'date' || key === 'amount' ? 'desc' : 'asc' }));
   const pname = e => (f.projects || []).find(p => p.id === e.projectId)?.name || '';
   const val = { date: e => e.date, cat: e => e.cat, memo: e => e.memo || '', proj: pname, amount: e => e.amount };

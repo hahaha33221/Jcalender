@@ -989,3 +989,28 @@ body.report-open { overflow: hidden; }
   .no-print { display: none !important; }
   .print-only { display: block; }
 }
+/* 보고서 v2 (한눈에 보기 + 프로젝트 상세) */
+.rp-range { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.rp-range select { width: auto; padding: 2px 6px; }
+.rp-head { border: 2px solid #000; padding: 12px 14px 10px; margin-bottom: 14px; }
+.rp-kicker { margin: 0; font-size: 9pt; letter-spacing: .08em; }
+.rp-head h1 { text-align: left; font-size: 20pt; margin: 2px 0 8px; }
+.rp-head .rp-meta { margin: 0; }
+.rp h2 { display: flex; align-items: baseline; gap: 8px; border-bottom: 1px solid #000; font-size: 12pt; margin: 18px 0 8px; }
+.rp h2 span { font-size: 10pt; font-weight: 700; border: 1px solid #000; padding: 0 5px; line-height: 1.5; }
+.rp-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.rp-kpis div { border: 1px solid #000; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.rp-kpis small { font-size: 9pt; }
+.rp-kpis b { font-size: 14pt; }
+.rp-ins { margin: 0; padding-left: 20px; }
+.rp-ins li { margin: 2px 0; }
+.rp-two { display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px; margin-bottom: 8px; }
+.rp-two .rp-box { margin: 0; }
+.rp-mini { margin: 0; }
+.rp-mini td { border: 0; border-bottom: 1px solid #000; padding: 2px 4px; }
+.rp-proj .rp-box + .rp-box, .rp-proj .rp-meta + .rp-two { margin-top: 8px; }
+.rp-proj .rp-box { margin-bottom: 8px; }
+.rp-out { margin: 10px 0 4px !important; }
+.rp-foot { margin: 14px 0 0; font-size: 8.5pt; text-align: right; }
+@media print { .rp-proj { break-before: page; } .rp-kpis { break-inside: avoid; } .rp-table tr { break-inside: avoid; } }
+.rp-proj .rp-two .rp-box { margin: 0 !important; }
