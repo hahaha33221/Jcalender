@@ -6,7 +6,8 @@ import { ROWS, iso } from '../data.js';
      expenses: [{ id, date, amount, cat, memo, shopId? }],   shopId 가 있으면 구매 목록에서 온 지출
      shopping: [{ id, name, qty, price(예상), cat, added, bought?: 'YYYY-MM-DD', paid?: 실제 금액 }],
    } */
-export const EXP_CATS = ['식비', '생활용품', '교통', '여가', '선물', '의료', '공과금·구독', '기타'];
+// 순서 = 포함 범위 적용 순서 (위가 먼저). 공과금·구독을 생활용품보다 먼저 봐야 "쿠팡(와우 멤버십)" 이 구독으로 간다
+export const EXP_CATS = ['식비', '공과금·구독', '생활용품', '교통', '여가', '선물', '의료', '기타'];
 /* 지출 카테고리 설정 finance.cats = [{ name, budget(월 한도, 0 = 없음), keywords(포함 범위: 가맹점·메모에 이 말이 있으면 이 분류) }]
    '기타' 는 어디에도 안 맞는 지출이 가는 곳이라 지울 수 없다 */
 export const OTHER = '기타';
@@ -20,7 +21,7 @@ export const DEFAULT_KEYWORDS = {
   선물: ['꽃', '플라워', '선물', '기프트'],
   의료: ['병원', '의원', '약국', '치과', '한의원', '안과', '피부과', '정형외과', '내과', '소아과', '이비인후과', '산부인과', '클리닉', '검진', '메디'],
   '공과금·구독': ['자동이체', '한국전력', '도시가스', '수도', '관리비', '통신요금', 'SKT', 'LG유플러스', '아파트', '등기소', '정부24', '국세', '지방세',
-    'Amazon', 'AWS', 'OPENAI', 'ChatGPT', 'HOSTINGER', 'GOOGLE', 'APPLE', 'MICROSOFT', '구독'],
+    'Amazon', 'AWS', 'OPENAI', 'ChatGPT', 'HOSTINGER', 'GOOGLE', '구글', '클라우드', 'APPLE', 'MICROSOFT', '구독', '멤버십'],
   기타: [],
 };
 export const defaultCats = () => EXP_CATS.map(name => ({ name, budget: 0, keywords: [...(DEFAULT_KEYWORDS[name] || [])] }));

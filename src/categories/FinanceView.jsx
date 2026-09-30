@@ -114,7 +114,7 @@ export default function FinanceView({ area, cat }) {
 const uid = () => Math.random().toString(36).slice(2, 10);
 const GUIDE = {
   롯데카드: '롯데카드 홈페이지(또는 앱) 로그인 → 이용대금명세서 → 해당 월 → 엑셀 다운로드 (이용내역 조회 엑셀도 가능)',
-  KB국민카드: 'KB국민카드 홈페이지 로그인 → 이용내역 조회(승인내역) → 기간 선택 → 엑셀 저장',
+  KB국민카드: 'KB국민카드 홈페이지 로그인 → 이용내역 조회(승인내역) → 기간 선택(예: 한 달) → 엑셀 저장. 승인취소 건은 빼고, 파일 위 요약(정상 금액)과 합계를 맞춰 봅니다',
 };
 const wonStr = n => `${Math.round(n || 0).toLocaleString('ko-KR')}원`;
 function CardImport({ f, update, now, onMonth }) {
@@ -137,7 +137,9 @@ function CardImport({ f, update, now, onMonth }) {
         lastMonth = parsed.items.map(x => x.date).sort().pop().slice(0, 7);
         const sum = parsed.items.reduce((a, x) => a + x.amount, 0);
         out.push(`${file.name} (${parsed.company}${parsed.statement ? ' 이용대금명세서' : ''}): 새로 ${res.added}건${res.dup ? `, 이미 있음 ${res.dup}건` : ''}${parsed.cancelled ? `, 취소 제외 ${parsed.cancelled}건` : ''}${res.removedExamples ? `, 예시 지출 ${res.removedExamples}건 삭제` : ''}`
-          + (parsed.statement ? ` · 명세서 청구 합계 ${wonStr(parsed.billTotal)}, 가져온 합계 ${wonStr(sum)}` : ''));
+          + (parsed.foreign ? `, 해외 이용 ${parsed.foreign}건 제외(원화 금액 미확정)` : '')
+          + (parsed.statement ? ` · 명세서 청구 합계 ${wonStr(parsed.billTotal)}, 가져온 합계 ${wonStr(sum)}` : '')
+          + (!parsed.statement && parsed.fileTotal != null ? ` · 파일 요약 국내 정상 ${wonStr(parsed.fileTotal)}, 가져온 합계 ${wonStr(sum)}${parsed.fileTotal === sum ? ' (일치)' : ''}` : ''));
       } catch (e) { err = true; out.push(`${file.name}: 읽지 못했습니다 (${e.message})`); }
     }
     if (fin !== f) {

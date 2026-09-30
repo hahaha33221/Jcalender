@@ -59,6 +59,7 @@ const H = {
   card: /이용카드|카드명|카드구분|카드번호/,
   plan: /할부|결제방법|이용구분/,
   // 이용대금명세서 전용: 회차 · 이번 달 청구 원금 · 수수료
+  foreign: /해외이용금액|해외금액|외화/,
   round: /^회차$/,
   principal: /원금/,
   fee: /수수료/,
@@ -123,7 +124,7 @@ export function parseCardRows(rows, { pick = 'auto', fileName = '', year = new D
   });
   const stmtDate = body.map(r => cardDate(get(r, 'date'), year)).filter(Boolean).sort().pop() || '';
   const items = [], used = {};
-  let cancelled = 0, skipped = 0, billTotal = 0;
+  let cancelled = 0, skipped = 0, billTotal = 0, foreign = 0;
   body.forEach(r => {
     const useDate = cardDate(get(r, 'date'), year);
     const merchant = String(get(r, 'merchant') || '').trim() || '카드 결제';
@@ -135,9 +136,12 @@ export function parseCardRows(rows, { pick = 'auto', fileName = '', year = new D
     else if (!inst) amount = money(get(r, 'principal')) || money(get(r, 'amount'));
     else if (installment === 'use') { amount = money(get(r, 'amount')); tag = ` (할부 ${months}개월)`; }
     else { amount = bill; date = stmtDate || useDate; tag = ` (할부 ${round}/${months}회차)`; }
-    if (!useDate || !amount) { if (r.some(x => String(x ?? '').trim())) skipped++; return; }
     const st = `${get(r, 'status')} ${statement ? '' : get(r, 'plan')}`;
-    if (amount < 0 || /취소|거절|승인거절|환불/.test(st)) { cancelled++; return; }
+    if (useDate && /취소|거절|승인거절|환불/.test(st)) { cancelled++; return; }
+    // 해외 이용: 원화 금액이 아직 없고 달러 금액만 있는 줄 (원화는 명세서에서 확정)
+    if (useDate && !amount && money(get(r, 'foreign')) > 0) { foreign++; return; }
+    if (!useDate || !amount) { if (r.some(x => String(x ?? '').trim())) skipped++; return; }
+    if (amount < 0) { cancelled++; return; }
     billTotal += bill;
     // 중복 방지 key: 승인번호, 없으면 이용일·금액·가맹점(할부 청구분은 회차까지)
     // 같은 날 같은 곳에서 같은 금액을 여러 번 쓴 경우는 #2, #3 … 으로 구분 (같은 파일을 다시 올려도 같은 key)
@@ -148,7 +152,21 @@ export function parseCardRows(rows, { pick = 'auto', fileName = '', year = new D
     const key = used[base] > 1 ? `${base}#${used[base]}` : base;
     items.push({ key, date, amount: Math.round(amount), merchant: merchant + tag, cat: guess(merchant), card: String(get(r, 'card') || '').trim(), plan: String(get(r, 'plan') || '').trim() });
   });
-  return { company, statement, billTotal: Math.round(billTotal), stmtDate, items, cancelled, skipped };
+  return { company, statement, billTotal: Math.round(billTotal), stmtDate, items, cancelled, skipped, foreign, fileTotal: summaryTotal(rows.slice(0, i)) };
+}
+
+/** 머리글 위 요약 칸에서 파일이 적어 둔 국내 정상 이용 합계 읽기
+    (KB국민카드 승인내역: "정상/취소 (금액)" · "국내" · "417,776 / 0") → 숫자 또는 null */
+function summaryTotal(top) {
+  for (const r of top) {
+    const cells = r.map(x => String(x ?? '').replace(/\s+/g, ''));
+    const j = cells.findIndex(x => /정상/.test(x) && /금액/.test(x));
+    if (j < 0) continue;
+    const k = cells.findIndex((x, n) => n > j && x === '국내');
+    const v = cells.slice((k >= 0 ? k : j) + 1).find(x => /\d/.test(x));
+    if (v) return money(v.split('/')[0]);
+  }
+  return null;
 }
 
 /** 지출 내역에 합치기: 이미 있는 key 는 건너뛰고, 처음 가져올 때 예시 지출은 지운다 */
