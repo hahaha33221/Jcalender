@@ -43,12 +43,25 @@ export default function NeedsPanel() {
   // 분류 고르기: 연동 현황은 전체 / 연결됨 / 설정 필요 / 미개발, 체크리스트 기준은 전체 / API / AI
   const [st, setSt] = useState('all');
   const [ty, setTy] = useState('all');
-  const shown = st === 'all' ? list : list.filter(x => x.st === st);
+  // 정렬: 연동 현황은 이름 / 상태 / 위치 기준 오름·내림차순, 체크리스트 기준은 카테고리·항목 가나다순 오름·내림차순
+  const [sk, setSk] = useState('order');                  // order 기본 순서 · name · st · where
+  const [dir, setDir] = useState('asc');
+  const [cdir, setCdir] = useState('none');                // none 기본 순서 · asc · desc
+  const rank = { ok: 0, part: 1, todo: 2 };
+  const keyOf = { name: x => x.name, st: x => rank[x.st], where: x => x.cat };
+  const ko = (a, b) => (typeof a === 'number' ? a - b : String(a).localeCompare(String(b), 'ko'));
+  const filtered = st === 'all' ? list : list.filter(x => x.st === st);
+  const shown = sk === 'order' ? (dir === 'asc' ? filtered : [...filtered].reverse())
+    : [...filtered].sort((a, b) => (dir === 'asc' ? 1 : -1) * (ko(keyOf[sk](a), keyOf[sk](b)) || ko(a.name, b.name)));
+  const csort = l => (cdir === 'none' ? l : [...l].sort((a, b) => (cdir === 'asc' ? 1 : -1) * a.localeCompare(b, 'ko')));
   const need = ROWS.filter(r => (r.code === 'A' || r.code === 'I') && (ty === 'all' || r.code === ty));
   const needAll = ROWS.filter(r => r.code === 'A' || r.code === 'I');
   const byArea = Object.keys(AREAS).map(a => {
     const rows = need.filter(r => r.a === a);
-    const cats = [...new Set(rows.map(r => r.cat))].map(cat => ({ cat, rows: rows.filter(r => r.cat === cat) }));
+    const cats = csort([...new Set(rows.map(r => r.cat))]).map(cat => {
+      const rs = rows.filter(r => r.cat === cat);
+      return { cat, rows: cdir === 'none' ? rs : [...rs].sort((a, b) => (cdir === 'asc' ? 1 : -1) * a.action.localeCompare(b.action, 'ko')) };
+    });
     return { a, rows, cats };
   });
   return (
@@ -58,6 +71,11 @@ export default function NeedsPanel() {
       <div className="chips nd-chips" role="group" aria-label="연동 상태로 보기">
         {[['all', '전체', list.length], ['ok', '연결됨', cnt('ok')], ['part', '설정 필요', cnt('part')], ['todo', '미개발', cnt('todo')]].map(([k, n, c]) => (
           <button key={k} aria-pressed={st === k} onClick={() => setSt(k)}>{n} <small>{c}</small></button>))}
+      </div>
+      <div className="nd-sort">
+        <label>정렬<select value={sk} onChange={e => setSk(e.target.value)} aria-label="연동 현황 정렬 기준">
+          <option value="order">기본 순서</option><option value="name">이름</option><option value="st">상태</option><option value="where">위치(카테고리)</option></select></label>
+        <button className="btn sm" onClick={() => setDir(d => (d === 'asc' ? 'desc' : 'asc'))} aria-label="정렬 방향 바꾸기">{dir === 'asc' ? '오름차순 ▲' : '내림차순 ▼'}</button>
       </div>
       {!shown.length && <p className="muted">해당하는 항목이 없습니다.</p>}
       <ul className="nd-list">{shown.map(x => (
@@ -72,6 +90,14 @@ export default function NeedsPanel() {
       <div className="chips nd-chips" role="group" aria-label="API · AI 로 보기">
         {[['all', '전체', needAll.length], ['A', 'API', needAll.filter(r => r.code === 'A').length], ['I', 'AI', needAll.filter(r => r.code === 'I').length]].map(([k, n, c]) => (
           <button key={k} aria-pressed={ty === k} onClick={() => setTy(k)}>{n} <small>{c}</small></button>))}
+      </div>
+      <div className="nd-sort">
+        <span>카테고리 · 항목 정렬</span>
+        <div className="chips" role="group" aria-label="체크리스트 기준 정렬">
+          <button aria-pressed={cdir === 'none'} onClick={() => setCdir('none')}>기본 순서</button>
+          <button aria-pressed={cdir === 'asc'} onClick={() => setCdir('asc')}>오름차순 ▲</button>
+          <button aria-pressed={cdir === 'desc'} onClick={() => setCdir('desc')}>내림차순 ▼</button>
+        </div>
       </div>
       {byArea.map(({ a, rows, cats }) => (
         <details key={a} className="nd-area">
