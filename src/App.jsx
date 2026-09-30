@@ -361,7 +361,8 @@ const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 /* 일정 끌어서 옮기기 (마우스 · 터치 공용, pointer 이벤트)
    - 마우스: 누른 채 4px 넘게 움직이면 시작 / 터치: 0.3초 길게 누른 뒤 움직이면 시작 (그냥 밀면 화면 스크롤)
-   - 놓은 곳: 달력 칸[data-drop-date] → 그 날짜(시간 유지), 시간 줄[data-drop-h] → 선택한 날짜의 그 시각, 종일[data-drop-allday] → 종일
+   - 놓은 곳: 달력 칸[data-drop-date] → 그 날짜(시간 유지), 시간 줄[data-drop-h] → 선택한 날짜의 그 시각, 종일[data-drop-allday] → 종일,
+     일정 노트[data-drop-note] → 날짜 없는 노트로 되돌림. 끄는 것이 노트(_note)면 놓은 곳에 새 일정으로 만든다
    - 끌기가 끝난 직후의 클릭(칸 선택)은 무시한다 (dragged.current) */
 function useEventDrag(onDrop) {
   const [drag, setDrag] = useState(null);                  // { ev, x, y, over: { date?, h?, allDay? } }
@@ -369,8 +370,8 @@ function useEventDrag(onDrop) {
   const cur = useRef(null);
   const targetAt = (x, y) => {
     const el = document.elementFromPoint(x, y);
-    const d = el?.closest('[data-drop-date]'), h = el?.closest('[data-drop-h]'), a = el?.closest('[data-drop-allday]');
-    return d ? { date: d.dataset.dropDate } : h ? { h: Number(h.dataset.dropH) } : a ? { allDay: true } : null;
+    const d = el?.closest('[data-drop-date]'), h = el?.closest('[data-drop-h]'), a = el?.closest('[data-drop-allday]'), n = el?.closest('[data-drop-note]');
+    return d ? { date: d.dataset.dropDate } : h ? { h: Number(h.dataset.dropH) } : a ? { allDay: true } : n ? { note: true } : null;
   };
   const start = (e, ev) => {
     if (e.button && e.button !== 0) return;
@@ -422,24 +423,50 @@ function Calendar({ sel, setSel }) {
   const move = n => { const d = new Date(ym.y, ym.m + n, 1); setYm({ y: d.getFullYear(), m: d.getMonth() }); };
   const goToday = () => { setYm({ y: now.getFullYear(), m: now.getMonth() }); setSel(todayStr); };
   const pick = k => { setSel(k); const d = new Date(k + 'T00:00:00'); if (d.getMonth() !== ym.m) setYm({ y: d.getFullYear(), m: d.getMonth() }); };
-  const addEvent = ev => {
-    setStore(s => ({ ...s, events: [...s.events, { id: uid(), ...ev }] }));
+  const notes = store.eventNotes || [];
+  /** 일정 창 저장: 새 일정 / 기존 일정 수정 / 노트를 일정으로 */
+  const saveEvent = ({ id, fromNote, ...ev }) => {
+    setStore(s => ({
+      ...s,
+      events: id ? s.events.map(x => (x.id === id ? { ...x, ...ev } : x)) : [...s.events, { id: uid(), ...ev }],
+      eventNotes: fromNote ? (s.eventNotes || []).filter(n => n.id !== fromNote) : s.eventNotes,
+    }));
     pick(ev.date);
+    setAdding(null); setMoved(null);
+  };
+  const toNote = e => {
+    setStore(s => ({ ...s, events: s.events.filter(x => x.id !== e.id), eventNotes: [...(s.eventNotes || []), { id: uid(), title: e.title, area: e.area, time: e.time || '', memo: e.memo || '' }] }));
     setAdding(null);
   };
   const delEvent = id => setStore(s => ({ ...s, events: s.events.filter(x => x.id !== id) }));
   // 끌어서 옮기기 + 방금 옮긴 것 되돌리기
-  const [moved, setMoved] = useState(null);                  // { id, title, prev: { date, time }, next }
+  // moved = { msg, events, notes, back } : 옮기기 직전의 일정·노트 (되돌리기용)
+  const [moved, setMoved] = useState(null);
   const moveEvent = (ev, over) => {
-    const next = over.date ? { date: over.date, time: ev.time || '' }
+    const snap = { events: store.events, notes: store.eventNotes || [], back: ev.date || sel };
+    if (over.note) {                                          // 일정 → 노트
+      if (ev._note) return;
+      toNote(ev);
+      setMoved({ ...snap, msg: `"${ev.title}" 일정을 일정 노트로 옮겼습니다.` });
+      return;
+    }
+    const baseTime = ev.time || '';
+    const next = over.date ? { date: over.date, time: baseTime }
       : over.allDay ? { date: sel, time: '' }
-      : { date: sel, time: `${pad(over.h)}:${ev.time ? ev.time.slice(3, 5) : '00'}` };
-    if (next.date === ev.date && next.time === (ev.time || '')) return;
-    setStore(s => ({ ...s, events: s.events.map(x => (x.id === ev.id ? { ...x, ...next } : x)) }));
-    setMoved({ id: ev.id, title: ev.title, prev: { date: ev.date, time: ev.time || '' }, next });
+      : { date: sel, time: `${pad(over.h)}:${baseTime ? baseTime.slice(3, 5) : '00'}` };
+    if (ev._note) {                                           // 노트 → 새 일정
+      const { _note, id, ...rest } = ev;
+      setStore(s => ({ ...s, events: [...s.events, { ...rest, id: uid(), ...next }], eventNotes: (s.eventNotes || []).filter(n => n.id !== id) }));
+      setMoved({ ...snap, msg: `노트 "${ev.title}"을(를) ${mdTxt(next.date, next.time)} 일정으로 넣었습니다.` });
+    } else {
+      if (next.date === ev.date && next.time === baseTime) return;
+      setStore(s => ({ ...s, events: s.events.map(x => (x.id === ev.id ? { ...x, ...next } : x)) }));
+      setMoved({ ...snap, msg: `"${ev.title}" 일정을 ${mdTxt(ev.date, baseTime)} → ${mdTxt(next.date, next.time)}로 옮겼습니다.` });
+    }
     if (over.date) pick(over.date);
   };
-  const undoMove = () => { if (!moved) return; setStore(s => ({ ...s, events: s.events.map(x => (x.id === moved.id ? { ...x, ...moved.prev } : x)) })); pick(moved.prev.date); setMoved(null); };
+  const undoMove = () => { if (!moved) return; setStore(s => ({ ...s, events: moved.events, eventNotes: moved.notes })); pick(moved.back); setMoved(null); };
+  const openEdit = e => { if (!dragged.current) setAdding({ ...e }); };
   const { drag, start: startDrag, dragged } = useEventDrag(moveEvent);
   // 날짜 두 번 누르기 → 그 날짜에 일정 추가 (다른 달 칸이면 첫 클릭에 달이 바뀌므로 첫 클릭한 날짜를 기억해 둔다)
   const lastClick = useRef(null);
@@ -456,6 +483,9 @@ function Calendar({ sel, setSel }) {
   const list = byDate[sel] || [];
 
   return (
+    <>
+    <EventNotes notes={notes} setStore={setStore} startDrag={startDrag} drag={drag} dragged={dragged}
+      onSchedule={n => setAdding({ title: n.title, area: n.area, memo: n.memo, time: n.time || '', date: sel, fromNote: n.id })} />
     <section className="cal" aria-label="일정 캘린더">
       <div className="cal-main">
         <div className="cal-h">
@@ -466,9 +496,9 @@ function Calendar({ sel, setSel }) {
             <button className="btn sm" onClick={() => setVoice(true)}>음성으로 추가</button>
           </div>
         </div>
-        {moved ? <p className="cal-moved" role="status">"{moved.title}" 일정을 {mdTxt(moved.prev.date, moved.prev.time)} → {mdTxt(moved.next.date, moved.next.time)}로 옮겼습니다.
+        {moved ? <p className="cal-moved" role="status">{moved.msg}
           <button className="btn sm" onClick={undoMove}>되돌리기</button><button className="btn sm" onClick={() => setMoved(null)}>닫기</button></p>
-          : <p className="cal-tip">일정을 끌어서 다른 날짜나 오른쪽 시간표의 다른 시각으로 옮길 수 있습니다 (휴대폰은 길게 누른 뒤 이동). 날짜를 두 번 누르면 그 날에 일정을 추가합니다.</p>}
+          : <p className="cal-tip">일정을 누르면 수정, 끌면 다른 날짜·시각으로 이동합니다 (휴대폰은 길게 누른 뒤 이동). 날짜를 두 번 누르면 일정 추가.</p>}
         <div className={`cal-grid ${drag ? 'dragging' : ''}`} role="grid">
           {WEEK.map((w, i) => <div key={w} className={`cal-dow ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}`}>{w}</div>)}
           {cells.map(d => {
@@ -480,7 +510,8 @@ function Calendar({ sel, setSel }) {
                   {['Y', 'M', 'W'].filter(c => isDue(c, d)).map(c => <span key={c} className={`cal-due ${c}`}>{CYCLES[c].slice(0, 2)}</span>)}</span>
                 {HOLIDAYS[k] && <span className="cal-hol">{HOLIDAYS[k]}</span>}
                 {annivOn(store.anniv, k).map(a => <span key={a.id} className="cal-anniv">{a.name}</span>)}
-                {evs.slice(0, 2).map(e => <span key={e.id} className={`cal-ev ${drag?.ev.id === e.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(e.area) }} onPointerDown={ev => startDrag(ev, e)} title="끌어서 옮기기">{e.time && <small>{e.time}</small>} {e.title}</span>)}
+                {evs.slice(0, 2).map(e => <span key={e.id} className={`cal-ev ${drag?.ev.id === e.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(e.area) }} onPointerDown={ev => startDrag(ev, e)}
+                  onClick={ev => { ev.stopPropagation(); openEdit(e); }} title="누르면 수정 · 끌어서 옮기기">{e.time && <small>{e.time}</small>} {e.title}</span>)}
                 {evs.length > 2 && <span className="cal-more">+{evs.length - 2}건</span>}
               </button>
             );
@@ -488,18 +519,56 @@ function Calendar({ sel, setSel }) {
         </div>
       </div>
       <DayTimeline date={selDate} isToday={sel === todayStr} list={list} dueCycles={dueCycles} holiday={HOLIDAYS[sel]} anniv={annivOn(store.anniv, sel)}
-        onAdd={time => setAdding({ date: sel, time })} onDelete={delEvent} startDrag={startDrag} drag={drag} />
+        onAdd={time => setAdding({ date: sel, time })} onDelete={delEvent} startDrag={startDrag} drag={drag} onEdit={openEdit} />
       {drag && createPortal(<div className="cal-ghost" style={{ left: drag.x, top: drag.y, '--ac': areaVar(drag.ev.area) }}>
         {drag.ev.time && <small>{drag.ev.time}</small>} {drag.ev.title}
-        <em>{drag.over ? (drag.over.date ? `${Number(drag.over.date.slice(5, 7))}/${Number(drag.over.date.slice(8, 10))}로` : drag.over.allDay ? '종일로' : `${pad(drag.over.h)}시로`) : '놓을 곳을 고르세요'}</em></div>, document.body)}
-      {adding && <EventDialog init={adding} onSave={addEvent} onClose={() => setAdding(null)} />}
+        <em>{drag.over ? (drag.over.date ? `${Number(drag.over.date.slice(5, 7))}/${Number(drag.over.date.slice(8, 10))}로` : drag.over.allDay ? '종일로' : drag.over.note ? '일정 노트로' : `${pad(drag.over.h)}시로`) : '놓을 곳을 고르세요'}</em></div>, document.body)}
+      {adding && <EventDialog init={adding} onSave={saveEvent} onClose={() => setAdding(null)}
+        onDelete={adding.id ? () => { delEvent(adding.id); setAdding(null); } : null} onToNote={adding.id ? () => toNote(adding) : null} />}
       {voice && <VoiceDialog now={now} onDone={ev => { setVoice(false); setAdding(ev); }} onClose={() => setVoice(false)} />}
+    </section>
+    </>
+  );
+}
+
+/* 일정 노트: 날짜를 아직 정하지 않은 일정을 적어 두는 곳
+   - 노트를 달력 날짜 칸이나 시간표로 끌어 놓으면 그 날짜·시각의 일정이 된다 (노트에서는 빠짐)
+   - 노트를 누르면 날짜를 골라 일정으로 넣는 창이 열린다
+   - 반대로 일정을 이 칸으로 끌어 오면 날짜 없는 노트로 돌아온다
+   store.eventNotes = [{ id, title, area, time(선택), memo }] */
+function EventNotes({ notes, setStore, startDrag, drag, dragged, onSchedule }) {
+  const [t, setT] = useState('');
+  const [area, setArea] = useState('P');
+  const add = e => {
+    e.preventDefault();
+    if (!t.trim()) return;
+    setStore(s => ({ ...s, eventNotes: [...(s.eventNotes || []), { id: uid(), title: t.trim(), area, time: '', memo: '' }] }));
+    setT('');
+  };
+  const del = id => setStore(s => ({ ...s, eventNotes: (s.eventNotes || []).filter(n => n.id !== id) }));
+  return (
+    <section className={`panel ev-notes ${drag && !drag.ev._note ? 'drop-ready' : ''} ${drag?.over?.note ? 'drop' : ''}`} data-drop-note="1" aria-label="일정 노트">
+      <div className="csum-h"><h2>일정 노트</h2><span className="muted">날짜가 정해지면 달력으로 끌어 넣으세요 · 누르면 날짜를 골라 넣기</span></div>
+      <form className="ev-add" onSubmit={add}>
+        <input value={t} onChange={e => setT(e.target.value)} placeholder="나중에 넣을 일정 (예: 치과 예약, 팀 회식)" aria-label="일정 노트 내용" />
+        <select value={area} onChange={e => setArea(e.target.value)} aria-label="영역">{Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}</select>
+        <button className="btn primary" disabled={!t.trim()}>노트 추가</button>
+      </form>
+      {notes.length ? (
+        <ul className="ev-list">{notes.map(n => (
+          <li key={n.id} className={`ev-note ${drag?.ev.id === n.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(n.area) }}
+            onPointerDown={e => { if (!e.target.closest('.ev-x')) startDrag(e, { ...n, _note: true }); }}>
+            <button className="ev-t" onClick={() => { if (!dragged.current) onSchedule(n); }} title="누르면 날짜를 골라 넣기 · 끌어서 달력에 넣기">
+              {n.time && <small>{n.time}</small>} {n.title}</button>
+            <button className="ev-x" onClick={() => del(n.id)} aria-label={`${n.title} 노트 삭제`}>×</button>
+          </li>))}</ul>
+      ) : <p className="muted ev-empty">{drag && !drag.ev._note ? '여기에 놓으면 날짜 없는 노트로 옮깁니다' : '아직 노트가 없습니다. 날짜가 정해지지 않은 일정을 적어 두세요.'}</p>}
     </section>
   );
 }
 
 /* 선택한 날짜의 1시간 단위 일정 */
-function DayTimeline({ date, isToday, list, dueCycles, holiday, anniv, onAdd, onDelete, startDrag, drag }) {
+function DayTimeline({ date, isToday, list, dueCycles, holiday, anniv, onAdd, onDelete, startDrag, drag, onEdit }) {
   const box = useRef(null);
   const allDay = list.filter(e => !e.time);
   const byHour = {};
@@ -525,7 +594,7 @@ function DayTimeline({ date, isToday, list, dueCycles, holiday, anniv, onAdd, on
       {dueCycles.length > 1 && <p className="due-note">이 날은 {dueCycles.filter(c => c !== 'D').map(c => CYCLES[c]).join(', ')}일입니다.</p>}
       {/* 종일 줄은 늘 보여 준다 (끌기 도중 줄이 생기며 시간표가 밀리지 않도록) */}
       <div className={`allday ${drag?.over?.allDay ? 'drop' : ''} ${allDay.length ? '' : 'ad-empty'}`} data-drop-allday="1"><span className="tl-h">종일</span>
-        <div className="tl-evs">{allDay.length ? allDay.map(e => <TimelineEvent key={e.id} e={e} onDelete={onDelete} startDrag={startDrag} drag={drag} />)
+        <div className="tl-evs">{allDay.length ? allDay.map(e => <TimelineEvent key={e.id} e={e} onDelete={onDelete} startDrag={startDrag} drag={drag} onEdit={onEdit} />)
           : <span className="tl-none">{drag ? '여기에 놓으면 종일 일정' : '없음'}</span>}</div></div>
       <div className="tl" ref={box} aria-label="시간대별 일정">
         {HOURS.map(h => {
@@ -534,7 +603,7 @@ function DayTimeline({ date, isToday, list, dueCycles, holiday, anniv, onAdd, on
             <div key={h} data-h={h} data-drop-h={h} className={`tl-row ${isToday && h === nowH ? 'now' : ''} ${drag?.over?.h === h ? 'drop' : ''}`}>
               <span className="tl-h">{pad(h)}:00</span>
               <div className="tl-evs">
-                {evs.map(e => <TimelineEvent key={e.id} e={e} onDelete={onDelete} startDrag={startDrag} drag={drag} />)}
+                {evs.map(e => <TimelineEvent key={e.id} e={e} onDelete={onDelete} startDrag={startDrag} drag={drag} onEdit={onEdit} />)}
                 <button className="tl-add" onClick={() => onAdd(`${pad(h)}:00`)} aria-label={`${h}시에 일정 추가`}>{evs.length ? '+' : ''}</button>
               </div>
             </div>
@@ -546,18 +615,20 @@ function DayTimeline({ date, isToday, list, dueCycles, holiday, anniv, onAdd, on
   );
 }
 
-function TimelineEvent({ e, onDelete, startDrag, drag }) {
+function TimelineEvent({ e, onDelete, startDrag, drag, onEdit }) {
   return (
-    <div className={`tl-ev ${drag?.ev.id === e.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(e.area) }} onPointerDown={ev => { if (!ev.target.closest('button')) startDrag?.(ev, e); }} title="끌어서 옮기기">
-      <span className="grow"><small>{e.time || '종일'}</small> {e.title}</span>
+    <div className={`tl-ev ${drag?.ev.id === e.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(e.area) }} onPointerDown={ev => { if (!ev.target.closest('.tl-del')) startDrag?.(ev, e); }}>
+      <button className="grow tl-open" onClick={() => onEdit?.(e)} title="누르면 수정 · 끌어서 옮기기"><small>{e.time || '종일'}</small> {e.title}</button>
       <button className="tl-del" onClick={() => onDelete(e.id)} aria-label={`${e.title} 삭제`}>삭제</button>
     </div>
   );
 }
 
 /* 일정 추가 창 */
-function EventDialog({ init, onSave, onClose }) {
-  const [f, setF] = useState({ title: init.title || '', date: init.date, time: init.time || '', area: init.area || 'P' });
+function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
+  const [f, setF] = useState({ title: init.title || '', date: init.date || '', time: init.time || '', area: init.area || 'P', memo: init.memo || '' });
+  const [arm, setArm] = useState(false);
+  const edit = !!init.id;
   useEffect(() => {
     const esc = e => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', esc);
@@ -566,12 +637,12 @@ function EventDialog({ init, onSave, onClose }) {
   const submit = e => {
     e.preventDefault();
     if (!f.title.trim() || !f.date) return;
-    onSave({ date: f.date, time: f.time, title: f.title.trim(), area: f.area });
+    onSave({ id: init.id, fromNote: init.fromNote, date: f.date, time: f.time, title: f.title.trim(), area: f.area, memo: f.memo.trim() });
   };
   return (
     <div className="modal-bg" onClick={onClose}>
-      <form className="modal" role="dialog" aria-label="일정 추가" onClick={e => e.stopPropagation()} onSubmit={submit}>
-        <h2>일정 추가</h2>
+      <form className="modal" role="dialog" aria-label={edit ? '일정 수정' : '일정 추가'} onClick={e => e.stopPropagation()} onSubmit={submit}>
+        <h2>{edit ? '일정 수정' : init.fromNote ? '노트를 일정으로 넣기' : '일정 추가'}</h2>
         {init.heard && <p className="heard">인식한 문장: “{init.heard}”<br /><span className="muted">내용을 확인하고 틀린 부분은 고친 뒤 추가하세요.</span></p>}
         <label>제목<input autoFocus={!init.heard} value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="일정 제목" /></label>
         <div className="row2">
@@ -580,8 +651,13 @@ function EventDialog({ init, onSave, onClose }) {
         </div>
         <label>영역<select value={f.area} onChange={e => setF({ ...f, area: e.target.value })}>
           {Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}</select></label>
+        <label>메모<textarea rows={2} value={f.memo} onChange={e => setF({ ...f, memo: e.target.value })} placeholder="장소, 준비물 등 (선택)" /></label>
         <p className="note">시간을 비우면 종일 일정으로 등록됩니다.</p>
-        <div className="btns"><button type="button" className="btn" onClick={onClose}>취소</button><button className="btn primary" disabled={!f.title.trim()}>추가</button></div>
+        <div className="btns">
+          {onDelete && (arm ? <button type="button" className="btn danger" onClick={onDelete}>정말 삭제?</button> : <button type="button" className="btn" onClick={() => setArm(true)}>삭제</button>)}
+          {onToNote && <button type="button" className="btn" onClick={onToNote} title="날짜를 빼고 일정 노트로 보냅니다">노트로 보내기</button>}
+          <span className="grow" />
+          <button type="button" className="btn" onClick={onClose}>취소</button><button className="btn primary" disabled={!f.title.trim() || !f.date}>{edit ? '저장' : '추가'}</button></div>
       </form>
     </div>
   );
