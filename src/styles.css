@@ -920,3 +920,21 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .fp-note { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; font-size: 13.5px; line-height: 1.6; padding: 8px 10px; }
 .fp-add { display: flex; gap: 8px; margin-top: 12px; }
 .fp-add input { flex: 1; min-width: 0; }
+/* 개인 재무 › 파일 끌어다 놓기 · 카테고리별 지출 내역 */
+.fm-drop { flex: 1 1 220px; min-height: 36px; display: flex; align-items: center; justify-content: center; border: 2px dashed var(--line); border-radius: 8px; color: var(--ink3); font-size: 13px; padding: 6px 12px; cursor: pointer; text-align: center; }
+.fm-drop:hover { border-color: var(--ac); color: var(--ink2); }
+.fv-card.drag { outline: 3px dashed var(--ac); outline-offset: -3px; background: color-mix(in srgb, var(--ac) 8%, var(--card)); }
+.fv-card.drag .fm-drop { border-color: var(--ac); color: var(--ac); font-weight: 700; }
+.fv-click { cursor: pointer; border-radius: 4px; }
+.fv-click:hover { background: var(--paper); }
+.fv-groups { display: flex; flex-direction: column; gap: 8px; }
+.fv-group { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.fv-group.focus { border-color: var(--ac); }
+.fv-group summary { display: grid; grid-template-columns: auto auto minmax(60px, 1fr) 44px auto; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; background: var(--paper); font-size: 13.5px; }
+.fv-gbar { height: 8px; background: var(--line2); border-radius: 4px; overflow: hidden; }
+.fv-gbar i { display: block; height: 100%; background: var(--viz-sl); }
+.fv-gpct { text-align: right; }
+.fv-gsum { text-align: right; white-space: nowrap; }
+.fv-group .tablewrap { margin: 0; }
+.fv-group .fv-table { margin: 0; }
+.fv-gbtns { display: flex; gap: 6px; justify-content: flex-end; }

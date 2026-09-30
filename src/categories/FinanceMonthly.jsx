@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CARD_COMPANIES, mergeCard, parseCardRows, readTable } from '../cardImport.js';
 import { catsOf, guessCatBy, won } from './finance.js';
 import BarChart from './BarChart.jsx';
@@ -55,11 +55,26 @@ export function CardImport({ f, update, now, onMonth }) {
     setPending(null);
   };
 
+  // 파일 끌어다 놓기: 이 칸 위에 놓으면 올리기. 다른 곳에 잘못 놓아도 브라우저가 파일을 열어 버리지 않게 막는다
+  const [drag, setDrag] = useState(false);
+  const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+  useEffect(() => {
+    const stop = e => { if (hasFiles(e)) e.preventDefault(); };
+    window.addEventListener('dragover', stop); window.addEventListener('drop', stop);
+    return () => { window.removeEventListener('dragover', stop); window.removeEventListener('drop', stop); };
+  }, []);
+  const dropProps = {
+    onDragEnter: e => { if (hasFiles(e)) { e.preventDefault(); setDrag(true); } },
+    onDragOver: e => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } },
+    onDragLeave: e => { if (!e.currentTarget.contains(e.relatedTarget)) setDrag(false); },
+    onDrop: e => { if (!hasFiles(e)) return; e.preventDefault(); setDrag(false); upload(e.dataTransfer.files); },
+  };
+
   const P = pending;
   const pm = P ? monthsOf(P.add) : {};
   const pc = P ? P.add.reduce((m, e) => { m[e.cat] = (m[e.cat] || 0) + e.amount; return m; }, {}) : {};
   return (
-    <section className="panel fv-card">
+    <section className={`panel fv-card ${drag ? 'drag' : ''}`} {...dropProps}>
       <div className="csum-h"><h2>카드 이용내역 가져오기</h2>
         <span className="muted">{f.cardImport ? `마지막 반영 ${f.cardImport.at}` : '파일을 올리면 미리보기 후 "반영 완료" 로 월별 내역에 쌓입니다'}</span></div>
       <div className="fv-card-row">
@@ -69,6 +84,8 @@ export function CardImport({ f, update, now, onMonth }) {
           <option value="bill">이번 달 청구분 (명세서 합계와 같게)</option>
           <option value="use">이용일에 전체 금액 한 번</option></select></label>
         <label className="btn primary">{P ? '파일 더 올리기' : '이용내역 파일 올리기'}<input ref={ref} type="file" accept=".xls,.xlsx,.csv,.htm,.html" multiple hidden onChange={e => upload(e.target.files)} /></label>
+        <label className="fm-drop" title="눌러서 파일 고르기도 됩니다">{drag ? '여기에 놓으면 올라갑니다' : '또는 파일을 여기로 끌어다 놓기 (여러 개 가능)'}
+          <input type="file" accept=".xls,.xlsx,.csv,.htm,.html" multiple hidden onChange={e => { upload(e.target.files); e.target.value = ''; }} /></label>
       </div>
       {msg && <p className={`sh-msg ${msg.err ? 'err' : ''}`} role="status">{msg.t}</p>}
 

@@ -13,6 +13,9 @@ export default function FinanceView({ area, cat }) {
   const [page, setPage] = useState('main');
   const today = iso(now), ym = today.slice(0, 7);
   const [month, setMonth] = useState(ym);
+  const [view, setView] = useState('date');
+  const [closed, setClosed] = useState(() => new Set());
+  const [focus, setFocus] = useState(null);
   const cats = catsOf(f);
   const monthExp = f.expenses.filter(e => e.date.slice(0, 7) === month).sort((a, b) => b.date.localeCompare(a.date));
   const total = monthExp.reduce((a, e) => a + e.amount, 0);
@@ -28,6 +31,22 @@ export default function FinanceView({ area, cat }) {
   const months = [...new Set([ym, ...f.expenses.map(e => e.date.slice(0, 7))])].sort().reverse();
 
   const setBudget = v => update(x => ({ ...x, budget: Math.max(0, Number(v) || 0) }));
+
+  // 지출 내역: 날짜순 / 카테고리별(분류마다 모아 합계 · 비율, 접고 펴기)
+  const groups = names.map(c => { const list = monthExp.filter(e => e.cat === c); return { c, list, v: list.reduce((t, e) => t + e.amount, 0) }; })
+    .filter(g => g.list.length).sort((a, b) => b.v - a.v);
+  const showCat = c => {                                   // 분류별 지출 막대를 누르면 그 분류 묶음으로
+    setView('cat'); setFocus(c); setClosed(s0 => { const n = new Set(s0); n.delete(c); return n; });
+    setTimeout(() => document.getElementById(`fv-g-${c}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
+  const row = e => (
+    <tr key={e.id}><td>{e.date.slice(5).replace('-', '/')}</td>
+      <td><select className="fv-cat" value={e.cat} onChange={ev => update(x => setExpenseCat(x, e.id, ev.target.value))} aria-label={`${e.memo || '지출'} 분류`}>
+        {[...new Set([...cats.map(c => c.name), e.cat])].map(c => <option key={c}>{c}</option>)}</select></td>
+      <td>{e.memo || '-'}{e.shopId && <span className="tag">구매 목록</span>}{e.card && <span className="tag">{e.card}</span>}</td>
+      <td className="num">{won(e.amount)}</td>
+      <td><button className="tl-del" onClick={() => update(x => delExpense(x, e.id))}>{e.shopId ? '구매 취소' : '삭제'}</button></td></tr>
+  );
 
   if (page === 'cats') return <FinanceCats area={area} cat={cat} month={month} onBack={() => setPage('main')} />;
   return (
@@ -52,34 +71,49 @@ export default function FinanceView({ area, cat }) {
       <MonthlyLedger f={f} update={update} month={month} onMonth={setMonth} />
 
           <section className="panel">
-            <div className="hv-ch"><h2>분류별 지출</h2><span className="muted">{month.replace('-', '년 ')}월 · 세로선은 카테고리 예산</span>
+            <div className="hv-ch"><h2>분류별 지출</h2><span className="muted">{month.replace('-', '년 ')}월 · 세로선은 카테고리 예산 · 막대를 누르면 내역을 모아 봅니다</span>
               <button className="btn sm grow-r" onClick={() => setPage('cats')}>카테고리 · 범위 수정</button></div>
             {byCat.length ? (
               <ul className="fv-bars fv-cbars">{byCat.map(x => (
-                <li key={x.c}><span className="fv-bl">{x.c}</span>
+                <li key={x.c} className="fv-click" onClick={() => showCat(x.c)} title={`${x.c} 내역 모아 보기`}><span className="fv-bl">{x.c}</span>
                   <span className="fv-track"><i style={{ width: `${x.v / maxCat * 100}%`, background: x.b && x.v > x.b ? 'var(--over)' : undefined }} />
                     {x.b > 0 && <em className="fv-cap" style={{ left: `${x.b / maxCat * 100}%` }} title={`예산 ${won(x.b)}`} />}</span>
                   <span className="fv-bv">{won(x.v)}{x.b > 0 && <small> / {won(x.b)}</small>}</span></li>))}</ul>
             ) : <p className="muted">지출 내역이 없습니다.</p>}
           </section>
 
-      <section className="panel">
+      <section className="panel" id="fv-list">
         <div className="csum-h"><h2>지출 내역</h2>
           <select value={month} onChange={e => setMonth(e.target.value)} aria-label="월 선택" className="fv-month">
             {months.map(m => <option key={m} value={m}>{m.replace('-', '년 ')}월</option>)}</select>
-          <span className="muted">합계 {won(total)}</span></div>
-        {monthExp.length ? (
-          <div className="tablewrap"><table className="prog fv-table">
-            <thead><tr><th>날짜</th><th>분류</th><th>내용</th><th>금액</th><th /></tr></thead>
-            <tbody>{monthExp.map(e => (
-              <tr key={e.id}><td>{e.date.slice(5).replace('-', '/')}</td>
-                <td><select className="fv-cat" value={e.cat} onChange={ev => update(x => setExpenseCat(x, e.id, ev.target.value))} aria-label={`${e.memo || '지출'} 분류`}>
-                  {[...new Set([...cats.map(c => c.name), e.cat])].map(c => <option key={c}>{c}</option>)}</select></td>
-                <td>{e.memo || '-'}{e.shopId && <span className="tag">구매 목록</span>}{e.card && <span className="tag">{e.card}</span>}</td>
-                <td className="num">{won(e.amount)}</td>
-                <td><button className="tl-del" onClick={() => update(x => delExpense(x, e.id))}>{e.shopId ? '구매 취소' : '삭제'}</button></td></tr>))}</tbody>
-          </table></div>
-        ) : <p className="muted">이 달의 지출 내역이 없습니다.</p>}
+          <span className="muted">합계 {won(total)}</span>
+          <div className="chips grow-r" role="group" aria-label="보기 방식">
+            <button aria-pressed={view === 'date'} onClick={() => setView('date')}>날짜순</button>
+            <button aria-pressed={view === 'cat'} onClick={() => setView('cat')}>카테고리별</button>
+          </div></div>
+        {!monthExp.length ? <p className="muted">이 달의 지출 내역이 없습니다.</p>
+          : view === 'date' ? (
+            <div className="tablewrap"><table className="prog fv-table">
+              <thead><tr><th>날짜</th><th>분류</th><th>내용</th><th>금액</th><th /></tr></thead>
+              <tbody>{monthExp.map(row)}</tbody>
+            </table></div>
+          ) : (
+            <div className="fv-groups">{groups.map(g => (
+              <details key={g.c} id={`fv-g-${g.c}`} className={`fv-group ${focus === g.c ? 'focus' : ''}`} open={!closed.has(g.c)}
+                onToggle={e => { const open = e.currentTarget.open; setClosed(s0 => { const n = new Set(s0); if (open) n.delete(g.c); else n.add(g.c); return n; }); }}>
+                <summary>
+                  <b>{g.c}</b><span className="muted">{g.list.length}건</span>
+                  <span className="fv-gbar"><i style={{ width: `${g.v / total * 100}%` }} /></span>
+                  <span className="fv-gpct muted">{Math.round(g.v / total * 100)}%</span>
+                  <b className="fv-gsum">{won(g.v)}</b>
+                </summary>
+                <div className="tablewrap"><table className="prog fv-table">
+                  <tbody>{g.list.map(row)}</tbody>
+                </table></div>
+              </details>))}
+              <div className="fv-gbtns"><button className="btn sm" onClick={() => setClosed(new Set())}>모두 펼치기</button><button className="btn sm" onClick={() => setClosed(new Set(groups.map(g => g.c)))}>모두 접기</button></div>
+            </div>
+          )}
       </section>
 
       <LinkedProjects f={f} update={update} now={now} />
