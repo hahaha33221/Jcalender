@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { iso } from '../data.js';
 import { MoneyInput, WEEK, areaVar } from '../shared.jsx';
-import ShoppingList, { useFinance } from './Shopping.jsx';
+import { useFinance } from './Shopping.jsx';
 import { addExpense, catsOf, delExpense, setExpenseCat, won } from './finance.js';
 import FinanceCats from './FinanceCats.jsx';
 import { CardImport, MonthlyLedger } from './FinanceMonthly.jsx';
@@ -60,9 +60,7 @@ export default function FinanceView({ area, cat }) {
       <CardImport update={update} f={f} now={now} onMonth={setMonth} />
       <MonthlyLedger f={f} update={update} month={month} onMonth={setMonth} />
 
-      <div className="fv-grid">
-        <ShoppingList />
-        <div>
+      <div className="fv-grid fv-grid2">
           <section className="panel">
             <h2>지출 입력</h2>
             <form className="fv-form" onSubmit={add}>
@@ -85,7 +83,6 @@ export default function FinanceView({ area, cat }) {
                   <span className="fv-bv">{won(x.v)}{x.b > 0 && <small> / {won(x.b)}</small>}</span></li>))}</ul>
             ) : <p className="muted">지출 내역이 없습니다.</p>}
           </section>
-        </div>
       </div>
 
       <section className="panel">

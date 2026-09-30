@@ -9,10 +9,6 @@ import BarChart from './BarChart.jsx';
    반영된 지출에는 importId 가 붙어 있어 "반영 취소" 로 그 묶음만 지울 수 있다 */
 const uid = () => Math.random().toString(36).slice(2, 10);
 const ymLabel = ym => `${ym.slice(0, 4)}년 ${Number(ym.slice(5, 7))}월`;
-const GUIDE = {
-  롯데카드: '롯데카드 홈페이지(또는 앱) 로그인 → 이용대금명세서 → 해당 월 → 엑셀 다운로드 (이용내역 조회 엑셀도 가능)',
-  KB국민카드: 'KB국민카드 홈페이지 로그인 → 이용내역 조회(승인내역) → 기간 선택(예: 한 달) → 엑셀 저장',
-};
 const monthsOf = list => list.reduce((m, e) => { const k = e.date.slice(0, 7); (m[k] ||= { n: 0, sum: 0 }); m[k].n++; m[k].sum += e.amount; return m; }, {});
 const stamp = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
@@ -100,8 +96,6 @@ export function CardImport({ f, update, now, onMonth }) {
         </div>
       )}
 
-      <ul className="fv-card-guide">{CARD_COMPANIES.map(c => <li key={c}><b>{c}</b> {GUIDE[c]}</li>)}</ul>
-      <p className="note">이미 반영된 건(승인번호 · 같은 명세서 줄)은 다시 올려도 빠지므로, 매달 새 파일을 올리면 월별로 쌓입니다. 롯데카드 명세서의 할부는 "명세서 할부" 설정대로 넣고, 해외 이용 표는 이용 내역과 겹쳐 따로 넣지 않습니다.</p>
     </section>
   );
 }

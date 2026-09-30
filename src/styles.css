@@ -909,3 +909,6 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .fm-log li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 7px 0; border-top: 1px solid var(--line2); }
 .fm-log time { color: var(--ink3); }
 @media (max-width: 600px) { .fm-pre-grid { grid-template-columns: minmax(0, 1fr); } }
+.fv-grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .fv-grid2 { grid-template-columns: minmax(0, 1fr); } }
+.fv-grid2 .hv-ch h2 { white-space: nowrap; }
