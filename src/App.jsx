@@ -488,7 +488,7 @@ function Calendar({ sel, setSel }) {
     if (over.date) pick(over.date);
   };
   const undoMove = () => { if (!moved) return; setStore(s => ({ ...s, events: moved.events, eventNotes: moved.notes })); pick(moved.back); setMoved(null); };
-  const openEdit = e => { if (!dragged.current) setAdding({ ...e, occ: e.sid ? e.date : undefined }); };
+  const openEdit = e => { if (dragged.current) return; pick(e.date); setAdding({ ...e, occ: e.sid ? e.date : undefined }); };
   const { drag, start: startDrag, dragged } = useEventDrag(moveEvent);
   // 날짜 두 번 누르기 → 그 날짜에 일정 추가 (다른 달 칸이면 첫 클릭에 달이 바뀌므로 첫 클릭한 날짜를 기억해 둔다)
   const lastClick = useRef(null);
@@ -541,13 +541,13 @@ function Calendar({ sel, setSel }) {
           })}
         </div>
       </div>
-      <DayTimeline date={selDate} isToday={sel === todayStr} list={list} dueCycles={dueCycles} holiday={HOLIDAYS[sel]} anniv={[...annivOn(store.anniv, sel), ...ddaysOn(store.ddays, sel).map(x => ({ id: x.id, kind: 'D-day', name: x.label }))]}
-        onAdd={time => setAdding({ date: sel, time })} onDelete={delEvent} startDrag={startDrag} drag={drag} onEdit={openEdit} />
+      {adding ? <EventDialog key={adding.id || `${adding.date}|${adding.time}|${adding.fromNote || ''}|${adding.heard || ''}`} init={adding} onSave={saveEvent} onClose={() => setAdding(null)}
+        onDelete={adding.id ? all => { delEvent(adding, all); setAdding(null); } : null} onToNote={adding.id ? () => toNote(adding) : null} />
+      : <DayTimeline date={selDate} isToday={sel === todayStr} list={list} dueCycles={dueCycles} holiday={HOLIDAYS[sel]} anniv={[...annivOn(store.anniv, sel), ...ddaysOn(store.ddays, sel).map(x => ({ id: x.id, kind: 'D-day', name: x.label }))]}
+        onAdd={time => setAdding({ date: sel, time })} onDelete={delEvent} startDrag={startDrag} drag={drag} onEdit={openEdit} />}
       {drag && createPortal(<div className="cal-ghost" style={{ left: drag.x, top: drag.y, '--ac': areaVar(drag.ev.area) }}>
         {drag.ev.time && <small>{drag.ev.time}</small>} {drag.ev.title}
         <em>{drag.over ? (drag.over.date ? `${Number(drag.over.date.slice(5, 7))}/${Number(drag.over.date.slice(8, 10))}로` : drag.over.allDay ? '종일로' : drag.over.note ? '일정 노트로' : `${pad(drag.over.h)}시로`) : '놓을 곳을 고르세요'}</em></div>, document.body)}
-      {adding && <EventDialog init={adding} onSave={saveEvent} onClose={() => setAdding(null)}
-        onDelete={adding.id ? all => { delEvent(adding, all); setAdding(null); } : null} onToNote={adding.id ? () => toNote(adding) : null} />}
       {voice && <VoiceDialog now={now} onDone={ev => { setVoice(false); setAdding(ev); }} onClose={() => setVoice(false)} />}
     </section>
     </>
@@ -648,7 +648,10 @@ function TimelineEvent({ e, onDelete, startDrag, drag, onEdit }) {
 }
 
 /* 일정 추가 창 */
+/* 일정 추가·수정 칸: 팝업 없이 캘린더 오른쪽(날짜 상세) 자리에 바로 열린다 */
 function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
+  const box = useRef(null);
+  useEffect(() => { box.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, []);
   const [f, setF] = useState({ title: init.title || '', date: init.date || '', time: init.time || '', area: init.area || 'P', memo: init.memo || '',
     freq: init.repeat?.freq || '', until: init.repeat?.until || '' });
   const [arm, setArm] = useState(false);
@@ -665,9 +668,10 @@ function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
   };
   const submit = e => { e.preventDefault(); save(series ? 'all' : undefined); };
   return (
-    <div className="modal-bg" onClick={onClose}>
-      <form className="modal" role="dialog" aria-label={edit ? '일정 수정' : '일정 추가'} onClick={e => e.stopPropagation()} onSubmit={submit}>
-        <h2>{edit ? '일정 수정' : init.fromNote ? '노트를 일정으로 넣기' : '일정 추가'}</h2>
+    <div className="cal-side ev-edit" ref={box}>
+      <form className="ev-form" aria-label={edit ? '일정 수정' : '일정 추가'} onSubmit={submit}>
+        <div className="day-h"><h2>{edit ? '일정 수정' : init.fromNote ? '노트를 일정으로 넣기' : '일정 추가'}</h2>
+          <button type="button" className="btn sm" onClick={onClose}>닫기</button></div>
         {init.heard && <p className="heard">인식한 문장: “{init.heard}”<br /><span className="muted">내용을 확인하고 틀린 부분은 고친 뒤 추가하세요.</span></p>}
         <label>제목<input autoFocus={!init.heard} value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="일정 제목" /></label>
         <div className="row2">

@@ -1278,3 +1278,11 @@ body.report-open { overflow: hidden; }
 .wl-r { font-size: 11px; color: var(--ink3); background: var(--code); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
 .wl-t { overflow-wrap: anywhere; }
 @media (max-width: 560px) { .wl-list li { grid-template-columns: 26px minmax(0, 1fr); } .wl-r { grid-column: 2; justify-self: start; } .wl-t { grid-column: 2; } }
+/* 캘린더 › 일정 추가·수정 (팝업 없이 오른쪽 칸) */
+.ev-edit { border-color: var(--ac, var(--a1)); box-shadow: 0 0 0 1px var(--ac, var(--a1)); }
+.ev-form { display: flex; flex-direction: column; gap: 10px; }
+.ev-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink2); }
+.ev-form .day-h { margin-bottom: 2px; }
+.ev-form .btns { flex-wrap: wrap; gap: 6px; }
+.ev-form .btns .grow { flex: 1; }
+.ev-form .row2 > label { min-width: 0; }
