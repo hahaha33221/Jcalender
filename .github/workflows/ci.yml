@@ -1,0 +1,53 @@
+# 푸시할 때마다 자동 점검: 화면 빌드 + API 서버 점검(PostgreSQL 16)
+# 배포는 하지 않는다 (화면 배포는 Vercel 이 GitHub 연결로 자동, VPS 는 server/deploy/update.sh)
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  web:
+    name: 화면 빌드
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  server:
+    name: API 서버 점검
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: jcal
+          POSTGRES_PASSWORD: jcal
+          POSTGRES_DB: jcal
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U jcal" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://jcal:jcal@127.0.0.1:5432/jcal
+      JCAL_ENV_FILE: /nonexistent
+      PGPASSWORD: jcal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - name: 테이블 만들기
+        run: |
+          psql "$DATABASE_URL" -q -v ON_ERROR_STOP=1 -f db/schema.sql
+          for f in db/migrations/*.sql; do psql "$DATABASE_URL" -q -v ON_ERROR_STOP=1 -f "$f"; done
+      - run: npm ci
+        working-directory: server
+      - run: node test.mjs
+        working-directory: server
