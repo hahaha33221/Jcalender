@@ -1,6 +1,9 @@
 /* Jcalender API 서버 (VPS) — 로그인 · 동기화
    GET  /api/health                  서버 · DB 상태
+   GET  /api/config                                 → { signup: 'code' | 'open' | 'closed' }
+   POST /api/signup  {email, password, name, code, device} → { token, user, expiresAt }   (초대 코드 방식이면 code 필요)
    POST /api/login   {email, password, device}     → { token, user, expiresAt }
+   POST /api/password {current, next}               비밀번호 바꾸기 (다른 기기는 로그아웃)
    POST /api/logout                                 (Authorization: Bearer <token>)
    GET  /api/me                                     → { user, snapshot: { version, updatedAt, device } }
    GET  /api/sync                                   → { version, updatedAt, device, data }   (data 없으면 null)
@@ -11,10 +14,11 @@
 import http from 'http';
 import { config } from './config.mjs';
 import { pool, tx } from './db.mjs';
-import { newToken, tokenHash, verifyPassword } from './auth.mjs';
+import crypto from 'crypto';
+import { hashPassword, newToken, tokenHash, verifyPassword } from './auth.mjs';
 import { storeToSql } from '../db/convert.mjs';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 
 /* ── 공통 ── */
 class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
@@ -76,11 +80,63 @@ function stripSecrets(d) {
 }
 const isStore = d => d && typeof d === 'object' && !Array.isArray(d) && ('done' in d || 'events' in d);
 
+async function newSession(c, req, userId, device) {
+  const token = newToken();
+  const s = await c.query(`INSERT INTO jcal.sessions (user_id, token_hash, user_agent, expires_at) VALUES ($1, $2, $3, now() + make_interval(days => $4)) RETURNING expires_at`,
+    [userId, tokenHash(token), cleanDevice(device || req.headers['user-agent']), config.sessionDays]);
+  await c.query('UPDATE jcal.users SET last_login_at = now() WHERE id = $1', [userId]);
+  await c.query('DELETE FROM jcal.sessions WHERE user_id = $1 AND expires_at < now()', [userId]);
+  return { token, expiresAt: s.rows[0].expires_at };
+}
+async function signupSettings() {
+  const { rows } = await pool.query("SELECT key, value FROM jcal.server_settings WHERE key IN ('signup_mode', 'signup_code')");
+  const m = Object.fromEntries(rows.map(r => [r.key, r.value]));
+  const mode = ['code', 'open', 'closed'].includes(m.signup_mode) ? m.signup_mode : 'closed';
+  return { mode: mode === 'code' && !m.signup_code ? 'closed' : mode, code: m.signup_code || '' };
+}
+const sameText = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
+
 /* ── 경로 ── */
 const routes = {
   'GET /api/health': async () => {
     const { rows } = await pool.query('SELECT now() AS now');
     return { ok: true, version: VERSION, time: rows[0].now };
+  },
+
+  'GET /api/config': async () => ({ signup: (await signupSettings()).mode }),
+
+  'POST /api/signup': async (req, body) => {
+    const email = String(body.email || '').trim().toLowerCase(), pw = String(body.password || ''), name = String(body.name || '').trim().slice(0, 100);
+    const key = `${clientIp(req)}|signup`;
+    checkFails(key);
+    const set = await signupSettings();
+    if (set.mode === 'closed') throw new HttpError(403, '지금은 회원가입을 받지 않습니다. 관리자에게 문의하세요');
+    if (set.mode === 'code' && !sameText(String(body.code || '').trim(), set.code)) { addFail(key); throw new HttpError(403, '초대 코드가 맞지 않습니다'); }
+    if (!EMAIL_RE.test(email)) throw new HttpError(400, '이메일 형식이 아닙니다');
+    if (pw.length < 8) throw new HttpError(400, '비밀번호는 8자 이상이어야 합니다');
+    if (!name) throw new HttpError(400, '이름을 입력하세요');
+    const hash = await hashPassword(pw);
+    return tx(async c => {
+      const u = await c.query(`INSERT INTO jcal.users (email, name, password_hash) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING RETURNING id, email, name`, [email, name, hash]);
+      if (!u.rows[0]) throw new HttpError(409, '이미 가입된 이메일입니다. 로그인하세요');
+      const ses = await newSession(c, req, u.rows[0].id, body.device);
+      addFail(key);                                                 // 같은 곳에서 15분에 10명까지만 가입
+      return { token: ses.token, user: { email: u.rows[0].email, name: u.rows[0].name }, expiresAt: ses.expiresAt, created: true };
+    });
+  },
+
+  'POST /api/password': async (req, body) => {
+    const u = await authUser(req);
+    const next = String(body.next || '');
+    if (next.length < 8) throw new HttpError(400, '새 비밀번호는 8자 이상이어야 합니다');
+    const { rows } = await pool.query('SELECT password_hash FROM jcal.users WHERE id = $1', [u.id]);
+    if (!(await verifyPassword(String(body.current || ''), rows[0].password_hash))) throw new HttpError(400, '지금 비밀번호가 맞지 않습니다');
+    await tx(async c => {
+      await c.query('UPDATE jcal.users SET password_hash = $2 WHERE id = $1', [u.id, await hashPassword(next)]);
+      await c.query('DELETE FROM jcal.sessions WHERE user_id = $1 AND id <> $2', [u.id, u.sid]);
+    });
+    return { ok: true };
   },
 
   'POST /api/login': async (req, body) => {
@@ -92,15 +148,8 @@ const routes = {
     const u = rows[0];
     if (!u || !(await verifyPassword(pw, u.password_hash))) { addFail(key); throw new HttpError(401, '이메일 또는 비밀번호가 맞지 않습니다'); }
     fails.delete(key);
-    const token = newToken();
-    const r = await tx(async c => {
-      const s = await c.query(`INSERT INTO jcal.sessions (user_id, token_hash, user_agent, expires_at) VALUES ($1, $2, $3, now() + make_interval(days => $4)) RETURNING expires_at`,
-        [u.id, tokenHash(token), cleanDevice(body.device || req.headers['user-agent']), config.sessionDays]);
-      await c.query('UPDATE jcal.users SET last_login_at = now() WHERE id = $1', [u.id]);
-      await c.query('DELETE FROM jcal.sessions WHERE user_id = $1 AND expires_at < now()', [u.id]);
-      return s.rows[0];
-    });
-    return { token, user: { email: u.email, name: u.name }, expiresAt: r.expires_at };
+    const ses = await tx(c => newSession(c, req, u.id, body.device));
+    return { token: ses.token, user: { email: u.email, name: u.name }, expiresAt: ses.expiresAt };
   },
 
   'POST /api/logout': async req => {

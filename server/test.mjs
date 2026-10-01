@@ -68,6 +68,31 @@ try {
   const me = await call('GET', '/api/me', null, T);
   check('me: 버전 · 기기', me.json.snapshot.version === 3 && me.json.snapshot.device === '맥북');
 
+  console.log('회원가입 · 사용자별 분리');
+  const prevSet = (await pool.query('SELECT key, value FROM jcal.server_settings')).rows;
+  const setS = (k, v) => pool.query('INSERT INTO jcal.server_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value', [k, v]);
+  await setS('signup_mode', 'code'); await setS('signup_code', 'TEST-CODE');
+  check('config: 초대 코드 방식', (await call('GET', '/api/config')).json.signup === 'code');
+  const E2 = `new-${Date.now()}@example.com`;
+  check('틀린 초대 코드 403', (await call('POST', '/api/signup', { email: E2, password: 'pw-12345678', name: '새사람', code: 'WRONG' })).status === 403);
+  check('짧은 비밀번호 400', (await call('POST', '/api/signup', { email: E2, password: 'short', name: '새사람', code: 'TEST-CODE' })).status === 400);
+  const su = await call('POST', '/api/signup', { email: E2, password: 'pw-12345678', name: '새사람', code: 'TEST-CODE' });
+  check('가입 → 바로 로그인 토큰', su.status === 200 && su.json.token && su.json.created, JSON.stringify(su.json));
+  check('같은 이메일 다시 가입 409', (await call('POST', '/api/signup', { email: E2, password: 'pw-12345678', name: '새사람', code: 'TEST-CODE' })).status === 409);
+  const T2 = su.json.token;
+  check('새 사용자는 빈 서버 데이터', (await call('GET', '/api/sync', null, T2)).json.data === null);
+  await call('PUT', '/api/sync', { baseVersion: 0, data: { done: {}, events: [{ id: 'mine', date: '2026-10-03', title: '새사람 일정' }] }, device: '폰' }, T2);
+  const g1u = (await call('GET', '/api/sync', null, T)).json, g2u = (await call('GET', '/api/sync', null, T2)).json;
+  check('사용자끼리 데이터 분리', !JSON.stringify(g1u.data).includes('새사람 일정') && g2u.data.events[0].title === '새사람 일정' && g2u.version === 1);
+  check('비밀번호 바꾸기: 틀린 현재 비밀번호 400', (await call('POST', '/api/password', { current: 'nope', next: 'new-pass-999' }, T2)).status === 400);
+  check('비밀번호 바꾸기', (await call('POST', '/api/password', { current: 'pw-12345678', next: 'new-pass-999' }, T2)).status === 200);
+  check('새 비밀번호로 로그인', (await call('POST', '/api/login', { email: E2, password: 'new-pass-999' })).status === 200);
+  await setS('signup_mode', 'closed');
+  check('가입 막기 → 403', (await call('POST', '/api/signup', { email: `x${E2}`, password: 'pw-12345678', name: 'x', code: 'TEST-CODE' })).status === 403);
+  await pool.query('DELETE FROM jcal.users WHERE email = $1', [E2]);
+  await pool.query('DELETE FROM jcal.server_settings');
+  for (const r of prevSet) await setS(r.key, r.value);
+
   console.log('로그아웃 · 실패 제한');
   check('로그아웃', (await call('POST', '/api/logout', null, T)).status === 200);
   check('로그아웃 뒤 토큰 무효', (await call('GET', '/api/me', null, T)).status === 401);

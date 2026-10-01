@@ -87,6 +87,13 @@ CREATE TABLE store_snapshots (                                -- 앱 동기화: 
   updated_at  timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE server_settings (                                -- 서버 전체 설정 (회원가입 방식 · 초대 코드)
+  key         varchar(50) PRIMARY KEY,                       -- signup_mode: code | open | closed, signup_code
+  value       text NOT NULL,
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO server_settings (key, value) VALUES ('signup_mode', 'code');
+
 -- ============================================================================
 -- 2. 카테고리 · 체크리스트
 --    체크 항목 정의(CHECK_ROW)는 앱 코드(data.js)에 있어 테이블로 두지 않고 row_id 문자열로 참조

@@ -5,14 +5,9 @@ import { iso } from './data.js';
 export const ANNIV_KINDS = ['생일', '기념일'];
 
 /** 기본 기념일 (2026-09-30 받은 엑셀 기준) */
-export const seedAnniv = () => [
-  { id: 'an1', name: '엄마 생신', person: '엄마', date: '2000-10-01', kind: '생일', yearly: true, lunar: true, noYear: true },
-  { id: 'an2', name: '아빠 생신', person: '아빠', date: '2000-10-08', kind: '생일', yearly: true, lunar: true, noYear: true },
-  { id: 'an3', name: '부모님 결혼기념일', person: '부모님', date: '2000-11-19', kind: '기념일', yearly: true, noYear: true },
-  { id: 'an4', name: '엄마 방통고 학사 일정 확인', person: '엄마', date: '2000-01-01', kind: '기념일', yearly: true, noYear: true },
-];
-/** 한 번만: 저장된 기념일을 새 기본 목록으로 바꾼다 (annivV2) */
-export const replaceAnnivOnce = s => (s.annivV2 ? s : { ...s, anniv: seedAnniv(), annivV2: true });
+export const seedAnniv = () => [];                 // 사용자마다 직접 입력 (개인 기념일은 코드에 두지 않음)
+/** 예전 저장 구조 표시만 올린다 (기념일 목록은 그대로) */
+export const replaceAnnivOnce = s => (s.annivV2 ? s : { ...s, annivV2: true });
 
 /* ── 음력 → 양력 (브라우저 내장 한국 음력 달력 Intl 'dangi' 사용) ── */
 let dangi = null;

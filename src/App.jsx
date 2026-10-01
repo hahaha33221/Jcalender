@@ -21,9 +21,10 @@ import { FREQ, expandEvents, repeatText, skipDate } from './recur.js';
 import { ddaysOn } from './dday.js';
 import { SECRETS_KEY, mergeSecrets, migrate, purgeTrash, readSecrets, splitSecrets, toTrash } from './schema.js';
 import { useServerSync } from './serverSync.js';
+import Welcome from './Welcome.jsx';
 import { sourcesOn } from './calendarSources.js';
 import { dueNotifications, recordSent, showOsNotification } from './notify.js';
-import DataSettings from './DataSettings.jsx';
+import DataSettings, { AccountPanel } from './DataSettings.jsx';
 import { AttachList, ProjectSelect, TagChips, TagPicker } from './common.jsx';
 import { DdayStrip } from './categories/DdayPanel.jsx';
 import { ddayText, planDueSoon } from './categories/PlanResearchView.jsx';
@@ -57,6 +58,19 @@ function renameCats(st) {
   return { ...st, reviewed: mv(st.reviewed), goals: st.goals?.boards ? { ...st.goals, boards: mv(st.goals.boards) } : st.goals };
 }
 const seedAll = () => migrate({ ...INIT, financeCleared: true, financeCleared2: true, annivV2: true, events: seedEvents(), anniv: seedAnniv(), health: seedHealth(), finance: seedFinance(), goals: seedGoals(), people: seedPeople(), leisure: seedLeisure(), journal: seedJournal() });
+/** 새 사용자용 빈 데이터: 화면 설정 · 카테고리는 기본값, 기록(일정 · 인맥 · 건강 · 여가 · 저널 · 목표)은 비움 */
+const blankStore = () => {
+  const s = seedAll();
+  const empty = (o, ks) => (o ? { ...o, ...Object.fromEntries(ks.map(k => [k, []])) } : o);
+  return {
+    ...s, events: [], anniv: [], people: [], ddays: [], eventNotes: [],
+    health: empty(s.health, ['workouts', 'sleep', 'meals', 'visits']),
+    leisure: empty(s.leisure, ['trips', 'books', 'logs']),
+    journal: empty(s.journal, ['entries', 'reviews']),
+    goals: s.goals?.boards ? { ...s.goals, examples: true, miles2: true, boards: Object.fromEntries(Object.entries(s.goals.boards).map(([k, b]) => [k, { ...b, items: [], miles: [] }])) } : s.goals,
+    meta: { ...(s.meta || {}), createdAt: new Date().toISOString() },
+  };
+};
 
 function useStore() {
   const [store, setStore] = useState(() => {
@@ -87,7 +101,7 @@ function useStore() {
 /* ───────────────────────── 앱 ───────────────────────── */
 export default function App() {
   const [store, setStore, persist] = useStore();
-  const sync = useServerSync(store, setStore);       // VPS 서버 동기화 (설정 › 서버 연결)
+  const sync = useServerSync(store, setStore, blankStore);   // 로그인 · VPS 서버 동기화 (설정 › 서버 연결)
   setRules(store.rules);                           // 도래 규칙을 저장된 설정으로 맞춘다 (렌더 전에)
   applyCategories(store.categories);               // 카테고리 표에서 숨긴 카테고리를 목록에서 뺀다
   setUserNoGoal((store.categories || []).filter(c => c.hasGoal === false).map(c => c.key));
@@ -208,11 +222,13 @@ export default function App() {
     { id: 'settings', label: '설정' },
   ];
 
+  if (!sync.connected && !sync.guest) return <Welcome sync={sync} />;   // 처음: 로그인 / 회원가입
+
   return (
     <Ctx.Provider value={ctx}>
       <div className="app">
         <aside className="nav" aria-label="주 메뉴">
-          <div className="brand"><b>Jcalender</b><span>{now.getFullYear()}.{pad(now.getMonth() + 1)}.{pad(now.getDate())} ({WEEK[now.getDay()]})</span></div>
+          <div className="brand"><b>Jcalender</b><span>{now.getFullYear()}.{pad(now.getMonth() + 1)}.{pad(now.getDate())} ({WEEK[now.getDay()]})</span>{sync.connected && <span className="nav-user" title={sync.conf.email}>{sync.conf.name || sync.conf.email}님</span>}</div>
           <nav>
             {NAV.map((n, i) => n.sec
               ? <div className="nav-sec" key={i}>{n.sec}</div>
@@ -1000,20 +1016,21 @@ function Progress() {
 
 /* ───────────────────────── 설정 ───────────────────────── */
 function Settings() {
-  const { store, setStore } = useCtx();
+  const { store, setStore, sync } = useCtx();
   const [arm, setArm] = useState(false);
   const rules = { ...DEFAULT_RULES, ...store.rules };
   const setRule = (k, v) => setStore(s => ({ ...s, rules: { ...DEFAULT_RULES, ...s.rules, [k]: v } }));
   const isDefault = Object.keys(DEFAULT_RULES).every(k => String(rules[k]) === String(DEFAULT_RULES[k]));
   const reset = () => {
     if (!arm) { setArm(true); setTimeout(() => setArm(false), 3000); return; }
-    setStore(seedAll()); setArm(false);
+    setStore(blankStore()); setArm(false);
   };
   const days = n => Array.from({ length: n }, (_, i) => i + 1);
   const yearDays = new Date(2025, Number(rules.yearMonth), 0).getDate();   // 윤년 아닌 해 기준
   return (
     <>
       <header className="page-h"><h1>설정</h1><p>정기 체크가 도래하는 날과 데이터를 관리합니다. 바꾸면 대시보드, 캘린더, 체크리스트에 바로 반영됩니다.</p></header>
+      <AccountPanel />
       <div className="panel">
         <div className="csum-h"><h2>체크 주기 규칙</h2>
           <button className="btn sm" disabled={isDefault} onClick={() => setStore(s => ({ ...s, rules: DEFAULT_RULES }))}>기본값으로</button></div>
@@ -1036,7 +1053,9 @@ function Settings() {
       </div>
       <div className="panel">
         <h2>데이터</h2>
-        <p className="muted">체크 상태, 일정, 기념일, 건강 기록, 설정은 이 브라우저에만 저장됩니다. 아래 "백업"으로 파일을 내려받아 두세요.</p>
+        <p className="muted">{sync.connected
+          ? '체크 상태, 일정, 기념일, 건강 기록, 설정은 내 계정(서버)과 이 브라우저에 함께 저장됩니다. 초기화하면 기록이 모두 비워지고 서버에도 반영됩니다.'
+          : '체크 상태, 일정, 기념일, 건강 기록, 설정은 이 브라우저에만 저장됩니다. 아래 "백업"으로 파일을 내려받아 두세요.'}</p>
         <button className={`btn ${arm ? 'danger' : ''}`} onClick={reset}>{arm ? '정말 초기화할까요?' : '모든 데이터 초기화'}</button>
       </div>
       <DataSettings />

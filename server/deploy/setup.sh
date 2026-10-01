@@ -100,6 +100,11 @@ if [ "$(psql "$DATABASE_URL" -tAc "SELECT to_regclass('jcal.users') IS NOT NULL"
   echo "테이블을 만들었습니다"
 fi
 for f in "$APP_DIR"/db/migrations/*.sql; do psql "$DATABASE_URL" -q -v ON_ERROR_STOP=1 -c 'SET client_min_messages = warning' -f "$f"; done
+# 회원가입 초대 코드가 없으면 하나 만든다 (jcal-admin signup 으로 보기 · 바꾸기)
+if [ "$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM jcal.server_settings WHERE key = 'signup_code'")" = 0 ]; then
+  CODE=$(openssl rand -hex 4 | tr a-f A-F | sed 's/^\(....\)/\1-/')
+  psql "$DATABASE_URL" -q -c "INSERT INTO jcal.server_settings (key, value) VALUES ('signup_code', '$CODE') ON CONFLICT DO NOTHING"
+fi
 echo "jcal DB 테이블 수: $(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='jcal' AND table_type='BASE TABLE'")"
 
 step "5/7 API 서버 (systemd 서비스 jcal-api, 127.0.0.1:$API_PORT)"
@@ -205,3 +210,4 @@ printf '\n\033[1m완료\033[0m\n'
 echo "API 주소:    https://${API_HOST}"
 echo "확인:        curl https://${API_HOST}/api/health"
 echo "사용자 추가: jcal-admin add-user 이메일 이름"
+/usr/local/bin/jcal-admin signup

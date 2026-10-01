@@ -13,7 +13,7 @@
 
 | 묶음 | 테이블 | 수 |
 |---|---|---|
-| 사용자 · 인증 | users, sessions, devices, user_settings, user_secrets, store_snapshots | 6 |
+| 사용자 · 인증 | users, sessions, devices, user_settings, user_secrets, store_snapshots, server_settings | 7 |
 | 카테고리 · 체크리스트 | categories, check_done, check_prefs, run_logs | 4 |
 | 공통 | projects, tags, attachments, notifications | 4 |
 | 캘린더 | events, event_skips, event_tags, event_notes | 4 |

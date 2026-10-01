@@ -68,6 +68,7 @@ export const WORK_LOG = [
     ['43ac8fa..1e75061', 'VPS 서버 DB(PostgreSQL) 테이블 설계: db/schema.sql · 백업 → DB 변환 db/import-backup.mjs · 설계서 docs/DB-VPS.md'],
     ['1e75061..86f250f', 'VPS(Hostinger) API 서버: 로그인 · 동기화(server/), 설치 스크립트(PostgreSQL 16 · HTTPS · 매일 백업), 설정 › 서버 연결(자동 올리기 · 받기 · 충돌 선택)'],
     ['86f250f..7ef3354', '서버가 Vercel 주소(jcalender-amber.vercel.app)와 맥북 개발 화면에서 온 요청만 받도록 제한'],
-    ['7ef3354..', 'VPS 다른 서비스와 겹치지 않게 Jcalender 전용 설치: 전용 주소(jcal-31-97-71-87.sslip.io) · 기존 Nginx 에 설정 1개만 추가 · 전용 Node · 기존 PostgreSQL 안 전용 DB · 방화벽 변경 없음'],
+    ['7ef3354..ef9122e', 'VPS 다른 서비스와 겹치지 않게 Jcalender 전용 설치: 전용 주소(jcal-31-97-71-87.sslip.io) · 기존 Nginx 에 설정 1개만 추가 · 전용 Node · 기존 PostgreSQL 안 전용 DB · 방화벽 변경 없음'],
+    ['ef9122e..', '여러 사용자: 처음 화면 로그인 / 회원가입(초대 코드), 사용자마다 서버에 따로 저장 · 가입하면 빈 데이터로 시작, 로그아웃하면 브라우저 데이터 지움, 비밀번호 바꾸기, 관리자 명령(초대 코드 · 이름 · 삭제), 코드에 있던 개인 기념일 예시 삭제'],
   ] },
 ];

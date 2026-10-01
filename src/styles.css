@@ -1334,6 +1334,28 @@ body.report-open { overflow: hidden; }
 .srv-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 12px; align-items: end; margin: 4px 0; font-size: 13px; }
 .srv-form label { display: flex; flex-direction: column; gap: 4px; }
 .srv-on { color: var(--ok); }
+.nav-user { font-size: 12px; opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 처음 화면 (Welcome.jsx) */
+.welcome { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: var(--paper); }
+.wl-box { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 14px; }
+.wl-brand { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 4px; }
+.wl-brand b { font-size: 26px; letter-spacing: -0.5px; }
+.wl-brand span { color: var(--ink3); font-size: 13px; }
+.wl-guest { background: none; border: 0; color: var(--ink3); font-size: 13px; text-decoration: underline; cursor: pointer; padding: 6px; align-self: center; }
+.auth { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.auth.compact { max-width: 460px; padding: 14px; }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--code); border-radius: 8px; padding: 3px; }
+.auth-tabs button { border: 0; background: none; padding: 8px; border-radius: 6px; cursor: pointer; color: var(--ink2); font: inherit; font-size: 14px; }
+.auth-tabs button.on { background: var(--card); color: var(--ink); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.auth-form { display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.auth-form label { display: flex; flex-direction: column; gap: 4px; color: var(--ink2); }
+.auth-form input { font-size: 15px; padding: 9px 10px; }
+.auth-form .btn.primary { padding: 10px; font-size: 15px; margin-top: 2px; }
+.auth-form .sh-msg { margin: 0; }
+.auth-note { margin: 0; font-size: 12px; color: var(--ink3); line-height: 1.5; }
+.auth-server { font-size: 12px; color: var(--ink3); }
+.auth-server summary { cursor: pointer; }
+.auth-server input { width: 100%; margin-top: 6px; font-size: 13px; padding: 6px 8px; box-sizing: border-box; }
 .banner .btn { margin-left: 8px; }
 .ds-confirm { border: 1px solid var(--over); background: var(--oversoft); border-radius: 8px; padding: 10px 12px; margin: 8px 0; font-size: 13px; display: flex; flex-direction: column; gap: 8px; }
 .ds-table { width: 100%; }
