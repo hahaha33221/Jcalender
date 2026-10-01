@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Jcalender VPS 설치 (Ubuntu 22.04 / 24.04, root 로 실행) — 여러 번 실행해도 안전 (업데이트에도 사용)
-#   API_HOST=srv1809055.hstgr.cloud ALLOWED_ORIGINS=https://jcalender.vercel.app bash /opt/jcalender/server/deploy/setup.sh
+#   API_HOST=srv1809055.hstgr.cloud ALLOWED_ORIGINS=https://jcalender-amber.vercel.app bash /opt/jcalender/server/deploy/setup.sh
 # 하는 일: PostgreSQL 16 · Node 22 · Caddy(HTTPS 자동) 설치 → DB · 테이블 → API 서버(systemd) → 방화벽 → 매일 백업
 set -euo pipefail
 
@@ -54,7 +54,7 @@ if [ ! -f "$ENV_FILE" ]; then
 DATABASE_URL=postgres://jcal:${DB_PW}@127.0.0.1:5432/jcal
 PORT=8787
 HOST=127.0.0.1
-ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://*.vercel.app,http://localhost:5288}
+ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://jcalender-amber.vercel.app,http://localhost:5288}
 SESSION_DAYS=90
 MAX_BODY_MB=30
 API_HOST=${API_HOST}

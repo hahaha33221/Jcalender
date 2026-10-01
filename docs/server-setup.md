@@ -5,7 +5,7 @@
 ## 1. 개요
 
 - 목적: 맥북 · 휴대폰 · Vercel 주소 어디서 열어도 같은 데이터를 쓰도록 VPS에 로그인 · 동기화 서버를 둔다.
-- 구성: 화면(Vercel 또는 맥북 `npm run dev`) → `https://srv1809055.hstgr.cloud` (Caddy, HTTPS 자동) → API 서버(Node, 8787번, 밖에서 직접 접속 불가) → PostgreSQL 16 (`jcal` DB, 테이블 48개).
+- 구성: 화면(Vercel `https://jcalender-amber.vercel.app` 또는 맥북 `npm run dev`) → `https://srv1809055.hstgr.cloud` (Caddy, HTTPS 자동) → API 서버(Node, 8787번, 밖에서 직접 접속 불가) → PostgreSQL 16 (`jcal` DB, 테이블 48개).
 - 도메인: 따로 사지 않는다. Hostinger 가 준 서버 이름 `srv1809055.hstgr.cloud` 가 이미 31.97.71.87 로 연결되어 있어 Let's Encrypt 인증서를 받을 수 있다.
 
 ## 2. 안건
@@ -57,7 +57,7 @@
 | 방화벽 | 22(SSH) · 80 · 443 만 허용 |
 | 비밀번호 | scrypt 해시로 저장, 15분에 10번 틀리면 잠시 막음 |
 | 로그인 토큰 | 서버에는 해시만 저장, 90일 유효, 로그아웃하면 바로 무효 |
-| 화면 주소 제한 | `*.vercel.app`, `http://localhost:5288` 에서 온 요청만 허용 (`/etc/jcalender.env` 의 `ALLOWED_ORIGINS`) |
+| 화면 주소 제한 | `https://jcalender-amber.vercel.app`, `http://localhost:5288` 에서 온 요청만 허용 (`/etc/jcalender.env` 의 `ALLOWED_ORIGINS`) |
 | DB 비밀번호 | 설치할 때 무작위로 만들어 `/etc/jcalender.env` (root 만 읽기) 에 저장 |
 
 ## 4. 결론
@@ -70,7 +70,7 @@
 | 순서 | 할 일 | 내용 |
 |---|---|---|
 | 1 | 설치 실행 | 위 3-1 순서대로 (막히면 터미널 화면을 그대로 보내 주기) |
-| 2 | Vercel 주소 확정 후 제한 | `ALLOWED_ORIGINS=https://내주소.vercel.app,http://localhost:5288 bash server/deploy/update.sh` |
+| 2 | Vercel 주소 제한 (완료) | `https://jcalender-amber.vercel.app` 만 허용. 주소가 바뀌면 `ALLOWED_ORIGINS=새주소,http://localhost:5288 bash server/deploy/update.sh` |
 | 3 | 명함 이미지 파일 저장소 | 지금은 데이터 안에 함께 올라감 (최대 30MB). 많아지면 서버 파일로 분리 |
 | 4 | 비밀 정보 동기화 | 필요하면 API 키를 서버 `user_secrets` 에 암호화해 저장 |
 

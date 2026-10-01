@@ -66,6 +66,7 @@ export const WORK_LOG = [
     ['ca83273..c6e2e34', '안전장치: 저장 구조 옮기기 실패 시 예전 구조로 열기, 화면 오류 시 빈 화면 대신 오류 내용·데이터 백업 버튼'],
     ['c6e2e34..43ac8fa', 'Vercel 배포 설정(vercel.json), 커밋 작성자를 본인 GitHub 계정으로'],
     ['43ac8fa..1e75061', 'VPS 서버 DB(PostgreSQL) 테이블 설계: db/schema.sql · 백업 → DB 변환 db/import-backup.mjs · 설계서 docs/DB-VPS.md'],
-    ['1e75061..', 'VPS(Hostinger) API 서버: 로그인 · 동기화(server/), 설치 스크립트(PostgreSQL 16 · HTTPS · 매일 백업), 설정 › 서버 연결(자동 올리기 · 받기 · 충돌 선택)'],
+    ['1e75061..86f250f', 'VPS(Hostinger) API 서버: 로그인 · 동기화(server/), 설치 스크립트(PostgreSQL 16 · HTTPS · 매일 백업), 설정 › 서버 연결(자동 올리기 · 받기 · 충돌 선택)'],
+    ['86f250f..', '서버가 Vercel 주소(jcalender-amber.vercel.app)와 맥북 개발 화면에서 온 요청만 받도록 제한'],
   ] },
 ];
