@@ -1058,6 +1058,11 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .bi-hist summary { cursor: pointer; color: var(--ink2); }
 .bi-hist ul { list-style: none; margin: 6px 0 0; padding: 0; }
 .bi-hist li { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--line2); }
+.ge-box { flex-basis: 100%; border: 1px solid var(--over); background: var(--oversoft); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+.ge-box p, .ge-box ul { margin: 0 0 6px; }
+.ge-box ul { padding-left: 18px; }
+.ge-warn { color: var(--over); }
+.ge-box.ok { border-color: var(--line); background: var(--card); }
 .fv-timeopt { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--ink2); white-space: nowrap; }
 .fv-date { white-space: nowrap; }
 .fv-time { margin-left: 6px; font-size: 12px; color: var(--ink3); font-variant-numeric: tabular-nums; }

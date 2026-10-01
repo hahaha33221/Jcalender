@@ -140,7 +140,7 @@ export function boardForYear(g, year) {
   const roots = new Set(g.items.filter(i => !i.parent && i.start <= y1 && i.end >= y0).map(i => i.id));
   const keep = new Set(roots);
   let grew = true;
-  while (grew) { grew = false; g.items.forEach(i => { if (i.parent && keep.has(i.parent) && !keep.has(i.id)) { keep.add(i.id); grew = true; } }); }
+  while (grew) { grew = false; g.items.forEach(i => { if (i.parent && keep.has(i.parent) && !keep.has(i.id) && i.start <= y1 && i.end >= y0) { keep.add(i.id); grew = true; } }); }   // 그 해와 겹치는 하위만
   return { items: g.items.filter(i => keep.has(i.id)), miles: g.miles.filter(m => m.date.slice(0, 4) === String(year)) };
 }
 
