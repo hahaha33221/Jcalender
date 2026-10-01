@@ -1316,6 +1316,9 @@ body.report-open { overflow: hidden; }
 .prog-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .prog-col > .panel { margin: 0; }
 .wl-q { flex: 0 1 160px; min-width: 0; width: auto; }
+.wl-day { width: auto; max-width: 200px; }
+.wl-meta { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.wl-d { font-size: 11.5px; color: var(--ink2); font-variant-numeric: tabular-nums; }
 .wl-g + .wl-g { margin-top: 6px; }
 .wl-h { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: var(--paper); border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 13.5px; color: var(--ink); cursor: pointer; text-align: left; }
 .wl-h i { font-style: normal; color: var(--ink3); width: 12px; }
@@ -1324,7 +1327,7 @@ body.report-open { overflow: hidden; }
 .wl-no { color: var(--ink3); text-align: right; font-variant-numeric: tabular-nums; }
 .wl-r { font-size: 11px; color: var(--ink3); background: var(--code); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
 .wl-t { overflow-wrap: anywhere; }
-@media (max-width: 560px) { .wl-list li { grid-template-columns: 26px minmax(0, 1fr); } .wl-r { grid-column: 2; justify-self: start; } .wl-t { grid-column: 2; } }
+@media (max-width: 560px) { .wl-list li { grid-template-columns: 26px minmax(0, 1fr); } .wl-meta { grid-column: 2; justify-self: start; } .wl-t { grid-column: 2; } }
 /* 캘린더 › 일정 추가·수정 (팝업 없이 오른쪽 칸) */
 .ev-edit { border-color: var(--ac, var(--a1)); box-shadow: 0 0 0 1px var(--ac, var(--a1)); }
 .ev-form { display: flex; flex-direction: column; gap: 10px; }
