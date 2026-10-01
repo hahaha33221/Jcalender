@@ -1044,6 +1044,20 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .ps-add input { flex: 1 1 180px; min-width: 0; padding: 4px 8px; }
 .ps-sum { margin-left: auto; }
 @media (max-width: 560px) { .ps-list li { grid-template-columns: minmax(0, 1fr) 88px 24px; } .ps-amt { grid-column: 1; text-align: left; } .ps-role { grid-column: 2 / 4; } .ps-sum { margin-left: 0; } }
+.bi-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px 12px; font-size: 13px; margin: 6px 0 10px; }
+.bi-form label { display: flex; flex-direction: column; gap: 4px; color: var(--ink2); }
+.bi-form label.wide { grid-column: span 2; }
+@media (max-width: 560px) { .bi-form label.wide { grid-column: auto; } }
+.bi-up { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.bi-up .btn[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+.bi .fm-drop.on { border-color: var(--ok); color: var(--ok); }
+.bi-pre { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-size: 13px; }
+.bi-pre p { margin: 0 0 8px; }
+.bi-pre .nw { white-space: nowrap; }
+.bi-hist { margin-top: 10px; font-size: 13px; }
+.bi-hist summary { cursor: pointer; color: var(--ink2); }
+.bi-hist ul { list-style: none; margin: 6px 0 0; padding: 0; }
+.bi-hist li { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--line2); }
 .fv-timeopt { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--ink2); white-space: nowrap; }
 .fv-date { white-space: nowrap; }
 .fv-time { margin-left: 6px; font-size: 12px; color: var(--ink3); font-variant-numeric: tabular-nums; }

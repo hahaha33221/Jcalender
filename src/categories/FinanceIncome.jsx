@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { MoneyInput } from '../shared.jsx';
 import { won } from './finance.js';
 import BarChart from './BarChart.jsx';
+import BankImport from './BankImport.jsx';
 
 /* 개인 재무 › 수입관리 탭
    finance.incomes      = [{ id, date, amount, cat, source(입금처), memo, fixedId?(정기 수입에서 넣은 것) }]
    finance.incomeFixed  = [{ id, cat, source, amount, day(매월 n일) }]   정기 수입(급여 등) — 달마다 한 번에 넣기
+   월급통장 거래내역 파일 → 입금을 수입으로 (BankImport.jsx · bankImport.js)
    구성: 요약(수입 · 지출 · 수지 · 저축률) → 수입 입력 | 정기 수입 → 분류별 수입 → 수입 내역(정렬 · 번호) → 월별 수입·지출 */
 export const INCOME_CATS = ['급여', '상여', '부수입', '이자·배당', '용돈·지원', '환급', '기타'];
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -92,6 +94,8 @@ export default function FinanceIncome({ f, update, today, month, setMonth, month
         </section>
       </div>
 
+      <BankImport f={f} update={update} onMonth={setMonth} />
+
       <section className="panel">
         <div className="hv-ch"><h2>분류별 수입</h2><span className="muted">{ymL(month)}</span></div>
         {byCat.length ? <ul className="fv-bars fv-cbars">{byCat.map(x => (
@@ -113,7 +117,7 @@ export default function FinanceIncome({ f, update, today, month, setMonth, month
               <tr key={e.id}><td className="fv-no">{i + 1}</td><td>{e.date.slice(5).replace('-', '/')}</td>
                 <td><select className="fv-cat" value={e.cat} onChange={ev => setInc(l => l.map(k => (k.id === e.id ? { ...k, cat: ev.target.value } : k)))} aria-label="수입 분류">
                   {[...new Set([...INCOME_CATS, e.cat])].map(c => <option key={c}>{c}</option>)}</select></td>
-                <td>{e.source || '-'}</td><td>{e.memo || '-'}{e.fixedId && <span className="tag">정기</span>}</td>
+                <td>{e.source || '-'}</td><td>{e.memo || '-'}{e.fixedId && <span className="tag">정기</span>}{e.bankKey && <span className="tag">통장</span>}</td>
                 <td className="num">{won(e.amount)}</td>
                 <td><button className="tl-del" onClick={() => setInc(l => l.filter(k => k.id !== e.id))}>삭제</button></td></tr>))}</tbody>
           </table></div>
