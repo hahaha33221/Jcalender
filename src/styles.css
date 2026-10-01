@@ -1006,6 +1006,16 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .rp-item { break-inside: avoid-page; }
 .rp-edit { width: 100%; box-sizing: border-box; font: inherit; color: #000; background: #fff; border: 1px dashed #999; padding: 6px 8px; resize: vertical; }
 .print-only { display: none; }
+.fp-saved { margin-top: 14px; border-top: 1px solid var(--line2); padding-top: 10px; }
+.fp-saved h3 { font-size: 14px; margin: 0 0 6px; }
+.fp-saved-t { width: 100%; font-size: 13px; border-collapse: collapse; }
+.fp-saved-t th, .fp-saved-t td { padding: 5px 6px; border-bottom: 1px solid var(--line2); text-align: left; vertical-align: middle; }
+.fp-saved-t td.r { text-align: right; }
+.fp-saved-t .nw { white-space: nowrap; }
+.fp-saved-t input { width: 100%; min-width: 140px; padding: 3px 6px; }
+.fp-saved-t .btn + .btn { margin-left: 4px; }
+.fp-saved-empty { font-size: 12px; margin-top: 10px; }
+@media (max-width: 700px) { .fp-saved-t thead { display: none; } .fp-saved-t tr { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 0; border-bottom: 1px solid var(--line2); } .fp-saved-t td { border: 0; padding: 2px 0; } .fp-saved-t td:nth-child(2) { grid-column: 1 / -1; } }
 .rp-split-edit { border: 1px dashed #999; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #000; }
 .rp-split-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .rp-split-row > b { min-width: 110px; }

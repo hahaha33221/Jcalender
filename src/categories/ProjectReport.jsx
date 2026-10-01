@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { won } from './finance.js';
 import { useCtx } from '../shared.jsx';
@@ -8,6 +8,7 @@ import { useCtx } from '../shared.jsx';
    - 1쪽 "한눈에 보기": 핵심 지표 4칸 → 핵심 요약(자동 문장) → 프로젝트별 요약 표 → 월별 추이 표
    - 2쪽부터 "프로젝트 상세"(선택): 프로젝트마다 머리 줄(합계·건수·기간) · 메모 | 분류별 합계 · 큰 지출 TOP 3 · 전체 지출 내역
    - "정산 (N분의 1)": 프로젝트마다 함께 나눌 사람 · 나 포함 여부를 정하면 1인당 금액 · 받을 금액 (project.split = { people, me })
+   - 저장: "보고서 저장" 또는 "PDF로 저장"을 누르면 그때 모습 그대로 finance.savedReports 에 보관 (SavedReports 에서 다시 열기 · PDF · 삭제)
    - 마지막 "비고 · 향후 계획": 미리보기에서 직접 적는 칸 (finance.report.next 에 저장)
    - 옵션: 프로젝트 선택 · 기간(시작 달 ~ 끝 달) · 구성(요약만 / 상세 포함)
    - 인쇄 서식: 글자 검은색, 음영 없음, 모든 내용은 테두리 칸 안, A4 세로
@@ -70,7 +71,25 @@ export default function ProjectReport({ f, update, today, onClose }) {
     window.addEventListener('keydown', esc);
     return () => { document.body.classList.remove('report-open'); window.removeEventListener('keydown', esc); };
   }, []);
+  const art = useRef(null);
+  const [saved, setSaved] = useState(null);
+  /** 지금 화면 그대로(입력칸 제외) 보관. 같은 내용이 마지막 저장본과 같으면 다시 저장하지 않음 */
+  const saveSnapshot = () => {
+    if (!art.current || !chosen.length) return null;
+    const c = art.current.cloneNode(true);
+    c.querySelectorAll('.no-print').forEach(n => n.remove());
+    c.querySelectorAll('.print-only').forEach(n => n.classList.remove('print-only'));
+    const html = c.innerHTML;
+    const list = f.savedReports || [];
+    if (list[0]?.html === html) { setSaved(list[0]); return list[0]; }
+    const rep = { id: Math.random().toString(36).slice(2, 10), at: new Date().toISOString(), title: `프로젝트 지출 보고서 (${period})`,
+      projects: chosen.map(p => p.name), total, html };
+    update(x => ({ ...x, savedReports: [rep, ...(x.savedReports || [])].slice(0, 50) }));
+    setSaved(rep);
+    return rep;
+  };
   const print = () => {
+    saveSnapshot();
     const t = document.title;
     document.title = `project_report_${today.replace(/-/g, '')}`;           // PDF 파일 이름 (영문)
     window.print();
@@ -88,12 +107,13 @@ export default function ProjectReport({ f, update, today, onClose }) {
           <select value={from} onChange={e => setFrom(e.target.value)}>{allMonths.map(m => <option key={m} value={m}>{ymL(m)}</option>)}</select>~
           <select value={to} onChange={e => setTo(e.target.value)}>{allMonths.map(m => <option key={m} value={m}>{ymL(m)}</option>)}</select></span>}
         <span className="chips"><button aria-pressed={!detail} onClick={() => setDetail(false)}>요약만</button><button aria-pressed={detail} onClick={() => setDetail(true)}>상세 포함</button></span>
+        <button className="btn" onClick={saveSnapshot} disabled={!chosen.length}>보고서 저장</button>
         <button className="btn primary" onClick={print} disabled={!chosen.length}>PDF로 저장</button>
         <button className="btn" onClick={onClose}>닫기</button>
-        <small>인쇄 창에서 대상을 "PDF로 저장"으로 고르세요. 맨 아래 "비고 · 향후 계획"은 바로 적을 수 있습니다.</small>
+        <small>{saved ? `저장됨 · ${new Date(saved.at).toLocaleString('ko-KR')} (연계 프로젝트 › 저장된 보고서)` : '인쇄 창에서 대상을 "PDF로 저장"으로 고르세요. PDF로 저장하면 보고서도 함께 보관됩니다.'}</small>
       </div>
 
-      <article className="rp">
+      <article className="rp" ref={art}>
         <header className="rp-head">
           <p className="rp-kicker">개인 재무 · 연계 프로젝트</p>
           <h1>프로젝트 지출 보고서</h1>
@@ -221,5 +241,33 @@ function SplitEditor({ p, names, onChange }) {
       <button type="button" className="btn sm" onClick={add}>추가</button>
       <span className="rp-split-n">{sp.people.length ? `${sp.people.length + (sp.me ? 1 : 0)}분의 1` : '본인 부담'}</span>
     </div>
+  );
+}
+
+/** 저장된 보고서 보기 (그때 모습 그대로, 다시 PDF 로 저장 가능) */
+export function SavedReportView({ rep, onClose }) {
+  useEffect(() => {
+    document.body.classList.add('report-open');
+    const esc = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', esc);
+    return () => { document.body.classList.remove('report-open'); window.removeEventListener('keydown', esc); };
+  }, []);
+  const print = () => {
+    const t = document.title;
+    document.title = `project_report_${rep.at.slice(0, 10).replace(/-/g, '')}`;
+    window.print();
+    setTimeout(() => { document.title = t; }, 500);
+  };
+  return createPortal(
+    <div className="rp-wrap" role="dialog" aria-label={rep.title}>
+      <div className="rp-bar no-print">
+        <b>저장된 보고서</b><span>{new Date(rep.at).toLocaleString('ko-KR')} 저장 · {rep.projects.join(', ')}</span>
+        <button className="btn primary" onClick={print}>PDF로 저장</button>
+        <button className="btn" onClick={onClose}>닫기</button>
+      </div>
+      {/* 이 앱이 만든 보고서 화면(글자는 모두 React 가 이스케이프한 값)을 그대로 보관한 것 */}
+      <article className="rp" dangerouslySetInnerHTML={{ __html: rep.html }} />
+    </div>,
+    document.body,
   );
 }

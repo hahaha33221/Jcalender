@@ -5,7 +5,7 @@ import { useFinance } from './Shopping.jsx';
 import { catsOf, delExpense, setExpenseCat, setExpenseProject, won } from './finance.js';
 import FinanceCats from './FinanceCats.jsx';
 import { CardImport, MonthlyLedger } from './FinanceMonthly.jsx';
-import ProjectReport from './ProjectReport.jsx';
+import ProjectReport, { SavedReportView } from './ProjectReport.jsx';
 import FinanceIncome from './FinanceIncome.jsx';
 
 /* 개인 › 개인 재무 전용 화면: 지출 관리 + 구매해야 할 물품 (대시보드와 같은 데이터)
@@ -208,6 +208,36 @@ function LinkedProjects({ f, update, now }) {
         <input value={name} onChange={e => setName(e.target.value)} placeholder="프로젝트 이름 (예: 이사 준비, 자동차 구매)" aria-label="새 연계 프로젝트 이름" />
         <button className="btn primary" disabled={!name.trim()}>추가</button>
       </form>
+      <SavedReports f={f} update={update} />
     </section>
+  );
+}
+
+/* 저장된 보고서: 보고서 화면에서 "보고서 저장" · "PDF로 저장"을 누르면 그때 모습 그대로 쌓인다 (finance.savedReports, 최근 50개) */
+function SavedReports({ f, update }) {
+  const list = f.savedReports || [];
+  const [open, setOpen] = useState(null);
+  const [arm, setArm] = useState(null);
+  const del = id => {
+    if (arm !== id) { setArm(id); setTimeout(() => setArm(a => (a === id ? null : a)), 3000); return; }
+    update(x => ({ ...x, savedReports: (x.savedReports || []).filter(r => r.id !== id) })); setArm(null);
+  };
+  const rename = (id, title) => update(x => ({ ...x, savedReports: (x.savedReports || []).map(r => (r.id === id ? { ...r, title } : r)) }));
+  if (!list.length) return <p className="muted fp-saved-empty">저장된 보고서가 없습니다. 보고서 화면에서 "보고서 저장" 또는 "PDF로 저장"을 누르면 여기에 보관됩니다.</p>;
+  return (
+    <div className="fp-saved">
+      <h3>저장된 보고서 <small className="muted">{list.length}개</small></h3>
+      <table className="fp-saved-t"><thead><tr><th>저장일</th><th>제목</th><th>프로젝트</th><th>총 지출</th><th /></tr></thead>
+        <tbody>{list.map(r => (
+          <tr key={r.id}>
+            <td className="nw">{new Date(r.at).toLocaleString('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+            <td><input value={r.title} onChange={e => rename(r.id, e.target.value)} aria-label="보고서 제목" /></td>
+            <td>{r.projects.join(', ')}</td>
+            <td className="r nw">{won(r.total)}</td>
+            <td className="nw"><button className="btn sm" onClick={() => setOpen(r)}>열기</button>
+              <button className={`btn sm ${arm === r.id ? 'danger' : ''}`} onClick={() => del(r.id)}>{arm === r.id ? '정말 삭제?' : '삭제'}</button></td>
+          </tr>))}</tbody></table>
+      {open && <SavedReportView rep={open} onClose={() => setOpen(null)} />}
+    </div>
   );
 }
