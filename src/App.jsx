@@ -20,6 +20,7 @@ import { annivOn, lunarTag, nextAnniv, replaceAnnivOnce, seedAnniv } from './ann
 import { FREQ, expandEvents, repeatText, skipDate } from './recur.js';
 import { ddaysOn } from './dday.js';
 import { SECRETS_KEY, mergeSecrets, migrate, purgeTrash, readSecrets, splitSecrets, toTrash } from './schema.js';
+import { useServerSync } from './serverSync.js';
 import { sourcesOn } from './calendarSources.js';
 import { dueNotifications, recordSent, showOsNotification } from './notify.js';
 import DataSettings from './DataSettings.jsx';
@@ -86,6 +87,7 @@ function useStore() {
 /* ───────────────────────── 앱 ───────────────────────── */
 export default function App() {
   const [store, setStore, persist] = useStore();
+  const sync = useServerSync(store, setStore);       // VPS 서버 동기화 (설정 › 서버 연결)
   setRules(store.rules);                           // 도래 규칙을 저장된 설정으로 맞춘다 (렌더 전에)
   applyCategories(store.categories);               // 카테고리 표에서 숨긴 카테고리를 목록에서 뺀다
   setUserNoGoal((store.categories || []).filter(c => c.hasGoal === false).map(c => c.key));
@@ -192,7 +194,7 @@ export default function App() {
   const go = (p, init = null) => { setCheckInit(init); nav(p); };
   const openCat = (a, c) => nav(a, c);
 
-  const ctx = { store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go, openCat };
+  const ctx = { store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go, openCat, sync };
 
   const NAV = [
     { id: 'home', label: '대시보드' },
@@ -221,6 +223,7 @@ export default function App() {
         </aside>
         <main className="main">
           {!persist && <p className="banner">이 브라우저에서는 데이터가 저장되지 않습니다. 새로고침하면 진행 상태가 사라집니다.</p>}
+          {sync.conflict && page !== 'settings' && <p className="banner">서버와 이 기기의 데이터가 다릅니다. <button className="btn" onClick={() => go('settings')}>설정에서 고르기</button></p>}
           {page === 'home' && <Home />}
           {page === 'check' && <CheckPage key={JSON.stringify(checkInit)} init={checkInit} />}
           {AREAS[page] && !cat && <AreaPage key={page} area={page} />}

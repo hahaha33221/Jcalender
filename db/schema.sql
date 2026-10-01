@@ -78,6 +78,15 @@ CREATE TABLE user_secrets (                                   -- API 키 · 토�
   PRIMARY KEY (user_id, key)
 );
 
+CREATE TABLE store_snapshots (                                -- 앱 동기화: 사용자 데이터 전체(비밀 정보 제외) 최신본
+  user_id     uuid PRIMARY KEY REFERENCES users ON DELETE CASCADE,
+  version     bigint NOT NULL DEFAULT 0,                     -- 올릴 때마다 +1 (기기가 가진 버전과 다르면 충돌)
+  data        jsonb NOT NULL,
+  device      varchar(100) NOT NULL DEFAULT '',              -- 마지막으로 올린 기기
+  size_bytes  int NOT NULL DEFAULT 0,
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
 -- ============================================================================
 -- 2. 카테고리 · 체크리스트
 --    체크 항목 정의(CHECK_ROW)는 앱 코드(data.js)에 있어 테이블로 두지 않고 row_id 문자열로 참조

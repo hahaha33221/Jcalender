@@ -4,6 +4,7 @@ import { useCtx } from './shared.jsx';
 import { download } from './xlsx.js';
 import { TRASH_TYPES, exportJson, importJson, mergeSecrets, restoreTrash, splitSecrets } from './schema.js';
 import { TAG_COLORS } from './common.jsx';
+import { DEFAULT_SERVER } from './serverSync.js';
 
 /* 설정 › 데이터 관리 (schema.js v2 의 새 테이블 화면)
    백업(내보내기·가져오기) · 카테고리(표시·목표 보드·순서) · 프로젝트 · 태그 · 휴지통 · 알림 */
@@ -12,6 +13,7 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 export default function DataSettings() {
   return (
     <>
+      <Server />
       <Backup />
       <Notify />
       <Categories />
@@ -19,6 +21,50 @@ export default function DataSettings() {
       <Tags />
       <Trash />
     </>
+  );
+}
+
+/* ── 서버 연결 (VPS 동기화, serverSync.js) ── */
+function Server() {
+  const { sync } = useCtx();
+  const c = sync.conf;
+  const [url, setUrl] = useState(c.url || DEFAULT_SERVER);
+  const [email, setEmail] = useState(c.email || '');
+  const [pw, setPw] = useState('');
+  const submit = async e => { e.preventDefault(); if (await sync.login(url, email, pw)) setPw(''); };
+  const cf = sync.conflict;
+  const cnt = d => [['일정', d?.events?.length], ['인맥', d?.people?.length], ['기념일', d?.anniv?.length], ['지출', d?.finance?.expenses?.length]]
+    .filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(' · ');
+  return (
+    <section className="panel ds">
+      <div className="csum-h"><h2>서버 연결</h2><span className={`muted ${sync.connected ? 'srv-on' : ''}`}>{sync.status}</span></div>
+      {!sync.connected ? (
+        <form className="srv-form" onSubmit={submit}>
+          <label>서버 주소<input value={url} onChange={e => setUrl(e.target.value)} placeholder={DEFAULT_SERVER} autoComplete="url" /></label>
+          <label>이메일<input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="username" required /></label>
+          <label>비밀번호<input type="password" value={pw} onChange={e => setPw(e.target.value)} autoComplete="current-password" required /></label>
+          <button className="btn primary" disabled={sync.busy}>{sync.busy ? '연결 중…' : '로그인'}</button>
+        </form>
+      ) : (
+        <div className="ds-row">
+          <span>{c.email} · {c.url.replace(/^https?:\/\//, '')} · 서버 버전 {c.version || 0}</span>
+          <button className="btn" onClick={sync.syncNow} disabled={sync.busy}>지금 동기화</button>
+          <button className="btn" onClick={sync.logout}>로그아웃</button>
+        </div>
+      )}
+      {cf && <div className="ds-confirm" role="alert">
+        {cf.first
+          ? <span>서버에 이미 데이터가 있습니다 ({cnt(cf.data) || '내용 있음'} · {cf.device || '다른 기기'} {sync.fmt(cf.updatedAt)}). 어느 쪽을 쓸지 고르세요.</span>
+          : <span>다른 기기({cf.device || '알 수 없음'}, {sync.fmt(cf.updatedAt)})에서 서버 데이터가 바뀌었는데, 이 기기에도 아직 안 올린 변경이 있습니다.</span>}
+        <span className="ds-row">
+          <button className="btn primary" onClick={sync.takeServer}>서버 데이터 받기 (이 기기 데이터 대체)</button>
+          <button className="btn danger" onClick={sync.keepMine}>이 기기 데이터로 서버 덮어쓰기</button>
+        </span>
+        <span className="muted">어느 쪽이든 고르기 전에 아래 "백업 파일 내려받기"로 이 기기 데이터를 받아 두면 안전합니다.</span>
+      </div>}
+      {sync.msg && <p className={`sh-msg ${sync.err ? 'err' : ''}`} role="status">{sync.msg}</p>}
+      <p className="note">로그인하면 바뀐 내용이 3초 뒤 서버에 저장되고, 다른 기기(맥북 · 휴대폰)에서 같은 데이터를 씁니다. 인터넷이 끊겨도 이 기기에는 그대로 저장되고, 다시 연결되면 올라갑니다. API 키 · 토큰은 서버로 보내지 않습니다.</p>
+    </section>
   );
 }
 

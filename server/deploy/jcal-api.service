@@ -1,0 +1,22 @@
+[Unit]
+Description=Jcalender API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jcal
+Group=jcal
+WorkingDirectory=/opt/jcalender/server
+EnvironmentFile=/etc/jcalender.env
+Environment=NODE_ENV=production JCAL_ENV_FILE=/nonexistent
+ExecStart=/usr/bin/node index.mjs
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

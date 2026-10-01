@@ -65,6 +65,7 @@ export const WORK_LOG = [
     ['980acc3..ca83273', '새 테이블 반영(저장 구조 v2): 백업·스키마 버전·비밀 정보 분리·카테고리·사람 통합·프로젝트 통합·일정 소스·태그·첨부·휴지통·알림'],
     ['ca83273..c6e2e34', '안전장치: 저장 구조 옮기기 실패 시 예전 구조로 열기, 화면 오류 시 빈 화면 대신 오류 내용·데이터 백업 버튼'],
     ['c6e2e34..43ac8fa', 'Vercel 배포 설정(vercel.json), 커밋 작성자를 본인 GitHub 계정으로'],
-    ['43ac8fa..', 'VPS 서버 DB(PostgreSQL) 테이블 설계: db/schema.sql · 백업 → DB 변환 db/import-backup.mjs · 설계서 docs/DB-VPS.md'],
+    ['43ac8fa..1e75061', 'VPS 서버 DB(PostgreSQL) 테이블 설계: db/schema.sql · 백업 → DB 변환 db/import-backup.mjs · 설계서 docs/DB-VPS.md'],
+    ['1e75061..', 'VPS(Hostinger) API 서버: 로그인 · 동기화(server/), 설치 스크립트(PostgreSQL 16 · HTTPS · 매일 백업), 설정 › 서버 연결(자동 올리기 · 받기 · 충돌 선택)'],
   ] },
 ];

@@ -1331,6 +1331,10 @@ body.report-open { overflow: hidden; }
 .ds-row > input { flex: 1 1 220px; min-width: 0; }
 .ds-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap; }
 .ds-chk.sm { font-size: 12px; margin-right: 6px; }
+.srv-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 12px; align-items: end; margin: 4px 0; font-size: 13px; }
+.srv-form label { display: flex; flex-direction: column; gap: 4px; }
+.srv-on { color: var(--ok); }
+.banner .btn { margin-left: 8px; }
 .ds-confirm { border: 1px solid var(--over); background: var(--oversoft); border-radius: 8px; padding: 10px 12px; margin: 8px 0; font-size: 13px; display: flex; flex-direction: column; gap: 8px; }
 .ds-table { width: 100%; }
 .ds-table th, .ds-table td { padding: 5px 8px; border-bottom: 1px solid var(--line2); vertical-align: middle; }

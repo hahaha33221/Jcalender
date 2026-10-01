@@ -1,0 +1,14 @@
+# Jcalender API — Caddy 가 Let's Encrypt 인증서를 자동으로 받고 갱신한다
+__API_HOST__ {
+	encode gzip
+	request_body {
+		max_size 32MB
+	}
+	reverse_proxy 127.0.0.1:8787
+	log {
+		output file /var/log/caddy/jcal-api.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}

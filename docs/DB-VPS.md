@@ -13,7 +13,7 @@
 
 | 묶음 | 테이블 | 수 |
 |---|---|---|
-| 사용자 · 인증 | users, sessions, devices, user_settings, user_secrets | 5 |
+| 사용자 · 인증 | users, sessions, devices, user_settings, user_secrets, store_snapshots | 6 |
 | 카테고리 · 체크리스트 | categories, check_done, check_prefs, run_logs | 4 |
 | 공통 | projects, tags, attachments, notifications | 4 |
 | 캘린더 | events, event_skips, event_tags, event_notes | 4 |
@@ -92,10 +92,10 @@
 
 | 순서 | 할 일 | 내용 |
 |---|---|---|
-| 1 | VPS 준비 | Ubuntu 서버 · PostgreSQL 16 설치, `db/schema.sql` 적용, 매일 `pg_dump` 백업 · `purge_trash()` cron |
-| 2 | API 서버 | 로그인(이메일 · 비밀번호, 세션 토큰), `GET /sync?since=` · `POST /sync`(바뀐 행 주고받기), Nginx + HTTPS |
-| 3 | 앱 동기화 | 설정에 "서버 연결" 추가, 변경 시 서버로 보내고 앱을 열 때 받아오기 (지금처럼 오프라인에서도 동작) |
-| 4 | 데이터 옮기기 | 맥북 앱 백업 → `node db/import-backup.mjs 백업.json 이메일 > import.sql` → `psql -f import.sql` |
+| 1 | VPS 준비 (스크립트 완료) | `server/deploy/setup.sh` — PostgreSQL 16 · `db/schema.sql` · 매일 `pg_dump` 백업 · `purge_trash()` cron. 안내: `docs/server-setup.md` |
+| 2 | API 서버 (완료) | `server/index.mjs` — 로그인(세션 토큰), `GET /api/sync` · `PUT /api/sync`(버전 비교 · 충돌 409), Caddy + HTTPS |
+| 3 | 앱 동기화 (완료) | 설정 › 서버 연결 (`src/serverSync.js`), 변경 3초 뒤 올림 · 열 때 받음 · 충돌 시 선택 |
+| 4 | 데이터 옮기기 | 맥북 앱에서 서버 연결로 로그인하면 자동으로 올라감 (백업 파일로 표만 채우려면 `node db/import-backup.mjs`) |
 | 5 | 파일 저장소 | 명함 이미지를 서버 파일(또는 오브젝트 저장소)로 옮기고 people.card_url 로 연결 |
 
 ## 6. 기타
