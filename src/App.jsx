@@ -210,30 +210,44 @@ export default function App() {
 
   const ctx = { store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go, openCat, sync };
 
+  // 메뉴 접기 (이 기기에만 기억)
+  const [navMini, setNavMini] = useState(() => { try { return localStorage.getItem('jcalender.navMini') === '1'; } catch { return false; } });
+  const toggleNav = () => setNavMini(v => { try { localStorage.setItem('jcalender.navMini', v ? '0' : '1'); } catch { /* 무시 */ } return !v; });
+
   const NAV = [
-    { id: 'home', label: '대시보드' },
-    { id: 'progress', label: '진행 현황' },
-    { id: 'check', label: '체크리스트' },
+    { id: 'home', label: '대시보드', icon: 'home' },
+    { id: 'progress', label: '진행 현황', icon: 'progress' },
+    { id: 'check', label: '체크리스트', icon: 'check' },
     { sec: '상세 내용' },
     { id: 'P', label: AREAS.P.n, color: areaVar('P') },
     { id: 'W', label: AREAS.W.n, color: areaVar('W') },
     { id: 'B', label: AREAS.B.n, color: areaVar('B') },
     { sec: '관리' },
-    { id: 'settings', label: '설정' },
+    { id: 'settings', label: '설정', icon: 'settings' },
   ];
 
   if (!sync.connected && !sync.guest) return <Welcome sync={sync} />;   // 처음: 로그인 / 회원가입
 
   return (
     <Ctx.Provider value={ctx}>
-      <div className="app">
+      <div className={`app ${navMini ? 'nav-mini' : ''}`}>
         <aside className="nav" aria-label="주 메뉴">
-          <div className="brand"><b>Jcalender</b><span>{now.getFullYear()}.{pad(now.getMonth() + 1)}.{pad(now.getDate())} ({WEEK[now.getDay()]})</span>{sync.connected && <span className="nav-user" title={sync.conf.email}>{sync.conf.name || sync.conf.email}님</span>}</div>
+          <div className="brand">
+            <div className="brand-top">
+              <b>{navMini ? 'J' : 'Jcalender'}</b>
+              <button type="button" className="nav-toggle" onClick={toggleNav} aria-label={navMini ? '메뉴 펼치기' : '메뉴 접기'} aria-expanded={!navMini} title={navMini ? '메뉴 펼치기' : '메뉴 접기'}>
+                <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d={navMini ? 'M8 5l5 5-5 5' : 'M12 5l-5 5 5 5'} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            </div>
+            <span className="brand-sub">{now.getFullYear()}.{pad(now.getMonth() + 1)}.{pad(now.getDate())} ({WEEK[now.getDay()]})</span>
+            {sync.connected && <span className="nav-user brand-sub" title={sync.conf.email}>{sync.conf.name || sync.conf.email}님</span>}
+          </div>
           <nav>
             {NAV.map((n, i) => n.sec
-              ? <div className="nav-sec" key={i}>{n.sec}</div>
-              : <button key={n.id} className={page === n.id ? 'on' : ''} aria-current={page === n.id ? 'page' : undefined} style={n.color ? { '--ac': n.color } : undefined} onClick={() => go(n.id)}>
-                  {n.color && <i className="dot" />}<span>{n.label}</span>
+              ? <div className="nav-sec" key={i}><span>{n.sec}</span></div>
+              : <button key={n.id} className={page === n.id ? 'on' : ''} aria-current={page === n.id ? 'page' : undefined} style={n.color ? { '--ac': n.color } : undefined} onClick={() => go(n.id)} title={navMini ? n.label : undefined} aria-label={navMini ? n.label : undefined}>
+                  {n.color ? <i className="dot" /> : <NavIcon name={n.icon} />}<span className="nav-label">{n.label}</span>
+                  {navMini && n.color && <b className="nav-abbr" aria-hidden="true">{n.label[0]}</b>}
                 </button>)}
           </nav>
         </aside>
@@ -1012,6 +1026,17 @@ function Progress() {
       </div>
     </>
   );
+}
+
+/* 메뉴 아이콘 (선 아이콘, 접은 메뉴에서 글자 대신 보임) */
+const NAV_ICONS = {
+  home: 'M3 9.5L10 4l7 5.5V16a1 1 0 0 1-1 1h-3.5v-4.5h-5V17H4a1 1 0 0 1-1-1z',
+  progress: 'M4 16V11M8.5 16V7M13 16V9.5M17 16V4',
+  check: 'M4 5.5l1.5 1.5L8 4.5M4 11l1.5 1.5L8 10M4 16.5l1.5 1.5L8 15.5M10.5 6h6M10.5 11.5h6M10.5 17h6',
+  settings: 'M10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4',
+};
+function NavIcon({ name }) {
+  return <svg className="nav-ico" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d={NAV_ICONS[name]} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 }
 
 /* ───────────────────────── 설정 ───────────────────────── */
