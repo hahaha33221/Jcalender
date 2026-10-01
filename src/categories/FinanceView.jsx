@@ -6,6 +6,8 @@ import { catsOf, delExpense, setExpenseCat, setExpenseProject, won } from './fin
 import FinanceCats from './FinanceCats.jsx';
 import { CardImport, MonthlyLedger } from './FinanceMonthly.jsx';
 import ProjectReport, { SavedReportView } from './ProjectReport.jsx';
+import { SplitEditor } from './ProjectSplit.jsx';
+import { useCtx } from '../shared.jsx';
 import FinanceIncome from './FinanceIncome.jsx';
 
 /* 개인 › 개인 재무 전용 화면: 지출 관리 + 구매해야 할 물품 (대시보드와 같은 데이터)
@@ -180,6 +182,8 @@ function LinkedProjects({ f, update, now }) {
   const [name, setName] = useState('');
   const [arm, setArm] = useState(null);
   const [report, setReport] = useState(false);
+  const { store } = useCtx();
+  const names = [...new Set((store.people || []).map(x => x.name).filter(Boolean))];   // 인맥 관리 이름 자동완성
   const today = iso(now);
   const setP = (id, patch) => update(x => ({ ...x, projects: (x.projects || []).map(p => (p.id === id ? { ...p, ...patch, updated: today } : p)) }));
   const add = e => {
@@ -203,6 +207,8 @@ function LinkedProjects({ f, update, now }) {
           </div>
           <textarea className="fp-note" value={p.note} onChange={e => setP(p.id, { note: e.target.value })} rows={Math.max(3, (p.note.match(/\n/g) || []).length + 2)}
             placeholder="예: 목표 금액, 진행 상황, 관련 지출, 메모 등 자유롭게" aria-label={`${p.name} 내용`} />
+          <SplitEditor p={p} names={names} sum={f.expenses.filter(e => e.projectId === p.id).reduce((a, e) => a + e.amount, 0)}
+            onChange={split => update(x => ({ ...x, projects: (x.projects || []).map(k => (k.id === p.id ? { ...k, split } : k)) }))} />
         </li>))}</ul> : <p className="muted">아직 연계 프로젝트가 없습니다.</p>}
       <form className="fp-add" onSubmit={add}>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="프로젝트 이름 (예: 이사 준비, 자동차 구매)" aria-label="새 연계 프로젝트 이름" />
