@@ -10,7 +10,7 @@ Group=jcal
 WorkingDirectory=/opt/jcalender/server
 EnvironmentFile=/etc/jcalender.env
 Environment=NODE_ENV=production JCAL_ENV_FILE=/nonexistent
-ExecStart=/usr/bin/node index.mjs
+ExecStart=__NODE__ index.mjs
 Restart=always
 RestartSec=3
 NoNewPrivileges=true

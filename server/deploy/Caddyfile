@@ -4,7 +4,7 @@ __API_HOST__ {
 	request_body {
 		max_size 32MB
 	}
-	reverse_proxy 127.0.0.1:8787
+	reverse_proxy 127.0.0.1:__API_PORT__
 	log {
 		output file /var/log/caddy/jcal-api.log {
 			roll_size 10MiB

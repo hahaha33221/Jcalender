@@ -93,7 +93,7 @@
 | 순서 | 할 일 | 내용 |
 |---|---|---|
 | 1 | VPS 준비 (스크립트 완료) | `server/deploy/setup.sh` — PostgreSQL 16 · `db/schema.sql` · 매일 `pg_dump` 백업 · `purge_trash()` cron. 안내: `docs/server-setup.md` |
-| 2 | API 서버 (완료) | `server/index.mjs` — 로그인(세션 토큰), `GET /api/sync` · `PUT /api/sync`(버전 비교 · 충돌 409), Caddy + HTTPS |
+| 2 | API 서버 (완료) | `server/index.mjs` — 로그인(세션 토큰), `GET /api/sync` · `PUT /api/sync`(버전 비교 · 충돌 409), 기존 Nginx 에 전용 설정 + HTTPS (jcal-31-97-71-87.sslip.io) |
 | 3 | 앱 동기화 (완료) | 설정 › 서버 연결 (`src/serverSync.js`), 변경 3초 뒤 올림 · 열 때 받음 · 충돌 시 선택 |
 | 4 | 데이터 옮기기 | 맥북 앱에서 서버 연결로 로그인하면 자동으로 올라감 (백업 파일로 표만 채우려면 `node db/import-backup.mjs`) |
 | 5 | 파일 저장소 | 명함 이미지를 서버 파일(또는 오브젝트 저장소)로 옮기고 people.card_url 로 연결 |

@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { mergeSecrets, migrate, splitSecrets } from './schema.js';
 
 export const SERVER_KEY = 'jcalender.server';
-export const DEFAULT_SERVER = 'https://srv1809055.hstgr.cloud';
+export const DEFAULT_SERVER = 'https://jcal-31-97-71-87.sslip.io';
 const PUSH_DELAY = 3000, CHECK_EVERY = 5 * 60 * 1000;
 
 const readConf = () => { try { return JSON.parse(localStorage.getItem(SERVER_KEY) || 'null') || {}; } catch { return {}; } };
