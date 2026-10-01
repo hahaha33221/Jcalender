@@ -99,6 +99,7 @@ src/
 - 업무 문서: OneDrive 폴더 구조를 읽기 전용으로 봅니다(src/onedrive.js, Microsoft Graph). Azure 앱 등록(SPA) 클라이언트 ID를 넣고 Microsoft 계정으로 로그인하면 연결되며, 토큰은 앱 데이터와 분리된 localStorage 키에 둡니다. 순서는 docs/onedrive-integration.md. 연결 전에는 예시 폴더 구조를 보여 줍니다.
 - 배포: Vercel (vercel.json, Vite · npm run build · dist). 앱 데이터는 브라우저 주소별로 저장되므로 새 주소에서는 설정 › 백업으로 옮겨 옵니다.
 - 데이터 구조: docs/ERD.md (ERD 설계서, 엔티티·관계·추가로 필요한 개념)
+- 서버 DB(VPS): db/schema.sql (PostgreSQL 16, 47개 테이블), db/import-backup.mjs (앱 백업 파일 → INSERT SQL), 설계서 docs/DB-VPS.md
 - 저장 구조 v2 (src/schema.js): 앱을 열 때 저장 구조 버전을 올리고, 공통 테이블(카테고리·프로젝트·태그·첨부·휴지통·알림)을 만들고, 흩어진 데이터(재무 연계 프로젝트, 근로 업무 연락처, 기념일 관련 인물)를 합칩니다. API 키·토큰은 jcalender.secrets 키에 따로 저장하고 백업에서 뺍니다. 설정 화면에서 백업(내보내기·되돌리기)·알림·카테고리·프로젝트·태그·휴지통을 관리합니다(src/DataSettings.jsx). 캘린더의 날짜 소스는 src/calendarSources.js, 알림은 src/notify.js, 공통 입력은 src/common.jsx.
 - 체크는 체크리스트 화면에서만 합니다. 상세 내용(개인·사업·근로의 카테고리 화면)에는 체크 기능이 없고, 기록을 추가해도 체크리스트가 자동으로 체크되지 않습니다.
 - 건강 관리 · 삼성 헬스: 삼성 헬스 앱 › 설정 › 개인 데이터 다운로드로 받은 폴더를 압축(.zip)하거나 CSV 파일을 골라 "삼성 헬스 파일 불러오기"를 누르면 운동(exercise)·수면(sleep)·식단(food_intake)을 읽어 합칩니다. 같은 기록은 한 번만 들어가고, 처음 불러오면 예시 기록은 지워집니다. 병원 진찰은 삼성 헬스에 없어 직접 입력합니다. 시험용 파일: samples/samsung_health_sample.zip
