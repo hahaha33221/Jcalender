@@ -1006,6 +1006,16 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .rp-item { break-inside: avoid-page; }
 .rp-edit { width: 100%; box-sizing: border-box; font: inherit; color: #000; background: #fff; border: 1px dashed #999; padding: 6px 8px; resize: vertical; }
 .print-only { display: none; }
+.rp-split-edit { border: 1px dashed #999; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #000; }
+.rp-split-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.rp-split-row > b { min-width: 110px; }
+.rp-split-row label { display: inline-flex; align-items: center; gap: 4px; }
+.rp-split-row input:not([type=checkbox]) { flex: 1 1 180px; min-width: 0; padding: 4px 8px; font: inherit; color: #000; background: #fff; border: 1px solid #999; border-radius: 4px; }
+.rp-split-people { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.rp-chip { display: inline-flex; align-items: center; gap: 2px; border: 1px solid #000; border-radius: 12px; padding: 1px 4px 1px 9px; }
+.rp-chip button { border: 0; background: none; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 4px; color: #000; }
+.rp-split-n { font-weight: 700; }
+.rp-note { font-size: 11px; margin: 4px 0 0; }
 body.report-open { overflow: hidden; }
 @media print {
   @page { size: A4; margin: 12mm; }
