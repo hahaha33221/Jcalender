@@ -25,6 +25,7 @@ export default function FinanceView({ area, cat }) {
   const setMonth = m => setUi({ month: m });
   const tab = ui.tab || 'expense';                        // 상단 탭: income 수입관리 · expense 지출관리
   const view = ui.view || 'date';
+  const showTime = !!ui.showTime;                          // 날짜 옆 이용 시간 (기본: 숨김)
   const setView = v => setUi({ view: v });
   const closed = new Set(ui.closed || []);
   const setClosed = v => setUi(u => ({ closed: [...(typeof v === 'function' ? v(new Set(u.closed || [])) : v)] }));
@@ -50,7 +51,7 @@ export default function FinanceView({ area, cat }) {
   const setSort = v => setUi(u => ({ sort: typeof v === 'function' ? v(u.sort || { key: 'date', dir: 'desc' }) : v }));
   const sortBy = key => setSort(x => (x.key === key ? { key, dir: x.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'date' || key === 'amount' ? 'desc' : 'asc' }));
   const pname = e => (f.projects || []).find(p => p.id === e.projectId)?.name || '';
-  const val = { date: e => e.date, cat: e => e.cat, memo: e => e.memo || '', proj: pname, amount: e => e.amount };
+  const val = { date: e => `${e.date} ${e.time || ''}`, cat: e => e.cat, memo: e => e.memo || '', proj: pname, amount: e => e.amount };
   const cmp = (a, b) => {
     const x = val[sort.key](a), y = val[sort.key](b);
     if (sort.key === 'proj' && !x !== !y) return !x ? 1 : -1;                      // 프로젝트 없는 줄은 항상 아래
@@ -77,7 +78,7 @@ export default function FinanceView({ area, cat }) {
     update(x => setExpenseProject({ ...x, projects: [...(x.projects || []), { id, name, note: '', updated: today }] }, e.id, id));
   };
   const row = (e, i) => (
-    <tr key={e.id}><td className="fv-no">{i + 1}</td><td>{e.date.slice(5).replace('-', '/')}</td>
+    <tr key={e.id}><td className="fv-no">{i + 1}</td><td className="fv-date">{e.date.slice(5).replace('-', '/')}{showTime && <span className="fv-time">{e.time || '--:--'}</span>}</td>
       <td><select className="fv-cat" value={e.cat} onChange={ev => update(x => setExpenseCat(x, e.id, ev.target.value))} aria-label={`${e.memo || '지출'} 분류`}>
         {[...new Set([...cats.map(c => c.name), e.cat])].map(c => <option key={c}>{c}</option>)}</select></td>
       <td>{e.memo || '-'}{e.shopId && <span className="tag">구매 목록</span>}{e.card && <span className="tag">{e.card}</span>}</td>
@@ -141,7 +142,8 @@ export default function FinanceView({ area, cat }) {
           <div className="chips grow-r" role="group" aria-label="보기 방식">
             <button aria-pressed={view === 'date'} onClick={() => setView('date')}>날짜순</button>
             <button aria-pressed={view === 'cat'} onClick={() => setView('cat')}>카테고리별</button>
-          </div></div>
+          </div>
+          <label className="fv-timeopt" title="카드 파일에 이용 시간이 있으면 날짜 옆에 보여 줍니다"><input type="checkbox" checked={showTime} onChange={e => setUi({ showTime: e.target.checked })} />시간 보기</label></div>
         {!list.length ? <p className="muted">이 달의 지출 내역이 없습니다.</p>
           : view === 'date' ? (
             <div className="tablewrap"><table className="prog fv-table">

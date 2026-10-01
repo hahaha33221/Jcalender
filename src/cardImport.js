@@ -6,6 +6,7 @@ import { parseCsv } from './categories/samsungHealth.js';
    - 카드사 홈페이지·앱의 "이용내역 조회 → 엑셀 저장" 파일: .xls(옛 엑셀 또는 HTML 표) · .xlsx · .csv
    - 열은 머리글 이름으로 찾는다(카드사·기간마다 열 순서가 달라도 됨): 이용일 · 가맹점 · 이용금액 · 상태 · 승인번호 …
    - 분류는 개인 재무 › 지출 카테고리 설정의 포함 범위(키워드)로 정한다 (guess 인자)
+   - 이용 시간(시간 열 또는 날짜 칸의 시각)이 있으면 time 'HH:MM' 으로 함께 저장
    - 취소 건과 합계 줄은 빼고, 같은 승인번호(없으면 날짜+금액+가맹점)는 한 번만 넣는다 */
 export const CARD_COMPANIES = ['롯데카드', 'KB국민카드'];
 
@@ -95,6 +96,20 @@ export function cardDate(v, year) {
   if (dt.getMonth() !== mo - 1 || dt.getDate() !== d) return '';
   return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
+/** 이용 시간 → HH:MM (시간 열, 또는 날짜 칸에 붙은 "2026-09-28 12:31", 엑셀 날짜·시간 숫자의 소수 부분). 없으면 '' */
+export function cardTime(dateCell, timeCell) {
+  const pick = v => {
+    if (typeof v === 'number') {
+      const fr = v < 1 ? v : v % 1;
+      if (!(fr > 0)) return '';
+      const mins = Math.round(fr * 1440) % 1440;
+      return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+    }
+    const m = String(v ?? '').match(/(?:^|\s|T)(\d{1,2}):(\d{2})/);
+    return m && Number(m[1]) < 24 && Number(m[2]) < 60 ? `${m[1].padStart(2, '0')}:${m[2]}` : '';
+  };
+  return pick(timeCell) || pick(dateCell);
+}
 const money = v => (typeof v === 'number' ? v : Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0);
 
 /** 카드사 추측: 선택값 → 파일 이름 → 표 안 글자 */
@@ -150,7 +165,7 @@ export function parseCardRows(rows, { pick = 'auto', fileName = '', year = new D
     used[base] = (used[base] || 0) + 1;
     if (inst && installment === 'use' && used[base] > 1) return;
     const key = used[base] > 1 ? `${base}#${used[base]}` : base;
-    items.push({ key, date, amount: Math.round(amount), merchant: merchant + tag, cat: guess(merchant), card: String(get(r, 'card') || '').trim(), plan: String(get(r, 'plan') || '').trim() });
+    items.push({ key, date, time: date === useDate ? cardTime(get(r, 'date'), get(r, 'time')) : '', amount: Math.round(amount), merchant: merchant + tag, cat: guess(merchant), card: String(get(r, 'card') || '').trim(), plan: String(get(r, 'plan') || '').trim() });
   });
   return { company, statement, billTotal: Math.round(billTotal), stmtDate, items, cancelled, skipped, foreign, fileTotal: summaryTotal(rows.slice(0, i)) };
 }
@@ -174,6 +189,10 @@ function summaryTotal(top) {
 export function mergeCard(fin, { company, items }, uid, importId) {
   const real = fin.expenses.filter(e => !/\(예시\)$/.test(e.memo || ''));
   const have = new Set(real.map(e => e.cardKey).filter(Boolean));
-  const add = items.filter(x => !have.has(x.key)).map(x => ({ id: uid(), date: x.date, amount: x.amount, cat: x.cat, memo: x.merchant, card: company, cardKey: x.key, ...(importId ? { importId } : {}) }));
-  return { fin: { ...fin, expenses: [...real, ...add] }, add, added: add.length, dup: items.length - add.length, removedExamples: fin.expenses.length - real.length };
+  const add = items.filter(x => !have.has(x.key)).map(x => ({ id: uid(), date: x.date, ...(x.time ? { time: x.time } : {}), amount: x.amount, cat: x.cat, memo: x.merchant, card: company, cardKey: x.key, ...(importId ? { importId } : {}) }));
+  // 이미 있는 지출에 시간이 없으면 이번 파일의 이용 시간으로 채운다 (예전에 가져온 내역도 같은 파일을 다시 올리면 시간이 생김)
+  const timeOf = new Map(items.filter(x => x.time).map(x => [x.key, x.time]));
+  let timed = 0;
+  const kept = real.map(e => { const t = !e.time && e.cardKey && timeOf.get(e.cardKey); if (!t) return e; timed++; return { ...e, time: t }; });
+  return { fin: { ...fin, expenses: [...kept, ...add] }, add, added: add.length, dup: items.length - add.length, removedExamples: fin.expenses.length - real.length, timed, times: Object.fromEntries(timeOf) };
 }

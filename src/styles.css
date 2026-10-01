@@ -1035,6 +1035,9 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .ps-add input { flex: 1 1 180px; min-width: 0; padding: 4px 8px; }
 .ps-sum { margin-left: auto; }
 @media (max-width: 560px) { .ps-list li { grid-template-columns: minmax(0, 1fr) 88px 24px; } .ps-amt { grid-column: 1; text-align: left; } .ps-role { grid-column: 2 / 4; } .ps-sum { margin-left: 0; } }
+.fv-timeopt { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--ink2); white-space: nowrap; }
+.fv-date { white-space: nowrap; }
+.fv-time { margin-left: 6px; font-size: 12px; color: var(--ink3); font-variant-numeric: tabular-nums; }
 .rp-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
 .rp-title input { width: 260px; max-width: 60vw; font-weight: 400; padding: 4px 8px; }
 .rp-split-edit { border: 1px dashed #999; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #000; }
