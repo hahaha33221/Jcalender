@@ -5,7 +5,7 @@ import { useCtx } from '../shared.jsx';
 
 /* 연계 프로젝트 지출 보고서 (PDF)
    기획
-   - 1쪽 "한눈에 보기": 핵심 지표 4칸 → 핵심 요약(자동 문장) → 프로젝트별 요약 표 → 월별 추이 표
+   - 1쪽 "한눈에 보기": 핵심 지표 4칸 → 프로젝트별 요약 표 → 정산 → 월별 추이 표
    - 2쪽부터 "프로젝트 상세"(선택): 프로젝트마다 머리 줄(합계·건수·기간) · 메모 | 분류별 합계 · 큰 지출 TOP 3 · 전체 지출 내역
    - "정산 (N분의 1)": 프로젝트마다 함께 나눌 사람 · 나 포함 여부를 정하면 1인당 금액 · 받을 금액 (project.split = { people, me })
    - 저장: "보고서 저장" 또는 "PDF로 저장"을 누르면 그때 모습 그대로 finance.savedReports 에 보관 (SavedReports 에서 다시 열기 · PDF · 삭제)
@@ -54,16 +54,6 @@ export default function ProjectReport({ f, update, today, onClose }) {
   const months = [...new Set(all.map(e => e.date.slice(0, 7)))].sort();
   const byMonth = Object.fromEntries(group(all, e => e.date.slice(0, 7)));
   const ranked = [...data].sort((a, b) => b.sum - a.sum);
-  const biggest = [...all].sort((a, b) => b.amount - a.amount)[0];
-  const peak = Object.entries(byMonth).sort((a, b) => b[1] - a[1])[0];
-  const last2 = months.slice(-2);
-  const insights = [
-    ranked[0]?.sum ? `지출이 가장 큰 프로젝트는 "${ranked[0].p.name}"로 ${won(ranked[0].sum)}(전체의 ${pct(ranked[0].sum, total)})입니다.` : '',
-    biggest ? `가장 큰 단일 지출은 ${dot(biggest.date)} ${biggest.memo} ${won(biggest.amount)}입니다.` : '',
-    peak && months.length > 1 ? `지출이 가장 많았던 달은 ${ymL(peak[0])}(${won(peak[1])})입니다.` : '',
-    last2.length === 2 ? `${ymL(last2[1])} 지출은 전월 대비 ${byMonth[last2[1]] >= byMonth[last2[0]] ? '+' : '-'}${won(Math.abs(byMonth[last2[1]] - byMonth[last2[0]]))} ${byMonth[last2[1]] >= byMonth[last2[0]] ? '늘었' : '줄었'}습니다.` : '',
-    data.some(d => !d.ex.length) ? `연결된 지출이 없는 프로젝트: ${data.filter(d => !d.ex.length).map(d => d.p.name).join(', ')}` : '',
-  ].filter(Boolean);
 
   useEffect(() => {
     document.body.classList.add('report-open');
@@ -130,10 +120,7 @@ export default function ProjectReport({ f, update, today, onClose }) {
           <div><small>건당 평균</small><b>{all.length ? won(Math.round(total / all.length)) : '-'}</b></div>
         </div>
 
-        <h2><span>02</span>핵심 요약</h2>
-        <div className="rp-box"><ol className="rp-ins">{insights.length ? insights.map((t, i) => <li key={i}>{t}</li>) : <li>선택한 기간에 연결된 지출이 없습니다.</li>}</ol></div>
-
-        <h2><span>03</span>프로젝트별 요약</h2>
+        <h2><span>02</span>프로젝트별 요약</h2>
         <table className="rp-table"><thead><tr><th>순위</th><th>프로젝트</th><th>기간</th><th>건수</th><th>합계</th><th>비중</th><th>주요 분류</th></tr></thead>
           <tbody>{ranked.map((d, i) => (
             <tr key={d.p.id}><td className="c">{i + 1}</td><td><b>{d.p.name}</b></td>
@@ -143,7 +130,7 @@ export default function ProjectReport({ f, update, today, onClose }) {
             <tr className="rp-sum"><td colSpan={3} className="c">합계</td><td className="r">{all.length}</td><td className="r">{won(total)}</td><td className="r">{total ? '100%' : '-'}</td><td /></tr>
           </tbody></table>
 
-        <h2><span>04</span>정산 (N분의 1)</h2>
+        <h2><span>03</span>정산 (N분의 1)</h2>
         <div className="rp-split-edit no-print">
           {ranked.map(d => <SplitEditor key={d.p.id} p={d.p} names={names} onChange={patch => setSplit(d.p.id, patch)} />)}
           <datalist id="rp-people">{names.map(n => <option key={n} value={n} />)}</datalist>
@@ -161,7 +148,7 @@ export default function ProjectReport({ f, update, today, onClose }) {
         <p className="rp-note">받을 금액 = 함께 나눈 사람들이 나에게 보낼 금액의 합 (지출은 내가 먼저 냈다고 보고 계산)</p>
 
         {months.length > 0 && <>
-          <h2><span>05</span>월별 추이</h2>
+          <h2><span>04</span>월별 추이</h2>
           <table className="rp-table"><thead><tr><th>월</th>{ranked.map(d => <th key={d.p.id}>{d.p.name}</th>)}<th>합계</th><th>전월 대비</th></tr></thead>
             <tbody>{months.map((m, i) => {
               const prev = months[i - 1], dlt = prev ? byMonth[m] - byMonth[prev] : null;
@@ -175,7 +162,7 @@ export default function ProjectReport({ f, update, today, onClose }) {
 
         {detail && ranked.map((d, i) => (
           <section key={d.p.id} className="rp-proj">
-            <h2><span>{String(i + 6).padStart(2, '0')}</span>프로젝트 상세 · {d.p.name}</h2>
+            <h2><span>{String(i + 5).padStart(2, '0')}</span>프로젝트 상세 · {d.p.name}</h2>
             <table className="rp-meta"><tbody><tr>
               <th>합계</th><td><b>{won(d.sum)}</b> ({pct(d.sum, total)})</td><th>건수</th><td>{d.ex.length}건</td><th>기간</th><td>{d.ex.length ? `${dot(d.ex[0].date)} ~ ${dot(d.ex[d.ex.length - 1].date)}` : '-'}</td>
             </tr></tbody></table>
@@ -201,7 +188,7 @@ export default function ProjectReport({ f, update, today, onClose }) {
           </section>
         ))}
 
-        <h2><span>{String((detail ? ranked.length : 0) + 6).padStart(2, '0')}</span>비고 · 향후 계획</h2>
+        <h2><span>{String((detail ? ranked.length : 0) + 5).padStart(2, '0')}</span>비고 · 향후 계획</h2>
         <div className="rp-box"><Editable value={R.next || ''} onChange={v => update(x => ({ ...x, report: { ...(x.report || {}), next: v } }))} placeholder="예: 다음 달 예산 조정, 견적 비교, 결제 일정 확인 등" /></div>
         <p className="rp-foot">금액은 카드사 이용내역(명세서) 반영 기준이며 취소 건과 원화 미확정 해외 이용은 제외됩니다. · Jcalender</p>
       </article>
