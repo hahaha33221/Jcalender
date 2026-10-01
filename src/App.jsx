@@ -428,6 +428,12 @@ function CheckPage({ init }) {
 
 /* 일정관리 캘린더 */
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
+/* 일정 길이: time(시작) ~ end(끝, 같은 날 · 수정할 때 설정). end 가 없으면 1시간 칸 하나 */
+const toMin = t => (t ? Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)) : null);
+const fromMin = m => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+const endOf = e => (e.time && e.end && toMin(e.end) > toMin(e.time) ? e.end : '');
+const timeText = e => (e.time ? (endOf(e) ? `${e.time}~${endOf(e)}` : e.time) : '');
+const durText = m => (m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ''}` : `${m}분`);
 
 /* 일정 끌어서 옮기기 (마우스 · 터치 공용, pointer 이벤트)
    - 마우스: 누른 채 4px 넘게 움직이면 시작 / 터치: 0.3초 길게 누른 뒤 움직이면 시작 (그냥 밀면 화면 스크롤)
@@ -538,12 +544,15 @@ function Calendar({ sel, setSel }) {
     const next = over.date ? { date: over.date, time: baseTime }
       : over.allDay ? { date: sel, time: '' }
       : { date: sel, time: `${pad(over.h)}:${baseTime ? baseTime.slice(3, 5) : '00'}` };
+    // 길게 잡은 일정은 옮겨도 길이를 그대로 (자정을 넘으면 23:59 까지)
+    const dur = endOf(ev) ? toMin(ev.end) - toMin(ev.time) : 0;
+    next.end = dur && next.time ? fromMin(Math.min(toMin(next.time) + dur, 23 * 60 + 59)) : '';
     if (ev._note) {                                           // 노트 → 새 일정
       const { _note, id, repeat, ...rest } = ev;
       setStore(s => ({ ...s, events: [...s.events, { ...rest, id: uid(), ...next }], eventNotes: (s.eventNotes || []).filter(n => n.id !== id) }));
       setMoved({ ...snap, msg: `노트 "${ev.title}"을(를) ${mdTxt(next.date, next.time)} 일정으로 넣었습니다.` });
     } else {
-      if (next.date === ev.date && next.time === baseTime) return;
+      if (next.date === ev.date && next.time === baseTime && next.end === (endOf(ev) || '')) return;
       if (ev.sid) {                                           // 반복 회차: 이 날만 떼어 옮긴다
         const { id, sid, repeat, ...rest } = ev;
         setStore(s => ({ ...s, events: [...skipDate(s.events, sid, ev.date), { ...rest, id: uid(), ...next }] }));
@@ -598,7 +607,7 @@ function Calendar({ sel, setSel }) {
                 {HOLIDAYS[k] && <span className="cal-hol">{HOLIDAYS[k]}</span>}
                 {sourcesOn(store, k).map(x => <span key={x.key} className={`cal-anniv ${x.cls}`} title={x.kind}>{x.label}</span>)}
                 {evs.slice(0, 2).map(e => <span key={e.id} className={`cal-ev ${drag?.ev.id === e.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(e.area) }} onPointerDown={ev => startDrag(ev, e)}
-                  onClick={ev => { ev.stopPropagation(); openEdit(e); }} title={`${e.sid ? `${repeatText(e)} · ` : ''}누르면 수정 · 끌어서 옮기기`}>{e.sid && <i className="cal-rep" aria-hidden="true">↻</i>}{e.time && <small>{e.time}</small>} {e.title}</span>)}
+                  onClick={ev => { ev.stopPropagation(); openEdit(e); }} title={`${timeText(e) ? `${timeText(e)} · ` : ''}${e.sid ? `${repeatText(e)} · ` : ''}누르면 수정 · 끌어서 옮기기`}>{e.sid && <i className="cal-rep" aria-hidden="true">↻</i>}{e.time && <small>{e.time}</small>} {e.title}</span>)}
                 {evs.length > 2 && <span className="cal-more">+{evs.length - 2}건</span>}
               </button>
             );
@@ -658,8 +667,13 @@ function EventNotes({ notes, setStore, startDrag, drag, dragged, onSchedule }) {
 function DayTimeline({ date, isToday, list, dueCycles, holiday, anniv, onAdd, onDelete, startDrag, drag, onEdit }) {
   const box = useRef(null);
   const allDay = list.filter(e => !e.time);
-  const byHour = {};
-  list.filter(e => e.time).forEach(e => { (byHour[Number(e.time.slice(0, 2))] ||= []).push(e); });
+  const byHour = {}, cont = {};
+  list.filter(e => e.time).forEach(e => {
+    const h0 = Number(e.time.slice(0, 2));
+    (byHour[h0] ||= []).push(e);
+    const end = endOf(e);                                   // 길게 잡은 일정: 이어지는 시간 줄에 "계속" 표시
+    if (end) { const last = Math.ceil(toMin(end) / 60) - 1; for (let h = h0 + 1; h <= last; h++) (cont[h] ||= []).push(e); }
+  });
   const nowH = new Date().getHours();
   // 날짜를 바꾸면 첫 일정 시각(없으면 오늘은 현재 시각, 다른 날은 8시) 근처로 스크롤
   const firstH = list.filter(e => e.time).map(e => Number(e.time.slice(0, 2)))[0];
@@ -690,6 +704,9 @@ function DayTimeline({ date, isToday, list, dueCycles, holiday, anniv, onAdd, on
             <div key={h} data-h={h} data-drop-h={h} className={`tl-row ${isToday && h === nowH ? 'now' : ''} ${drag?.over?.h === h ? 'drop' : ''}`}>
               <span className="tl-h">{pad(h)}:00</span>
               <div className="tl-evs">
+                {(cont[h] || []).map(e => (
+                  <button key={`c${e.id}`} className={`tl-cont ${drag?.ev.id === e.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(e.area) }} onClick={() => onEdit?.(e)} title={`${e.title} ${timeText(e)} · 누르면 수정`}>
+                    <span aria-hidden="true">│</span> {e.title} <small>~{endOf(e)}</small></button>))}
                 {evs.map(e => <TimelineEvent key={e.id} e={e} onDelete={onDelete} startDrag={startDrag} drag={drag} onEdit={onEdit} />)}
                 <button className="tl-add" onClick={() => onAdd(`${pad(h)}:00`)} aria-label={`${h}시에 일정 추가`}>{evs.length ? '+' : ''}</button>
               </div>
@@ -705,7 +722,7 @@ function DayTimeline({ date, isToday, list, dueCycles, holiday, anniv, onAdd, on
 function TimelineEvent({ e, onDelete, startDrag, drag, onEdit }) {
   return (
     <div className={`tl-ev ${drag?.ev.id === e.id ? 'ghosted' : ''}`} style={{ '--ac': areaVar(e.area) }} onPointerDown={ev => { if (!ev.target.closest('.tl-del')) startDrag?.(ev, e); }}>
-      <button className="grow tl-open" onClick={() => onEdit?.(e)} title="누르면 수정 · 끌어서 옮기기"><small>{e.time || '종일'}</small> {e.title}{e.sid && <span className="tl-rep">{repeatText(e)}</span>}<TagChips ids={e.tagIds} /></button>
+      <button className="grow tl-open" onClick={() => onEdit?.(e)} title="누르면 수정 · 끌어서 옮기기"><small>{timeText(e) || '종일'}</small> {e.title}{e.sid && <span className="tl-rep">{repeatText(e)}</span>}<TagChips ids={e.tagIds} /></button>
       <button className="tl-del" onClick={() => onDelete(e)} aria-label={`${e.title} 삭제`} title={e.sid ? '반복 중 이 날만 삭제' : '삭제'}>{e.sid ? '이 날 삭제' : '삭제'}</button>
     </div>
   );
@@ -716,7 +733,7 @@ function TimelineEvent({ e, onDelete, startDrag, drag, onEdit }) {
 function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
   const box = useRef(null);
   useEffect(() => { box.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, []);
-  const [f, setF] = useState({ title: init.title || '', date: init.date || '', time: init.time || '', area: init.area || 'P', memo: init.memo || '',
+  const [f, setF] = useState({ title: init.title || '', date: init.date || '', time: init.time || '', end: endOf(init), area: init.area || 'P', memo: init.memo || '',
     freq: init.repeat?.freq || '', until: init.repeat?.until || '', projectId: init.projectId || null, tagIds: init.tagIds || [], remind: init.remind ?? '' });
   const [arm, setArm] = useState(false);
   const edit = !!init.id, series = !!init.sid;
@@ -728,7 +745,7 @@ function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
   const save = scope => {
     if (!f.title.trim() || !f.date) return;
     const repeat = f.freq ? { freq: f.freq, until: f.until && f.until >= f.date ? f.until : '', skip: init.repeat?.skip || [] } : null;
-    onSave({ id: init.id, sid: init.sid, occ: init.occ, scope, fromNote: init.fromNote, date: f.date, time: f.time, title: f.title.trim(), area: f.area, memo: f.memo.trim(), repeat, projectId: f.projectId, tagIds: f.tagIds, remind: f.remind });
+    onSave({ id: init.id, sid: init.sid, occ: init.occ, scope, fromNote: init.fromNote, date: f.date, time: f.time, end: f.time && f.end && toMin(f.end) > toMin(f.time) ? f.end : '', title: f.title.trim(), area: f.area, memo: f.memo.trim(), repeat, projectId: f.projectId, tagIds: f.tagIds, remind: f.remind });
   };
   const submit = e => { e.preventDefault(); save(series ? 'all' : undefined); };
   return (
@@ -740,8 +757,20 @@ function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
         <label>제목<input autoFocus={!init.heard} value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="일정 제목" /></label>
         <div className="row2">
           <label>날짜<input type="date" value={f.date} onChange={e => setF({ ...f, date: e.target.value })} /></label>
-          <label>시간<input type="time" value={f.time} onChange={e => setF({ ...f, time: e.target.value })} /></label>
+          <label>{edit ? '시작 시간' : '시간'}<input type="time" value={f.time} onChange={e => {
+            const t = e.target.value, d = f.end && f.time ? toMin(f.end) - toMin(f.time) : 0;   // 시작을 바꾸면 길이는 그대로
+            setF({ ...f, time: t, end: t && d > 0 ? fromMin(Math.min(toMin(t) + d, 23 * 60 + 59)) : '' });
+          }} /></label>
         </div>
+        {edit && f.time && <div className="ev-len">
+          <label>끝 시간<input type="time" value={f.end} min={f.time} onChange={e => setF({ ...f, end: e.target.value })} aria-label="끝 시간" /></label>
+          <span className="ev-len-q" role="group" aria-label="길이 빠르게 정하기">
+            {[30, 60, 90, 120, 180, 240].map(m => <button type="button" key={m} className={`btn sm ${f.end && toMin(f.end) - toMin(f.time) === m ? 'on' : ''}`}
+              onClick={() => setF({ ...f, end: fromMin(Math.min(toMin(f.time) + m, 23 * 60 + 59)) })}>{durText(m)}</button>)}
+            {f.end && <button type="button" className="btn sm" onClick={() => setF({ ...f, end: '' })}>지우기</button>}
+          </span>
+          <span className="muted">{f.end && toMin(f.end) > toMin(f.time) ? `${f.time} ~ ${f.end} (${durText(toMin(f.end) - toMin(f.time))})` : f.end ? '끝 시간이 시작보다 늦어야 합니다' : '비워 두면 1시간 칸 하나로 보입니다'}</span>
+        </div>}
         <label>영역<select value={f.area} onChange={e => setF({ ...f, area: e.target.value })}>
           {Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}</select></label>
         <div className="row2">
@@ -759,7 +788,7 @@ function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
         </div>
         <TagPicker value={f.tagIds} onChange={v => setF({ ...f, tagIds: v })} />
         {edit ? <AttachList owner={{ type: 'event', id: init.sid || init.id }} /> : <p className="note">첨부는 저장한 뒤 이 일정을 다시 열어 추가할 수 있습니다.</p>}
-        <p className="note">시간을 비우면 종일 일정으로 등록됩니다.</p>
+        <p className="note">시간을 비우면 종일 일정으로 등록됩니다.{edit ? '' : ' 길게 잡으려면 추가한 뒤 일정을 눌러 끝 시간을 정하세요.'}</p>
         <div className="btns">
           {onDelete && (series
             ? (arm ? <><button type="button" className="btn danger" onClick={() => onDelete(false)}>이 날만 삭제</button><button type="button" className="btn danger" onClick={() => onDelete(true)}>반복 전체 삭제</button></>
