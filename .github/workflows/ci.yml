@@ -51,3 +51,37 @@ jobs:
         working-directory: server
       - run: node test.mjs
         working-directory: server
+
+  # 점검 두 개가 통과하면 Vercel 에 배포 (GitHub 저장소 Settings › Secrets › Actions 에 3개를 넣어야 동작)
+  #   VERCEL_TOKEN · VERCEL_ORG_ID · VERCEL_PROJECT_ID  — 없으면 이 단계는 건너뜀
+  deploy:
+    name: Vercel 배포
+    needs: [web, server]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/claude/adoring-einstein-45du8t'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: vercel-production
+      cancel-in-progress: false
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: 비밀값 확인
+        id: s
+        run: |
+          if [ -n "$VERCEL_TOKEN" ] && [ -n "$VERCEL_ORG_ID" ] && [ -n "$VERCEL_PROJECT_ID" ]; then echo "ok=1" >> "$GITHUB_OUTPUT";
+          else echo "::notice::Vercel 비밀값(VERCEL_TOKEN · VERCEL_ORG_ID · VERCEL_PROJECT_ID)이 없어 배포를 건너뜁니다"; fi
+      - if: steps.s.outputs.ok == '1'
+        uses: actions/checkout@v4
+      - if: steps.s.outputs.ok == '1'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: steps.s.outputs.ok == '1'
+        name: 배포
+        run: |
+          npm i -g vercel@latest
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          vercel build --prod --token="$VERCEL_TOKEN"
+          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
