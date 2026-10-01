@@ -8,16 +8,19 @@ import { settleProject } from './ProjectSplit.jsx';
    - 1쪽 "한눈에 보기": 핵심 지표 4칸 → 프로젝트별 요약 표 → 정산 → 월별 추이 표
    - 2쪽부터 "프로젝트 상세"(선택): 프로젝트마다 머리 줄(합계·건수·기간) · 메모 | 분류별 합계 · 큰 지출 TOP 3 · 전체 지출 내역
    - "정산": 연계 프로젝트의 비용 분담(사람 · 비율, ProjectSplit.jsx)대로 각자 금액 · 받을 금액
+   - 제목: 보고서 위쪽 제목 칸 (기본: 프로젝트 이름 + 지출 보고서) → 보고서 머리 · PDF 파일 이름 · 저장 제목
    - 저장: "보고서 저장" 또는 "PDF로 저장"을 누르면 그때 모습 그대로 finance.savedReports 에 보관 (SavedReports 에서 다시 열기 · PDF · 삭제)
    - 마지막 "비고 · 향후 계획": 미리보기에서 직접 적는 칸 (finance.report.next 에 저장)
    - 옵션: 프로젝트 선택 · 기간(시작 달 ~ 끝 달) · 구성(요약만 / 상세 포함)
    - 인쇄 서식: 글자 검은색, 음영 없음, 모든 내용은 테두리 칸 안, A4 세로
-   PDF 저장 = 브라우저 인쇄 창에서 "PDF로 저장" (한글 글꼴을 따로 넣지 않아도 됨) */
+   PDF 저장 = 브라우저 인쇄 창에서 "PDF로 저장" (파일 이름은 보고서 제목, 한글 글꼴을 따로 넣지 않아도 됨) */
 const dot = s => (s ? `${s.slice(0, 4)}. ${s.slice(5, 7)}. ${s.slice(8, 10)}.` : '');
 const md = s => `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
 const ymL = k => `${k.slice(0, 4)}년 ${Number(k.slice(5, 7))}월`;
 const pct = (a, b) => (b ? `${Math.round(a / b * 100)}%` : '-');
 const sumOf = l => l.reduce((a, e) => a + e.amount, 0);
+/** PDF 파일 이름 = 보고서 제목 (파일 이름에 못 쓰는 글자만 바꿈) */
+export const pdfName = (title, fallback) => String(title || '').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || fallback;
 const group = (l, key) => Object.entries(l.reduce((m, e) => { const k = key(e); m[k] = (m[k] || 0) + e.amount; return m; }, {}));
 
 export default function ProjectReport({ f, update, today, onClose }) {
@@ -50,6 +53,10 @@ export default function ProjectReport({ f, update, today, onClose }) {
     return () => { document.body.classList.remove('report-open'); window.removeEventListener('keydown', esc); };
   }, []);
   const art = useRef(null);
+  // 보고서 제목: 처음엔 고른 프로젝트로 자동, 직접 고치면 그대로 (PDF 파일 이름 · 저장 제목으로 씀)
+  const [title0, setTitle] = useState(null);
+  const autoTitle = chosen.length === 1 ? `${chosen[0].name} 지출 보고서` : chosen.length ? `${chosen[0].name} 외 ${chosen.length - 1}건 지출 보고서` : '프로젝트 지출 보고서';
+  const title = title0 ?? autoTitle;
   const [saved, setSaved] = useState(null);
   /** 지금 화면 그대로(입력칸 제외) 보관. 같은 내용이 마지막 저장본과 같으면 다시 저장하지 않음 */
   const saveSnapshot = () => {
@@ -60,7 +67,7 @@ export default function ProjectReport({ f, update, today, onClose }) {
     const html = c.innerHTML;
     const list = f.savedReports || [];
     if (list[0]?.html === html) { setSaved(list[0]); return list[0]; }
-    const rep = { id: Math.random().toString(36).slice(2, 10), at: new Date().toISOString(), title: `프로젝트 지출 보고서 (${period})`,
+    const rep = { id: Math.random().toString(36).slice(2, 10), at: new Date().toISOString(), title: title.trim() || autoTitle,
       projects: chosen.map(p => p.name), total, html };
     update(x => ({ ...x, savedReports: [rep, ...(x.savedReports || [])].slice(0, 50) }));
     setSaved(rep);
@@ -69,7 +76,7 @@ export default function ProjectReport({ f, update, today, onClose }) {
   const print = () => {
     saveSnapshot();
     const t = document.title;
-    document.title = `project_report_${today.replace(/-/g, '')}`;           // PDF 파일 이름 (영문)
+    document.title = pdfName(title, `project_report_${today.replace(/-/g, '')}`);   // PDF 파일 이름 = 보고서 제목
     window.print();
     setTimeout(() => { document.title = t; }, 500);
   };
@@ -78,7 +85,7 @@ export default function ProjectReport({ f, update, today, onClose }) {
   return createPortal(
     <div className="rp-wrap" role="dialog" aria-label="연계 프로젝트 지출 보고서">
       <div className="rp-bar no-print">
-        <b>보고서</b>
+        <label className="rp-title">제목<input value={title} onChange={e => setTitle(e.target.value)} placeholder={autoTitle} aria-label="보고서 제목 (PDF 파일 이름)" /></label>
         <span className="rp-pick">{projects.map(p => (
           <label key={p.id}><input type="checkbox" checked={pick.has(p.id)} onChange={e => setPick(s => { const n = new Set(s); if (e.target.checked) n.add(p.id); else n.delete(p.id); return n; })} />{p.name}</label>))}</span>
         {allMonths.length > 0 && <span className="rp-range">기간
@@ -94,7 +101,7 @@ export default function ProjectReport({ f, update, today, onClose }) {
       <article className="rp" ref={art}>
         <header className="rp-head">
           <p className="rp-kicker">개인 재무 · 연계 프로젝트</p>
-          <h1>프로젝트 지출 보고서</h1>
+          <h1>{title.trim() || autoTitle}</h1>
           <table className="rp-meta"><tbody><tr>
             <th>기간</th><td>{period}</td><th>작성일</th><td>{dot(today)}</td><th>대상</th><td>{chosen.length}개 프로젝트</td>
           </tr></tbody></table>
@@ -191,6 +198,10 @@ function Editable({ value, onChange, placeholder }) {
   );
 }
 
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+/** 저장 목록에서 제목을 바꾸면 보고서 머리 제목도 같이 */
+const withTitle = (html, title) => (title?.trim() ? html.replace(/<h1>[\s\S]*?<\/h1>/, `<h1>${esc(title.trim())}</h1>`) : html);
+
 /** 저장된 보고서 보기 (그때 모습 그대로, 다시 PDF 로 저장 가능) */
 export function SavedReportView({ rep, onClose }) {
   useEffect(() => {
@@ -201,7 +212,7 @@ export function SavedReportView({ rep, onClose }) {
   }, []);
   const print = () => {
     const t = document.title;
-    document.title = `project_report_${rep.at.slice(0, 10).replace(/-/g, '')}`;
+    document.title = pdfName(rep.title, `project_report_${rep.at.slice(0, 10).replace(/-/g, '')}`);
     window.print();
     setTimeout(() => { document.title = t; }, 500);
   };
@@ -213,7 +224,7 @@ export function SavedReportView({ rep, onClose }) {
         <button className="btn" onClick={onClose}>닫기</button>
       </div>
       {/* 이 앱이 만든 보고서 화면(글자는 모두 React 가 이스케이프한 값)을 그대로 보관한 것 */}
-      <article className="rp" dangerouslySetInnerHTML={{ __html: rep.html }} />
+      <article className="rp" dangerouslySetInnerHTML={{ __html: withTitle(rep.html, rep.title) }} />
     </div>,
     document.body,
   );
