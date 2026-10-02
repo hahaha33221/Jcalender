@@ -32,6 +32,8 @@ export default function FinanceView({ area, cat }) {
   const closed = new Set(ui.closed || []);
   const setClosed = v => setUi(u => ({ closed: [...(typeof v === 'function' ? v(new Set(u.closed || [])) : v)] }));
   const [focus, setFocus] = useState(null);
+  const [timeOpen, setTimeOpen] = useState(null);          // 날짜를 누른 지출 한 줄 → 그 줄의 상세 시간
+  const dayOf = d => WEEK[new Date(`${d}T00:00:00`).getDay()];
   const cats = catsOf(f);
   const monthExp = f.expenses.filter(e => e.date.slice(0, 7) === month).sort((a, b) => b.date.localeCompare(a.date));
   const total = monthExp.reduce((a, e) => a + e.amount, 0);
@@ -80,7 +82,10 @@ export default function FinanceView({ area, cat }) {
     update(x => setExpenseProject({ ...x, projects: [...(x.projects || []), { id, name, note: '', updated: today }] }, e.id, id));
   };
   const row = (e, i) => (
-    <tr key={e.id}><td className="fv-no">{i + 1}</td><td className="fv-date">{e.date.slice(5).replace('-', '/')}{showTime && <span className="fv-time">{e.time || '--:--'}</span>}</td>
+    <tr key={e.id}><td className="fv-no">{i + 1}</td><td className="fv-date">
+      <button type="button" className={`fv-datebtn ${timeOpen === e.id ? 'on' : ''}`} onClick={() => setTimeOpen(o => (o === e.id ? null : e.id))} aria-expanded={timeOpen === e.id} title="눌러서 상세 시간 보기">{e.date.slice(5).replace('-', '/')}</button>
+      {showTime && <span className="fv-time">{e.time || '--:--'}</span>}
+      {timeOpen === e.id && <span className="fv-timedetail" role="status">{e.date.replace(/-/g, '.')} ({dayOf(e.date)}) {e.time ? <b>{e.time}</b> : <em>시간 정보 없음</em>}</span>}</td>
       <td><select className="fv-cat" value={e.cat} onChange={ev => update(x => setExpenseCat(x, e.id, ev.target.value))} aria-label={`${e.memo || '지출'} 분류`}>
         {[...new Set([...cats.map(c => c.name), e.cat])].map(c => <option key={c}>{c}</option>)}</select></td>
       <td>{memoNoInst(e.memo) || '-'}{instOf(e) && <span className="tag fv-inst">{instText(instOf(e))}</span>}{subOf(e, f.subs) && <span className="tag fs-tag">구독</span>}{e.shopId && <span className="tag">구매 목록</span>}{e.card && <span className="tag">{e.card}</span>}</td>
