@@ -1067,6 +1067,8 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .fs-tag { background: var(--apisoft); color: var(--a3); }
 .fs-cands, .fs-checks { list-style: none; margin: 0; padding: 0; font-size: 13px; }
 .fs-cands li, .fs-checks li { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line2); }
+.fs-cands li .btn + .btn { margin-left: -4px; }
+.fs-ign { margin-top: 8px; }
 .fs-d { width: 44px; color: var(--ink2); font-variant-numeric: tabular-nums; }
 .fs-st { font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--nonesoft); color: var(--ink2); white-space: nowrap; }
 .fs-st.paid { background: var(--oksoft); color: var(--ok); }
@@ -1138,6 +1140,8 @@ body.report-open { overflow: hidden; }
 .fv-tabs button { border: 0; background: none; padding: 10px 22px; font: inherit; font-size: 15px; font-weight: 700; color: var(--ink3); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
 .fv-tabs button:hover { color: var(--ink); }
 .fv-tabs button.on { color: var(--ink); border-bottom-color: var(--ac); }
+.fv-tabs button { white-space: nowrap; }
+@media (max-width: 560px) { .fv-tabs { overflow-x: auto; } .fv-tabs button { padding: 10px 12px; font-size: 14px; } }
 .fi-chk { flex: 1 1 100%; flex-direction: row !important; align-items: center; }
 .fi-fixed { list-style: none; margin: 0; padding: 0; font-size: 13px; }
 .fi-fixed li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line2); }

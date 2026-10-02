@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { MoneyInput } from '../shared.jsx';
 import { catsOf, won } from './finance.js';
 
-/* 개인 재무 › 구독관리 탭: 매달(매년) 나가는 구독 고정비
+/* 개인 재무 › 구독 자동이체관리 탭: 매달(매년) 나가는 구독 고정비
    finance.subs = [{ id, name, amount, cycle: 'M' 매월 | 'Y' 매년, day(결제일), month(매년일 때 결제 월), cat(지출 분류), key(카드 내역에서 찾을 글자), active, memo }]
    - 월 고정비 = 매월 금액 + 매년 금액 ÷ 12, 연 고정비 = 매월 × 12 + 매년
    - 이번 달 결제 확인: 그 달 지출 내역(카드 가져오기)에서 찾을 글자가 들어간 줄 → 결제됨 / 예정 / 확인 안 됨
-   - 구독 후보: 지출 내역에서 2달 이상 비슷한 금액으로 반복된 가맹점, 흔한 구독 서비스 이름 */
+   - 구독 후보: 지출 내역에서 2달 이상 비슷한 금액으로 반복된 가맹점, 흔한 구독 서비스 이름
+     "후보에서 빼기"로 지운 후보는 finance.subsIgnore(가맹점 이름 정리 값)에 남겨 다시 보이지 않게 한다 */
 const uid = () => Math.random().toString(36).slice(2, 10);
 const ymL = k => `${k.slice(0, 4)}년 ${Number(k.slice(5, 7))}월`;
 const lastDay = ym => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
@@ -69,6 +70,8 @@ export default function FinanceSubs({ f, update, today, month, setMonth, months 
   const maxCat = Math.max(1, ...byCat.map(x => x.v));
 
   // 구독 후보: 지출에서 반복된 가맹점 · 흔한 구독 이름 (이미 등록한 것은 뺌)
+  const ignored = f.subsIgnore || [];
+  const ignore = name => update(x => ({ ...x, subsIgnore: [...new Set([...(x.subsIgnore || []), norm(name)])] }));
   const groups = {};
   f.expenses.forEach(e => { const k = norm(e.memo); if (k.length >= 2) (groups[k] ||= []).push(e); });
   const cands = Object.values(groups).map(list => {
@@ -77,23 +80,24 @@ export default function FinanceSubs({ f, update, today, month, setMonth, months 
     const known = KNOWN.test(list[0].memo || '');
     if (!(known || (ms.length >= 2 && hi <= lo * 1.2))) return null;
     if (subs.some(s => keysOf(s).some(k => norm(list[0].memo).includes(k)))) return null;
+    if (ignored.includes(norm(list[0].memo))) return null;
     const last = [...list].sort((a, b) => b.date.localeCompare(a.date))[0];
-    return { name: (last.memo || '').replace(/\s*\(.*\)$/, ''), amount: last.amount, day: Number(last.date.slice(8, 10)), months: ms.length, cat: last.cat, known };
+    return { memo: last.memo, name: (last.memo || '').replace(/\s*\(.*\)$/, ''), amount: last.amount, day: Number(last.date.slice(8, 10)), months: ms.length, cat: last.cat, known };
   }).filter(Boolean).sort((a, b) => b.months - a.months || b.amount - a.amount).slice(0, 8);
 
   const ST = { paid: '결제됨', soon: '예정', miss: '확인 안 됨' };
   return (
     <>
       <div className="hv-stats">
-        <div className="hv-stat sl"><span className="muted">월 구독 고정비</span><b>{won(monthly)}</b><span className="hv-sub">{active.length}개 · 매년 결제는 ÷12</span></div>
-        <div className="hv-stat sl"><span className="muted">연간 구독비</span><b>{won(yearly)}</b><span className="hv-sub">1년 동안 나가는 돈</span></div>
+        <div className="hv-stat sl"><span className="muted">월 구독 · 자동이체 고정비</span><b>{won(monthly)}</b><span className="hv-sub">{active.length}개 · 매년 결제는 ÷12</span></div>
+        <div className="hv-stat sl"><span className="muted">연간 구독 · 자동이체</span><b>{won(yearly)}</b><span className="hv-sub">1년 동안 나가는 돈</span></div>
         <div className="hv-stat ex"><span className="muted">{ymL(month)} 결제 예정</span><b>{won(thisMonth)}</b><span className="hv-sub">{checks.length}건 · 확인 {won(paidSum)}</span></div>
         <div className="hv-stat ex"><span className="muted">{ymL(month)} 지출 중 구독</span><b>{spent ? `${Math.round(paidSum / spent * 100)}%` : '-'}</b><span className="hv-sub">지출 {won(spent)} 중</span></div>
       </div>
 
       <div className="fv-grid fv-grid2">
         <section className="panel">
-          <h2>구독 추가</h2>
+          <h2>구독 · 자동이체 추가</h2>
           <form className="fv-form" onSubmit={add}>
             <label>서비스 이름<input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="예: 넷플릭스, 유튜브 프리미엄" /></label>
             <label>금액(원)<MoneyInput value={form.amount} onChange={v => setForm({ ...form, amount: v })} aria-label="구독 금액" /></label>
@@ -109,13 +113,15 @@ export default function FinanceSubs({ f, update, today, month, setMonth, months 
           <div className="hv-ch"><h2>구독 후보</h2><span className="muted">지출 내역에서 반복된 결제</span></div>
           {cands.length ? <ul className="fs-cands">{cands.map(c => (
             <li key={c.name}><span className="grow"><b>{c.name}</b> <small className="muted">{c.known ? '구독 서비스' : `${c.months}달 반복`} · 매월 {c.day}일쯤</small></span><b>{won(c.amount)}</b>
-              <button className="btn sm" onClick={() => add(null, { ...blank, name: c.name, amount: c.amount, day: c.day, cat: cats.includes(c.cat) ? c.cat : blank.cat, key: c.name })}>구독으로 등록</button></li>))}</ul>
-            : <p className="muted">카드 내역을 가져오면 매달 반복되는 결제를 찾아 보여 줍니다.</p>}
+              <button className="btn sm" onClick={() => add(null, { ...blank, name: c.name, amount: c.amount, day: c.day, cat: cats.includes(c.cat) ? c.cat : blank.cat, key: c.name })}>구독으로 등록</button>
+              <button className="btn sm" onClick={() => ignore(c.memo)} title="이 결제는 구독이 아니라서 후보에서 뺍니다" aria-label={`${c.name} 후보에서 빼기`}>후보에서 빼기</button></li>))}</ul>
+            : <p className="muted">{ignored.length ? '남은 구독 후보가 없습니다.' : '카드 내역을 가져오면 매달 반복되는 결제를 찾아 보여 줍니다.'}</p>}
+          {ignored.length > 0 && <p className="note fs-ign">후보에서 뺀 결제 {ignored.length}개 · <button className="linkish" onClick={() => update(x => ({ ...x, subsIgnore: [] }))}>다시 보이기</button></p>}
         </section>
       </div>
 
       <section className="panel">
-        <div className="csum-h"><h2>구독 목록</h2><span className="muted">{subs.length}개 · 사용 중 {active.length}개 · 금액 · 결제일을 바로 고칠 수 있습니다</span></div>
+        <div className="csum-h"><h2>구독 · 자동이체 목록</h2><span className="muted">{subs.length}개 · 사용 중 {active.length}개 · 금액 · 결제일을 바로 고칠 수 있습니다</span></div>
         {subs.length ? <div className="tablewrap"><table className="prog fv-table fs-table">
           <thead><tr><th>사용</th><th>서비스</th><th>주기 · 결제일</th><th>금액</th><th>월 환산</th><th>분류</th><th>찾을 글자</th><th /></tr></thead>
           <tbody>{[...subs].sort((a, b) => (b.active !== false) - (a.active !== false) || monthlyOf(b) - monthlyOf(a)).map(s => (

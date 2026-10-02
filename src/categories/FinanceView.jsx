@@ -104,7 +104,7 @@ export default function FinanceView({ area, cat }) {
       </header>
 
       <div className="fv-tabs" role="tablist" aria-label="개인 재무 보기">
-        {[['income', '수입관리'], ['expense', '지출관리'], ['subs', '구독관리']].map(([k, n]) => (
+        {[['income', '수입관리'], ['expense', '지출관리'], ['subs', '구독 자동이체관리']].map(([k, n]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setUi({ tab: k })}>{n}</button>))}
       </div>
 
@@ -120,8 +120,8 @@ export default function FinanceView({ area, cat }) {
         <div className="hv-stat ex"><span className="muted">구매 예정</span><b>{won(expect)}</b><span className="hv-sub">{todo.length}건</span></div>
         <div className="hv-stat ex"><span className="muted">오늘 지출</span><b>{won(todayTotal)}</b><span className="hv-sub">{WEEK[now.getDay()]}요일</span></div>
         {(() => { const S = subsSummary(f, month); return (
-          <button className="hv-stat sl fs-stat" onClick={() => setUi({ tab: 'subs' })} title="구독관리로 가기">
-            <span className="muted">구독 고정비</span><b>{won(S.thisMonth)}</b><span className="hv-sub">{S.n ? `${S.due}건 이번 달 · 월 평균 ${won(S.monthly)}` : '구독관리에서 등록'}</span></button>); })()}
+          <button className="hv-stat sl fs-stat" onClick={() => setUi({ tab: 'subs' })} title="구독 자동이체관리로 가기">
+            <span className="muted">구독 · 자동이체 고정비</span><b>{won(S.thisMonth)}</b><span className="hv-sub">{S.n ? `${S.due}건 이번 달 · 월 평균 ${won(S.monthly)}` : '구독 자동이체관리에서 등록'}</span></button>); })()}
       </div>
 
       <CardImport update={update} f={f} now={now} onMonth={setMonth} />
