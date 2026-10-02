@@ -1,18 +1,19 @@
 /* 알림 (store.notify 설정, store.notifications 보낸 기록)
    - 앱이 열려 있는 동안 1분마다 확인해 때가 된 알림을 보낸다 (브라우저 알림 허용 시 OS 알림, 아니면 화면 오른쪽 위 알림)
-   - 대상: 시간이 있는 일정(반복 회차 포함, 일정마다 remind 로 바꿀 수 있음), 기획 마감(planDays 일 전 오전 9시)
+   - 대상: 저널링 알림(journal.remind, reminders.js), 시간이 있는 일정(반복 회차 포함, 일정마다 remind 로 바꿀 수 있음), 기획 마감(planDays 일 전 오전 9시)
    - 같은 알림은 key 로 한 번만 보낸다. 기록은 최근 100개 */
 import { iso, pad } from './data.js';
 import { expandEvents } from './recur.js';
+import { dueJournal } from './reminders.js';
 
 const at = (date, hm) => new Date(`${date}T${hm}:00`);
 
 /** 지금 보내야 할 알림 목록 (이미 보낸 key 제외, 2시간 넘게 지난 것은 건너뜀) */
 export function dueNotifications(store, now = new Date()) {
   const N = store.notify || {};
-  if (!N.enabled) return [];
   const sent = new Set((store.notifications || []).map(n => n.key));
-  const out = [];
+  const out = dueJournal(store, now, sent);                 // 저널링 알림은 저널링 화면에서 따로 켠다 (reminders.js)
+  if (!N.enabled) return out;
   const t0 = iso(now), t1 = iso(new Date(now.getTime() + 2 * 864e5));
   for (const e of expandEvents(store.events || [], t0, t1)) {
     if (!e.time) continue;

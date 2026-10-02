@@ -1063,6 +1063,19 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .ge-box ul { padding-left: 18px; }
 .ge-warn { color: var(--over); }
 .ge-box.ok { border-color: var(--line); background: var(--card); }
+.jr-rows { display: flex; flex-direction: column; gap: 8px; }
+.jr-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 13px; }
+.jr-on { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; min-width: 130px; }
+.jr-row input[type=time] { width: auto; padding: 4px 6px; }
+.jr-row select { width: auto; }
+.jr-days { display: inline-flex; gap: 3px; }
+.jr-days button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--ink2); font: inherit; font-size: 12px; cursor: pointer; padding: 0; }
+.jr-days button[aria-pressed="true"] { background: var(--ac); border-color: var(--ac); color: #fff; }
+.jr-days button:disabled { opacity: .45; cursor: default; }
+.jr-skip { display: inline-flex; align-items: center; gap: 4px; color: var(--ink2); }
+.jr-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 10px; }
+.jr-foot .note { margin: 0; }
+.jr-warn { font-size: 12px; color: var(--over); }
 .fs-stat { text-align: left; font: inherit; color: inherit; cursor: pointer; border-top: 1px solid var(--line); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); border-left: 4px solid var(--viz-sl); }
 .fs-tag { background: var(--apisoft); color: var(--a3); }
 .fs-cands, .fs-checks { list-style: none; margin: 0; padding: 0; font-size: 13px; }

@@ -2,11 +2,14 @@ import React, { useState } from 'react';
 import { ROWS, iso, periodKey } from '../data.js';
 import { WEEK, areaVar, num, useCtx } from '../shared.jsx';
 import { sleepMinutes } from './health.js';
+import { DEFAULT_REMIND, remindOf, upcomingJournal, whenText } from '../reminders.js';
+import { showOsNotification } from '../notify.js';
 
 /* 개인 › 저널링 전용 화면
    journal = {
      entries: [{ id, date, mood(1~5), text, tags: [] }],            하루 하나
      reviews: [{ id, week('2026-W40'), keep, problem, tryNext, saved }], 한 주 하나
+     remind:  알림 설정 (reminders.js)
    } */
 export const MOODS = ['', '매우 나쁨', '나쁨', '보통', '좋음', '매우 좋음'];
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -144,6 +147,8 @@ export default function ReviewView({ area, cat, group }) {
         <div className="hv-stat ex"><span className="muted">쌓인 회고</span><b>{J.reviews.length}주</b><span className="hv-sub">일기 전체 {J.entries.length}일</span></div>
       </div>
 
+      <JournalRemind />
+
       <div className="jv-grid">
         <section className="panel">
           <div className="csum-h"><h2>일기</h2>
@@ -215,5 +220,47 @@ export default function ReviewView({ area, cat, group }) {
       </div>
 
     </div>
+  );
+}
+
+/* 저널링 알림 설정: 매일 일기 · 주간 회고 */
+const WD = ['일', '월', '화', '수', '목', '금', '토'];
+function JournalRemind() {
+  const { store, setStore, now } = useCtx();
+  const R = remindOf(store);
+  const set = p => setStore(s => ({ ...s, journal: { ...(s.journal || seedJournal(now)), remind: { ...remindOf(s), ...p } } }));
+  const setW = p => set({ weekly: { ...R.weekly, ...p } });
+  const perm = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+  const [, rerender] = useState(0);
+  const ask = async () => { try { await Notification.requestPermission(); } catch { /* 무시 */ } rerender(x => x + 1); };
+  const next = upcomingJournal(store, new Date(), 8).filter(n => n.when > new Date()).slice(0, 2);
+  const test = () => showOsNotification({ key: `test:${Date.now()}`, title: '저널링 알림 (시험)', body: '이렇게 알림이 옵니다' });
+  return (
+    <section className="panel jr">
+      <div className="csum-h"><h2>알림</h2>
+        <span className="muted">{R.on || R.weekly.on ? (next.length ? `다음 알림 ${whenText(next[0].when, WD)}` : '') : '꺼져 있음'}</span></div>
+      <div className="jr-rows">
+        <div className="jr-row">
+          <label className="jr-on"><input type="checkbox" checked={R.on} onChange={e => set({ on: e.target.checked })} />매일 일기 알림</label>
+          <input type="time" value={R.time} onChange={e => e.target.value && set({ time: e.target.value })} disabled={!R.on} aria-label="일기 알림 시각" />
+          <span className="jr-days" role="group" aria-label="알림 요일">{WD.map((w, i) => (
+            <button key={w} type="button" aria-pressed={R.days.includes(i)} disabled={!R.on}
+              onClick={() => set({ days: R.days.includes(i) ? R.days.filter(x => x !== i) : [...R.days, i].sort() })}>{w}</button>))}</span>
+          <label className="jr-skip"><input type="checkbox" checked={R.skip} onChange={e => set({ skip: e.target.checked })} disabled={!R.on} />이미 쓴 날은 알리지 않기</label>
+        </div>
+        <div className="jr-row">
+          <label className="jr-on"><input type="checkbox" checked={R.weekly.on} onChange={e => setW({ on: e.target.checked })} />주간 회고 알림</label>
+          <select value={R.weekly.day} onChange={e => setW({ day: Number(e.target.value) })} disabled={!R.weekly.on} aria-label="회고 알림 요일">{WD.map((w, i) => <option key={w} value={i}>매주 {w}요일</option>)}</select>
+          <input type="time" value={R.weekly.time} onChange={e => e.target.value && setW({ time: e.target.value })} disabled={!R.weekly.on} aria-label="회고 알림 시각" />
+          <span className="muted">그 주 회고를 이미 썼으면 알리지 않습니다</span>
+        </div>
+      </div>
+      <div className="jr-foot">
+        {perm === 'default' && <button className="btn sm primary" onClick={ask}>브라우저 알림 허용</button>}
+        {perm === 'denied' && <span className="jr-warn">브라우저에서 알림이 막혀 있어 화면 안 알림만 뜹니다 (주소창 왼쪽 자물쇠 › 알림 허용)</span>}
+        {perm === 'granted' && <button className="btn sm" onClick={test}>알림 시험</button>}
+        <span className="note">지금은 Jcalender 가 열려 있을 때(다른 탭이어도) 알림이 옵니다. 설치 앱으로 바꾸면 앱이 꺼져 있어도 같은 설정으로 울리게 됩니다.</span>
+      </div>
+    </section>
   );
 }
