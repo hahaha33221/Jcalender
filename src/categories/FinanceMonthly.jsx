@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CARD_COMPANIES, mergeCard, parseCardRows, readTable } from '../cardImport.js';
+import { CARD_COMPANIES, instOf, instText, memoNoInst, mergeCard, parseCardRows, readTable } from '../cardImport.js';
 import { catsOf, clearExpenses, guessCatBy, won } from './finance.js';
 import BarChart from './BarChart.jsx';
 
@@ -22,14 +22,14 @@ export function CardImport({ f, update, now, onMonth }) {
 
   const upload = async fileList => {
     const id = uid(), files = [], errors = [];
-    let fin = pending ? pending.fin : f, add = pending ? [...pending.add] : [], times = { ...(pending?.times || {}) }, timed = pending?.timed || 0;
+    let fin = pending ? pending.fin : f, add = pending ? [...pending.add] : [], times = { ...(pending?.times || {}) }, insts = { ...(pending?.insts || {}) }, timed = pending?.timed || 0;
     for (const file of [...(fileList || [])]) {
       try {
         const rows = await readTable(file);
         const p = parseCardRows(rows, { pick, fileName: file.name, year: now.getFullYear(), guess: m => guessCatBy(catsOf(f), m), installment });
         if (!p.items.length) throw new Error('가져올 이용 건이 없습니다');
         const res = mergeCard(fin, p, uid, pending?.id || id);
-        fin = res.fin; add = [...add, ...res.add]; times = { ...times, ...res.times }; timed += res.timed;
+        fin = res.fin; add = [...add, ...res.add]; times = { ...times, ...res.times }; insts = { ...insts, ...res.insts }; timed += res.timed;
         const sum = res.add.reduce((a, x) => a + x.amount, 0), all = p.items.reduce((a, x) => a + x.amount, 0);
         const check = p.statement ? { label: '명세서 청구 합계', file: p.billTotal, got: all } : p.fileTotal != null ? { label: '파일 요약 국내 정상', file: p.fileTotal, got: all } : null;
         files.push({ name: file.name, company: p.company, kind: p.statement ? '이용대금명세서' : '이용내역', count: res.added, sum, dup: res.dup, cancelled: p.cancelled, foreign: p.foreign, removedExamples: res.removedExamples, check });
@@ -38,7 +38,7 @@ export function CardImport({ f, update, now, onMonth }) {
     if (ref.current) ref.current.value = '';
     if (!files.length) { setMsg({ err: true, t: errors.join(' / ') }); return; }
     setMsg(errors.length ? { err: true, t: errors.join(' / ') } : null);
-    setPending({ id: pending?.id || id, fin, files: [...(pending?.files || []), ...files], add, times, timed });
+    setPending({ id: pending?.id || id, fin, files: [...(pending?.files || []), ...files], add, times, insts, timed });
   };
   const commit = () => {
     const P = pending, months = monthsOf(P.add);
@@ -48,12 +48,16 @@ export function CardImport({ f, update, now, onMonth }) {
       const real = x.expenses.filter(e => !/\(예시\)$/.test(e.memo || ''));
       const have = new Set(real.map(e => e.cardKey).filter(Boolean));
       const T = P.times || {};                              // 이미 있던 지출에 이용 시간 채우기
-      const filled = real.map(e => (!e.time && e.cardKey && T[e.cardKey] ? { ...e, time: T[e.cardKey] } : e));
+      const I = P.insts || {};                              // 할부 정보도
+      const filled = real.map(e => {
+        const t = !e.time && e.cardKey && T[e.cardKey], i = !e.inst && e.cardKey && I[e.cardKey];
+        return t || i ? { ...e, ...(t ? { time: t } : {}), ...(i ? { inst: i } : {}) } : e;
+      });
       return { ...x, expenses: [...filled, ...P.add.filter(e => !have.has(e.cardKey))], cardImport: { at: rec.at.slice(0, 10), added: rec.added }, imports: [rec, ...(x.imports || [])] };
     });
     const last = Object.keys(months).sort().pop();
     if (last) onMonth(last);
-    setMsg({ t: `반영 완료: ${rec.added}건 · ${won(rec.sum)}${Object.keys(months).length ? ` (${Object.keys(months).sort().map(ymLabel).join(', ')})` : ''}${P.timed ? ` · 이미 있던 ${P.timed}건에 이용 시간 추가` : ''}` });
+    setMsg({ t: `반영 완료: ${rec.added}건 · ${won(rec.sum)}${Object.keys(months).length ? ` (${Object.keys(months).sort().map(ymLabel).join(', ')})` : ''}${P.timed ? ` · 이미 있던 ${P.timed}건에 이용 시간 · 할부 정보 추가` : ''}` });
     setPending(null);
   };
 
@@ -105,10 +109,10 @@ export function CardImport({ f, update, now, onMonth }) {
           </div>
           {P.add.length > 0 && <div className="tablewrap fm-pre-list"><table className="prog fv-table">
             <thead><tr><th>날짜</th><th>분류</th><th>내용</th><th>금액</th></tr></thead>
-            <tbody>{[...P.add].sort((a, b) => b.date.localeCompare(a.date)).map(e => <tr key={e.id}><td>{e.date.slice(2).replace(/-/g, '/')}</td><td>{e.cat}</td><td>{e.memo}<span className="tag">{e.card}</span></td><td className="num">{won(e.amount)}</td></tr>)}</tbody>
+            <tbody>{[...P.add].sort((a, b) => b.date.localeCompare(a.date)).map(e => <tr key={e.id}><td>{e.date.slice(2).replace(/-/g, '/')}</td><td>{e.cat}</td><td>{memoNoInst(e.memo)}{instOf(e) && <span className="tag fv-inst">{instText(instOf(e))}</span>}<span className="tag">{e.card}</span></td><td className="num">{won(e.amount)}</td></tr>)}</tbody>
           </table></div>}
           <div className="fm-pre-f">
-            <span className="muted">합계 새로 {P.add.length}건 · {won(P.add.reduce((a, x) => a + x.amount, 0))}{P.timed ? ` · 이미 있던 ${P.timed}건에 이용 시간 추가` : ''}</span>
+            <span className="muted">합계 새로 {P.add.length}건 · {won(P.add.reduce((a, x) => a + x.amount, 0))}{P.timed ? ` · 이미 있던 ${P.timed}건에 이용 시간 · 할부 정보 추가` : ''}</span>
             <button className="btn" onClick={() => { setPending(null); setMsg({ t: '미리보기를 취소했습니다. 저장된 것은 없습니다.' }); }}>취소</button>
             <button className="btn primary" disabled={!P.add.length && !P.timed} onClick={commit}>반영 완료</button>
           </div>

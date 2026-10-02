@@ -110,6 +110,25 @@ export function cardTime(dateCell, timeCell) {
   };
   return pick(timeCell) || pick(dateCell);
 }
+/** 할부 칸 → 개월 수 ("3개월" · "할부(03)" · "2/6" · "일시불" → 0) */
+export function planMonths(v) {
+  const t = String(v ?? '').replace(/\s+/g, '');
+  if (!t || /일시불/.test(t)) return 0;
+  let m = t.match(/(\d+)개월/); if (m) return Number(m[1]);
+  m = t.match(/(\d+)\/(\d+)/); if (m) return Number(m[2]);
+  m = t.match(/(\d+)/); return m ? Number(m[1]) : 0;
+}
+/** 지출 한 줄의 할부 정보: 저장된 inst, 없으면 내용의 "(할부 2/6회차)" · "(할부 6개월)" 에서 → { months, round } | null */
+export function instOf(e) {
+  if (e?.inst?.months > 1) return e.inst;
+  const t = String(e?.memo || '');
+  let m = t.match(/할부\s*(\d+)\s*\/\s*(\d+)\s*회차/); if (m && Number(m[2]) > 1) return { months: Number(m[2]), round: Number(m[1]) };
+  m = t.match(/할부\s*(\d+)\s*개월/); if (m && Number(m[1]) > 1) return { months: Number(m[1]) };
+  return null;
+}
+export const instText = i => (i ? `할부 ${i.months}개월${i.round ? ` · ${i.round}회차` : ''}` : '');
+/** 내용에서 "(할부 …)" 꼬리표를 뺀 이름 (할부 표시를 따로 붙일 때) */
+export const memoNoInst = t => String(t || '').replace(/\s*\(할부[^)]*\)\s*$/, '');
 const money = v => (typeof v === 'number' ? v : Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0);
 
 /** 카드사 추측: 선택값 → 파일 이름 → 표 안 글자 */
@@ -143,7 +162,7 @@ export function parseCardRows(rows, { pick = 'auto', fileName = '', year = new D
   body.forEach(r => {
     const useDate = cardDate(get(r, 'date'), year);
     const merchant = String(get(r, 'merchant') || '').trim() || '카드 결제';
-    const round = money(get(r, 'round')), months = money(get(r, 'plan'));
+    const round = money(get(r, 'round')), months = planMonths(get(r, 'plan'));
     const inst = statement && round > 0;
     const bill = statement ? money(get(r, 'principal')) + money(get(r, 'fee')) : 0;
     let date = useDate, amount, tag = '';
@@ -165,7 +184,7 @@ export function parseCardRows(rows, { pick = 'auto', fileName = '', year = new D
     used[base] = (used[base] || 0) + 1;
     if (inst && installment === 'use' && used[base] > 1) return;
     const key = used[base] > 1 ? `${base}#${used[base]}` : base;
-    items.push({ key, date, time: date === useDate ? cardTime(get(r, 'date'), get(r, 'time')) : '', amount: Math.round(amount), merchant: merchant + tag, cat: guess(merchant), card: String(get(r, 'card') || '').trim(), plan: String(get(r, 'plan') || '').trim() });
+    items.push({ key, date, ...(months > 1 ? { inst: { months, ...(inst && installment !== 'use' && round ? { round } : {}) } } : {}), time: date === useDate ? cardTime(get(r, 'date'), get(r, 'time')) : '', amount: Math.round(amount), merchant: merchant + tag, cat: guess(merchant), card: String(get(r, 'card') || '').trim(), plan: String(get(r, 'plan') || '').trim() });
   });
   return { company, statement, billTotal: Math.round(billTotal), stmtDate, items, cancelled, skipped, foreign, fileTotal: summaryTotal(rows.slice(0, i)) };
 }
@@ -189,10 +208,15 @@ function summaryTotal(top) {
 export function mergeCard(fin, { company, items }, uid, importId) {
   const real = fin.expenses.filter(e => !/\(예시\)$/.test(e.memo || ''));
   const have = new Set(real.map(e => e.cardKey).filter(Boolean));
-  const add = items.filter(x => !have.has(x.key)).map(x => ({ id: uid(), date: x.date, ...(x.time ? { time: x.time } : {}), amount: x.amount, cat: x.cat, memo: x.merchant, card: company, cardKey: x.key, ...(importId ? { importId } : {}) }));
+  const add = items.filter(x => !have.has(x.key)).map(x => ({ id: uid(), date: x.date, ...(x.time ? { time: x.time } : {}), ...(x.inst ? { inst: x.inst } : {}), amount: x.amount, cat: x.cat, memo: x.merchant, card: company, cardKey: x.key, ...(importId ? { importId } : {}) }));
   // 이미 있는 지출에 시간이 없으면 이번 파일의 이용 시간으로 채운다 (예전에 가져온 내역도 같은 파일을 다시 올리면 시간이 생김)
+  // 이미 있는 지출에 시간 · 할부 정보가 없으면 이번 파일 것으로 채운다 (예전 내역도 같은 파일을 다시 올리면 생김)
   const timeOf = new Map(items.filter(x => x.time).map(x => [x.key, x.time]));
+  const instMap = new Map(items.filter(x => x.inst).map(x => [x.key, x.inst]));
   let timed = 0;
-  const kept = real.map(e => { const t = !e.time && e.cardKey && timeOf.get(e.cardKey); if (!t) return e; timed++; return { ...e, time: t }; });
-  return { fin: { ...fin, expenses: [...kept, ...add] }, add, added: add.length, dup: items.length - add.length, removedExamples: fin.expenses.length - real.length, timed, times: Object.fromEntries(timeOf) };
+  const kept = real.map(e => {
+    const t = !e.time && e.cardKey && timeOf.get(e.cardKey), i = !e.inst && e.cardKey && instMap.get(e.cardKey);
+    if (!t && !i) return e; timed++; return { ...e, ...(t ? { time: t } : {}), ...(i ? { inst: i } : {}) };
+  });
+  return { fin: { ...fin, expenses: [...kept, ...add] }, add, added: add.length, dup: items.length - add.length, removedExamples: fin.expenses.length - real.length, timed, times: Object.fromEntries(timeOf), insts: Object.fromEntries(instMap) };
 }

@@ -1077,6 +1077,7 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .jr-foot .note { margin: 0; }
 .jr-warn { font-size: 12px; color: var(--over); }
 .fs-stat { text-align: left; font: inherit; color: inherit; cursor: pointer; border-top: 1px solid var(--line); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); border-left: 4px solid var(--viz-sl); }
+.fv-inst { background: var(--warnsoft); color: var(--warn); }
 .fs-tag { background: var(--apisoft); color: var(--a3); }
 .fs-cands, .fs-checks { list-style: none; margin: 0; padding: 0; font-size: 13px; }
 .fs-cands li, .fs-checks li { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line2); }

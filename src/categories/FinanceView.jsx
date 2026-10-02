@@ -10,6 +10,7 @@ import { SplitEditor } from './ProjectSplit.jsx';
 import { useCtx } from '../shared.jsx';
 import FinanceIncome from './FinanceIncome.jsx';
 import FinanceSubs, { subOf, subsSummary } from './FinanceSubs.jsx';
+import { instOf, instText, memoNoInst } from '../cardImport.js';
 
 /* 개인 › 개인 재무 전용 화면: 지출 관리 + 구매해야 할 물품 (대시보드와 같은 데이터)
    "지출 카테고리 설정" 버튼 → FinanceCats 상세 페이지 (카테고리 이름 · 월 예산 · 포함 범위) */
@@ -82,7 +83,7 @@ export default function FinanceView({ area, cat }) {
     <tr key={e.id}><td className="fv-no">{i + 1}</td><td className="fv-date">{e.date.slice(5).replace('-', '/')}{showTime && <span className="fv-time">{e.time || '--:--'}</span>}</td>
       <td><select className="fv-cat" value={e.cat} onChange={ev => update(x => setExpenseCat(x, e.id, ev.target.value))} aria-label={`${e.memo || '지출'} 분류`}>
         {[...new Set([...cats.map(c => c.name), e.cat])].map(c => <option key={c}>{c}</option>)}</select></td>
-      <td>{e.memo || '-'}{subOf(e, f.subs) && <span className="tag fs-tag">구독</span>}{e.shopId && <span className="tag">구매 목록</span>}{e.card && <span className="tag">{e.card}</span>}</td>
+      <td>{memoNoInst(e.memo) || '-'}{instOf(e) && <span className="tag fv-inst">{instText(instOf(e))}</span>}{subOf(e, f.subs) && <span className="tag fs-tag">구독</span>}{e.shopId && <span className="tag">구매 목록</span>}{e.card && <span className="tag">{e.card}</span>}</td>
       <td><select className={`fv-proj ${e.projectId ? 'on' : ''}`} value={projects.some(p => p.id === e.projectId) ? e.projectId : ''} onChange={ev => pickProject(e, ev.target.value)} aria-label={`${e.memo || '지출'} 연계 프로젝트`}>
         <option value="">-</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}<option value="__new">+ 새 프로젝트…</option></select></td>
       <td className="num">{won(e.amount)}</td>
