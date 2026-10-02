@@ -11,6 +11,7 @@ import { useCtx } from '../shared.jsx';
 import FinanceIncome from './FinanceIncome.jsx';
 import FinanceSubs, { subOf, subsSummary } from './FinanceSubs.jsx';
 import { instOf, instText, memoNoInst } from '../cardImport.js';
+import FinanceInst, { instSummary } from './FinanceInst.jsx';
 
 /* 개인 › 개인 재무 전용 화면: 지출 관리 + 구매해야 할 물품 (대시보드와 같은 데이터)
    "지출 카테고리 설정" 버튼 → FinanceCats 상세 페이지 (카테고리 이름 · 월 예산 · 포함 범위) */
@@ -128,6 +129,9 @@ export default function FinanceView({ area, cat }) {
         {(() => { const S = subsSummary(f, month); return (
           <button className="hv-stat sl fs-stat" onClick={() => setUi({ tab: 'subs' })} title="구독 자동이체관리로 가기">
             <span className="muted">구독 · 자동이체 고정비</span><b>{won(S.thisMonth)}</b><span className="hv-sub">{S.n ? `${S.due}건 이번 달 · 월 평균 ${won(S.monthly)}` : '구독 자동이체관리에서 등록'}</span></button>); })()}
+        {(() => { const I = instSummary(f.expenses, month); return (
+          <button className="hv-stat ex fs-stat fi-stat" onClick={() => { setUi({ instOpen: true }); setTimeout(() => document.getElementById('fv-inst')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} title="할부 관리로 가기">
+            <span className="muted">할부 청구</span><b>{won(I.due)}</b><span className="hv-sub">{I.n ? `${I.n}건 진행 중 · 남은 ${won(I.left)}` : '진행 중인 할부 없음'}</span></button>); })()}
       </div>
 
       <CardImport update={update} f={f} now={now} onMonth={setMonth} />
@@ -144,6 +148,8 @@ export default function FinanceView({ area, cat }) {
                   <span className="fv-bv">{won(x.v)}{x.b > 0 && <small> / {won(x.b)}</small>}</span></li>))}</ul>
             ) : <p className="muted">지출 내역이 없습니다.</p>}
           </section>
+
+      <FinanceInst f={f} month={month} open={ui.instOpen !== false} setOpen={v => setUi({ instOpen: v })} showDone={!!ui.instDone} setShowDone={v => setUi({ instDone: v })} />
 
       <section className="panel" id="fv-list">
         <div className="csum-h"><h2>지출 내역</h2>

@@ -1099,6 +1099,25 @@ a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items
 .tl-del.arm { color: var(--over); font-weight: 700; }
 .fv-timeopt { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--ink2); white-space: nowrap; }
 .fv-date { white-space: nowrap; }
+.fi-stat { border-left-color: var(--viz-ex, var(--warn)); }
+.fi-stats { margin: 4px 0 14px; }
+.fi h3 { font-size: 14px; margin: 0; }
+.fi-fc { margin-bottom: 16px; }
+.fi-cols { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; align-items: end; height: 150px; margin-top: 8px; }
+.fi-col { display: flex; flex-direction: column; align-items: center; height: 100%; gap: 3px; min-width: 0; }
+.fi-v { font-size: 10.5px; color: var(--ink3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fi-bar { flex: 1; width: 100%; max-width: 34px; display: flex; align-items: flex-end; background: var(--line2); border-radius: 4px 4px 0 0; overflow: hidden; }
+.fi-bar i { display: block; width: 100%; background: var(--viz-sl, var(--a1)); opacity: .55; border-radius: 4px 4px 0 0; }
+.fi-col.now .fi-bar i { opacity: 1; }
+.fi-col.now .fi-m { color: var(--ink); font-weight: 600; }
+.fi-m { font-size: 11px; color: var(--ink3); font-variant-numeric: tabular-nums; }
+.fi-th { margin-bottom: 6px; }
+.fi-table td { vertical-align: middle; }
+.fi-table .nw { white-space: nowrap; }
+.fi-prog { min-width: 110px; }
+.fi-prog .pbar { display: block; margin-bottom: 2px; }
+.fi-table tr.done td { opacity: .55; }
+.fi-table th.r { text-align: right; }
 .fv-datebtn { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; border-bottom: 1px dashed var(--ink3); }
 .fv-datebtn:hover, .fv-datebtn.on { color: var(--a1); border-bottom-color: currentColor; }
 .fv-timedetail { display: block; margin-top: 3px; font-size: 12px; color: var(--ink2); font-variant-numeric: tabular-nums; }
@@ -1522,3 +1541,10 @@ body.report-open { overflow: hidden; }
 .eb h1 { font-size: 20px; margin: 0 0 8px; color: var(--over); }
 .eb-msg { white-space: pre-wrap; word-break: break-all; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 10px; font-size: 12px; max-height: 320px; overflow: auto; }
 .eb-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .fi-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .fi-stats .hv-stat b { font-size: 17px; }
+  .fi-cols { gap: 3px; height: 120px; }
+  .fi-v { display: none; }
+  .fi-m { font-size: 9px; letter-spacing: -.3px; }
+}
