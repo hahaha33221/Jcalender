@@ -76,6 +76,7 @@ export default function RelationView({ area, cat, fixedArea }) {
   const [ar, setAr] = useState(fixedArea || 'ALL');                      // 영역 거르기: ALL · P · W · B · NONE
   const [q, setQ] = useState('');
   const [openId, setOpenId] = useState(null);
+  const [focus, setFocus] = useState(null);                              // 요약 카드를 누르면 펼치는 상세: people · soon · check · card
   const blank = { name: '', group: fixedArea === 'W' ? '업무' : '친구', phone: '', company: '', birthday: '', annivName: '', annivDate: '', card: '', areas: [fixedArea || 'P'] };
   const [form, setForm] = useState(blank);
 
@@ -96,6 +97,12 @@ export default function RelationView({ area, cat, fixedArea }) {
   const shown = matched.slice(0, limit);
   useEffect(() => { setLimit(24); }, [grp, ar, co, q]);
   const noArea = people.filter(p => !areasOf(p).length).length;
+  const checks = people.filter(p => p.check), cards = people.filter(p => p.card);
+  // 상세에서 항목을 누르면 아래 연락처 목록을 그 조건으로 거르고 목록으로 내려간다
+  const showList = f => {
+    setGrp(f.grp || 'ALL'); setAr(fixedArea || f.ar || 'ALL'); setCo(f.co || ''); setQ('');
+    setTimeout(() => document.getElementById('rv-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
   // 지금 보이는(거른) 사람 전체의 영역을 한 번에 넣거나 빼기
   const [bulk, setBulk] = useState(false);
   const bulkSet = (k, on) => {
@@ -127,16 +134,56 @@ export default function RelationView({ area, cat, fixedArea }) {
 
       <CardScan onSave={saveScanned} />
 
-      <div className="hv-stats">
-        <div className="hv-stat sl"><span className="muted">등록한 사람</span><b>{people.length}명</b><span className="hv-sub">{GROUPS.map(g => `${g} ${people.filter(p => p.group === g).length}`).join(' · ')}</span></div>
-        <div className={`hv-stat ${soon.some(e => e.dday <= 7) ? 'over' : 'ex'}`}><span className="muted">30일 이내 생일·기념일</span><b>{soon.length}건</b>
-          <span className="hv-sub">{soon[0] ? `${soon[0].p.name} ${soon[0].kind} ${dd(soon[0].dday)}` : '없음'}</span></div>
-        {people.some(p => p.check) && <div className="hv-stat over"><span className="muted">번호 확인 필요</span><b>{people.filter(p => p.check).length}명</b><span className="hv-sub">엑셀에서 번호가 깨진 사람 · 검색창에 "확인" 입력</span></div>}
-        <div className="hv-stat sl"><span className="muted">명함 등록</span><b>{people.filter(p => p.card).length}장</b><span className="hv-sub">명함을 누르면 크게 봅니다</span></div>
+      <div className="hv-stats rv-stats">
+        {[
+          ['people', 'sl', '등록한 사람', `${people.length}명`, GROUPS.map(g => `${g} ${people.filter(p => p.group === g).length}`).join(' · ')],
+          ['soon', soon.some(e => e.dday <= 7) ? 'over' : 'ex', '30일 이내 생일·기념일', `${soon.length}건`, soon[0] ? `${soon[0].p.name} ${soon[0].kind} ${dd(soon[0].dday)}` : '없음'],
+          ...(checks.length ? [['check', 'over', '번호 확인 필요', `${checks.length}명`, '엑셀에서 번호가 깨진 사람']] : []),
+          ['card', 'sl', '명함 등록', `${cards.length}장`, '명함을 모아 봅니다'],
+        ].map(([k, tone, label, value, sub]) => (
+          <button key={k} type="button" className={`hv-stat ${tone} rv-stat ${focus === k ? 'on' : ''}`} aria-expanded={focus === k} onClick={() => setFocus(f => (f === k ? null : k))}>
+            <span className="muted">{label}</span><b>{value}</b><span className="hv-sub">{sub}</span><span className="rv-stat-go" aria-hidden="true">{focus === k ? '접기 ▲' : '자세히 ▼'}</span></button>))}
       </div>
 
+      {focus && <section className="panel rv-focus" aria-label="요약 상세">
+        <div className="csum-h"><h2>{{ people: '등록한 사람', soon: '다가오는 생일 · 기념일', check: '번호 확인 필요', card: '명함 모아 보기' }[focus]}</h2>
+          <button className="btn sm grow-r" onClick={() => setFocus(null)}>닫기</button></div>
 
-      <section className="panel">
+        {focus === 'people' && <div className="rv-fgrid">
+          <div><h3>관계별</h3><ul className="rv-flist">{[['ALL', '전체', people.length], ...GROUPS.map(g => [g, g, people.filter(p => p.group === g).length])].map(([k, n, c]) => (
+            <li key={k}><button className={grp === k && !co && ar === (fixedArea || 'ALL') ? 'on' : ''} onClick={() => showList({ grp: k })}><span>{n}</span><b>{c}명</b>
+              <i className="rv-fbar"><i style={{ width: `${people.length ? c / people.length * 100 : 0}%` }} /></i></button></li>))}</ul></div>
+          <div><h3>영역별</h3><ul className="rv-flist">{[...AREA_KEYS, ...(noArea ? [['NONE', '미지정']] : [])].map(([k, n]) => { const c = k === 'NONE' ? noArea : people.filter(p => areasOf(p).includes(k)).length; return (
+            <li key={k}><button onClick={() => showList({ ar: k })}><span>{n}</span><b>{c}명</b><i className="rv-fbar"><i style={{ width: `${people.length ? c / people.length * 100 : 0}%` }} /></i></button></li>); })}</ul></div>
+          <div><h3>회사별 <small className="muted">많은 순 10곳</small></h3>{companies.length ? <ul className="rv-flist">{companies.slice(0, 10).map(([c, n]) => (
+            <li key={c}><button onClick={() => showList({ co: c })}><span>{c}</span><b>{n}명</b><i className="rv-fbar"><i style={{ width: `${n / companies[0][1] * 100}%` }} /></i></button></li>))}</ul> : <p className="muted">회사가 적힌 사람이 없습니다.</p>}</div>
+          <p className="note rv-fnote">항목을 누르면 아래 연락처 목록이 그 사람들로 걸러집니다.</p>
+        </div>}
+
+        {focus === 'soon' && (events.length ? <>
+          <ul className="rv-elist">{events.filter(e => e.dday <= 60).map((e, i) => (
+            <li key={i} className={e.dday <= 7 ? 'hot' : e.dday > 30 ? 'later' : ''}><em>{dd(e.dday)}</em><span className="grow"><b>{e.p.name}</b> {e.kind}{e.years > 0 ? ` (${e.years}주년)` : ''}<small className="muted"> · {fmt(e.date)}{e.p.company ? ` · ${e.p.company}` : ''}</small></span>
+              <button className="btn sm" onClick={() => setOpenId(e.p.id)}>상세</button></li>))}</ul>
+          {!events.some(e => e.dday <= 60) && <p className="muted">60일 이내에는 없습니다. 가장 가까운 날: {events[0].p.name} {events[0].kind} {fmt(events[0].date)} ({dd(events[0].dday)})</p>}
+          <p className="note">30일 이내는 진하게, 31~60일은 흐리게 보입니다. 생일 · 기념일은 사람 상세에서 넣습니다.</p></>
+          : <p className="muted">생일이나 기념일이 등록된 사람이 없습니다. 사람 카드를 눌러 상세에서 생일 · 기념일을 넣으세요.</p>)}
+
+        {focus === 'check' && <>
+          <p className="note">엑셀에서 가져올 때 번호가 깨졌거나 형식이 이상한 사람입니다. 번호를 고친 뒤 "확인 완료"를 누르세요.</p>
+          <div className="tablewrap"><table className="prog fv-table rv-ctable"><thead><tr><th>이름</th><th>회사</th><th>휴대폰</th><th>원래 값 (비고)</th><th /></tr></thead>
+            <tbody>{checks.map(p => (
+              <tr key={p.id}><td><b>{p.name}</b></td><td>{p.company || '-'}</td>
+                <td><input value={p.phone || ''} onChange={e => upd(p.id, { phone: e.target.value })} inputMode="tel" aria-label={`${p.name} 휴대폰`} /></td>
+                <td><small className="muted">{p.note || '-'}</small></td>
+                <td className="nw"><button className="btn sm" onClick={() => upd(p.id, { check: false })}>확인 완료</button> <button className="btn sm" onClick={() => setOpenId(p.id)}>상세</button></td></tr>))}</tbody></table></div></>}
+
+        {focus === 'card' && (cards.length ? <div className="rv-cards">{cards.map(p => (
+          <button key={p.id} type="button" className="rv-cardimg" onClick={() => setOpenId(p.id)} aria-label={`${p.name} 명함 크게 보기`}>
+            <img src={p.card} alt={`${p.name} 명함`} /><span><b>{p.name}</b>{p.company && <small> · {p.company}</small>}</span></button>))}</div>
+          : <p className="muted">등록된 명함이 없습니다. 위의 "명함 촬영"으로 찍거나, 사람 상세에서 명함 사진을 넣으세요.</p>)}
+      </section>}
+
+      <section className="panel" id="rv-list">
         <div className="csum-h"><h2>연락처</h2>
           <div className="chips" role="group" aria-label="관계">
             {[['ALL', '전체'], ...GROUPS.map(g => [g, g])].map(([k, n]) => <button key={k} aria-pressed={grp === k} onClick={() => setGrp(k)}>{n}</button>)}
