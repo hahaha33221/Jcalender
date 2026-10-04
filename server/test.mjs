@@ -4,6 +4,8 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import { pool } from './db.mjs';
 import { hashPassword } from './auth.mjs';
+import http from 'http';
+import { parseFeed, htmlToText, extractBody, findFeedLink } from './shorts.mjs';
 
 const PORT = 18787, BASE = `http://127.0.0.1:${PORT}`, ORIGIN = 'https://jcalender-test.vercel.app';
 const EMAIL = `test-${Date.now()}@example.com`, PW = 'test-password-1', OWNER = `owner-${Date.now()}@example.com`;
@@ -26,7 +28,31 @@ const call = async (method, path, body, token, origin = ORIGIN) => {
 };
 
 await pool.query(`INSERT INTO jcal.users (email, name, password_hash) VALUES ($1, '테스트', $2)`, [EMAIL, await hashPassword(PW)]);
-const srv = spawn(process.execPath, ['index.mjs'], { env: { ...process.env, PORT: String(PORT), ALLOWED_ORIGINS: 'https://*.vercel.app', OWNER_EMAILS: OWNER }, stdio: ['ignore', 'pipe', 'inherit'] });
+// 숏폼 시험용: 가짜 게시판(RSS · 글 페이지) + 가짜 Claude API (실제 AI 호출 없음)
+const FAKE = 18788, F = `http://127.0.0.1:${FAKE}`;
+const aiCalls = [];
+const eucKr = Buffer.from('3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d226575632d6b72223f3e3c7273733e3c6368616e6e656c3e3c6974656d3e3c7469746c653ec7d1b1dbc1a6b8f13c2f7469746c653e3c6c696e6b3e687474703a2f2f3132372e302e302e313a31383738382f706f73742f6b723c2f6c696e6b3e3c6465736372697074696f6e3ebabbb9ae3c2f6465736372697074696f6e3e3c2f6974656d3e3c2f6368616e6e656c3e3c2f7273733e', 'hex');   // EUC-KR: 한글제목 / 본문
+const fake = http.createServer((req, res) => {
+  if (req.url === '/feed.xml') { res.writeHead(200, { 'Content-Type': 'application/rss+xml; charset=utf-8' }); return res.end(`<?xml version="1.0"?><rss version="2.0"><channel><title>시험 게시판</title>
+    <item><title><![CDATA[회사에서 생긴 일 &amp; 반전]]></title><link>${F}/post/1</link><pubDate>Sat, 03 Oct 2026 10:00:00 +0900</pubDate><description><![CDATA[<p>짧은 요약</p>]]></description></item>
+    <item><title>두 번째 글</title><link>${F}/post/2</link><description>&lt;b&gt;굵게&lt;/b&gt; 본문 둘</description></item></channel></rss>`); }
+  if (req.url === '/euc.xml') { res.writeHead(200, { 'Content-Type': 'text/xml' }); return res.end(eucKr); }
+  if (req.url === '/board') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end(`<html><head><link rel="alternate" type="application/rss+xml" href="/feed.xml"></head><body>게시판</body></html>`); }
+  if (req.url === '/nofeed') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end('<html><body>RSS 없음</body></html>'); }
+  if (req.url.startsWith('/post/')) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(`<html><body><nav>메뉴</nav><article><h1>제목</h1><p>${'본문 내용이 아주 깁니다. '.repeat(12)}</p><script>x()</script></article></body></html>`); }
+  if (req.url.startsWith('/v1/messages')) {
+    let b = ''; req.on('data', c => { b += c; }); req.on('end', () => {
+      aiCalls.push({ url: req.url, headers: req.headers, body: JSON.parse(b) });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ id: 'msg_test', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 },
+        content: [{ type: 'text', text: JSON.stringify({ candidates: [{ title: '회사에서 생긴 반전', script: '여러분 이거 실화입니다. 어떻게 생각하세요?', hashtags: ['#회사', '썰'] }, { title: '두 번째 후보', script: '스크립트 둘', hashtags: [] }] }) }] }));
+    }); return;
+  }
+  res.writeHead(404); res.end();
+});
+await new Promise(r => fake.listen(FAKE, '127.0.0.1', r));
+const srv = spawn(process.execPath, ['index.mjs'], { env: { ...process.env, PORT: String(PORT), ALLOWED_ORIGINS: 'https://*.vercel.app', OWNER_EMAILS: OWNER,
+  SHORTS_ALLOW_PRIVATE: '1', SHORTS_CRON: '0', ANTHROPIC_API_KEY: 'test-key', ANTHROPIC_BASE_URL: F }, stdio: ['ignore', 'pipe', 'inherit'] });
 await new Promise(r => srv.stdout.once('data', r));
 
 try {
@@ -118,6 +144,45 @@ try {
   check('일반 회원은 가입 설정 403', (await call('GET', '/api/admin/signup', null, T)).status === 403);
   const sg = await call('POST', '/api/admin/signup', { mode: 'code', newCode: true }, TA.token);
   check('새 초대 코드', sg.status === 200 && sg.json.mode === 'code' && sg.json.code && sg.json.code !== 'TEST-CODE');
+
+  console.log('숏폼 제작 (수집 · 고르기 · AI 스크립트)');
+  const sh_items = parseFeed(`<feed><entry><title>아톰 &lt;글&gt;</title><link rel="alternate" href="/a/1"/><updated>2026-10-01T00:00:00Z</updated><content type="html">&lt;p&gt;안녕&lt;/p&gt;</content></entry></feed>`, 'https://ex.com/');
+  check('Atom 읽기 (상대 주소 · 엔티티 · HTML)', sh_items[0]?.link === 'https://ex.com/a/1' && sh_items[0].title === '아톰 <글>' && sh_items[0].body === '안녕', JSON.stringify(sh_items));
+  check('HTML → 글자 (script 제거 · 줄바꿈)', htmlToText('<p>가<br>나</p><script>x</script><div>다&nbsp;라</div>') === '가\n나\n다 라');
+  check('본문: article 우선 · 정규식', extractBody(`<article>${'긴 본문 '.repeat(20)}</article>`).startsWith('긴 본문') && extractBody('<div id="x">찾을 글</div>', '<div id="x">([\\s\\S]*?)</div>') === '찾을 글');
+  check('페이지 안 RSS 링크 찾기', findFeedLink('<link rel="alternate" type="application/rss+xml" href="/rss">', 'https://b.com/board') === 'https://b.com/rss');
+  check('일반 회원은 숏폼 403', (await call('GET', '/api/shorts', null, T)).status === 403);
+  const sh_T0 = TA.token;
+  const sh_g0 = await call('GET', '/api/shorts', null, sh_T0);
+  check('처음: 설정 기본값 · AI 준비됨', sh_g0.status === 200 && sh_g0.json.settings.scriptChars === 350 && sh_g0.json.ai.ready === true, JSON.stringify(sh_g0.json).slice(0, 200));
+  const sh_add1 = await call('POST', '/api/shorts/source', { action: 'add', url: `${F}/board`, name: '시험 게시판', fullText: true }, sh_T0);
+  check('게시판 페이지 주소 → RSS 찾아 등록 + 바로 수집 2개', sh_add1.status === 200 && sh_add1.json.source.feed_url === `${F}/feed.xml` && sh_add1.json.added === 2, JSON.stringify(sh_add1.json));
+  check('같은 게시판 다시 등록 409', (await call('POST', '/api/shorts/source', { action: 'add', url: `${F}/feed.xml` }, sh_T0)).status === 409);
+  check('RSS 없는 페이지 400', (await call('POST', '/api/shorts/source', { action: 'add', url: `${F}/nofeed` }, sh_T0)).status === 400);
+  check('http(s) 아닌 주소 400', (await call('POST', '/api/shorts/source', { action: 'add', url: 'file:///etc/passwd' }, sh_T0)).status === 400);
+  const sh_add2 = await call('POST', '/api/shorts/source', { action: 'add', url: `${F}/euc.xml` }, sh_T0);
+  const sh_g1 = await call('GET', '/api/shorts', null, sh_T0);
+  const sh_it1 = sh_g1.json.items.find(i => i.link === `${F}/post/1`), sh_kr = sh_g1.json.items.find(i => i.link === `${F}/post/kr`);
+  check('EUC-KR 게시판 글자 깨짐 없음', sh_add2.status === 200 && sh_kr?.title === '한글제목' && sh_kr.body === '본문', JSON.stringify(sh_kr));
+  check('제목 엔티티 · 본문 가져오기(article)', sh_it1?.title === '회사에서 생긴 일 & 반전' && sh_it1.body.includes('본문 내용이 아주 깁니다') && !sh_it1.body.includes('메뉴') && !sh_it1.body.includes('x()'), JSON.stringify(sh_it1).slice(0, 200));
+  check('다시 수집해도 중복 없음', (await call('POST', '/api/shorts/source', { action: 'fetch', id: sh_add1.json.source.id }, sh_T0)).json.added === 0);
+  check('글 고르기', (await call('POST', '/api/shorts/item', { id: sh_it1.id, status: 'picked' }, sh_T0)).status === 200);
+  await call('POST', '/api/shorts/settings', { scriptChars: 300, count: 2, tone: '담담하게', titleMax: 999 }, sh_T0);
+  const sh_gen = await call('POST', '/api/shorts/generate', { itemId: sh_it1.id }, sh_T0);
+  check('AI 스크립트 후보 2개 저장', sh_gen.status === 200 && sh_gen.json.scripts.length === 2 && sh_gen.json.scripts[0].title === '회사에서 생긴 반전' && sh_gen.json.scripts[0].hashtags === '회사 썰', JSON.stringify(sh_gen.json).slice(0, 300));
+  const sh_call0 = aiCalls[0];
+  check('AI 요청: 모델 · JSON 형식 · 대체 모델 · 설정 반영', sh_call0 && sh_call0.body.model === 'claude-opus-5-5' && sh_call0.body.output_config?.format?.type === 'json_schema' && sh_call0.body.fallbacks === 'default'
+    && String(sh_call0.headers['anthropic-beta']).includes('server-side-fallback-2026-07-01') && sh_call0.body.messages[0].content.includes('약 300자') && sh_call0.body.messages[0].content.includes('100자 이내') && sh_call0.body.messages[0].content.includes('본문 내용이 아주'), JSON.stringify(sh_call0?.body).slice(0, 300));
+  const [sh_s1, sh_s2] = sh_gen.json.scripts;
+  const sh_order = (await call('GET', '/api/shorts', null, sh_T0)).json.scripts.map(x => x.id).join();
+  check('후보 순서가 항상 같음', sh_order === `${sh_s1.id},${sh_s2.id}`);
+  await call('POST', '/api/shorts/script', { id: sh_s1.id, chosen: true }, sh_T0);
+  await call('POST', '/api/shorts/script', { id: sh_s2.id, chosen: true, script: '고친 스크립트' }, sh_T0);
+  const sh_g2 = (await call('GET', '/api/shorts', null, sh_T0)).json;
+  check('한 글에 하나만 고름 · 고친 내용 저장', sh_g2.scripts.filter(x => x.chosen).length === 1 && sh_g2.scripts.find(x => x.chosen).id === sh_s2.id && sh_g2.scripts.find(x => x.id === sh_s2.id).script === '고친 스크립트');
+  check('설정 범위 제한 (제목 100자까지)', sh_g2.settings.titleMax === 100 && sh_g2.settings.tone === '담담하게');
+  check('다른 사람 항목은 404', (await call('POST', '/api/shorts/item', { id: sh_it1.id, status: 'skipped' }, T2b)).status !== 200);
+  check('게시판 삭제', (await call('POST', '/api/shorts/source', { action: 'delete', id: sh_add2.json.source.id }, sh_T0)).status === 200);
   await pool.query('DELETE FROM jcal.users WHERE email = $1', [OWNER]);
   await setS('signup_mode', 'closed');
   check('가입 막기 → 403', (await call('POST', '/api/signup', { email: `x${E2}`, password: 'pw-12345678', name: 'x', code: 'TEST-CODE' })).status === 403);
@@ -132,7 +197,7 @@ try {
   for (let i = 0; i < 11; i++) last = await call('POST', '/api/login', { email: EMAIL, password: 'nope' });
   check('10번 실패 뒤 429', last.status === 429);
 } finally {
-  srv.kill('SIGTERM');
+  srv.kill('SIGTERM'); fake.close();
   await pool.query('DELETE FROM jcal.users WHERE email = $1', [EMAIL]);
   await pool.end();
 }

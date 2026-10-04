@@ -1845,3 +1845,57 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .rv-dir button + button { border-left: 1px solid var(--line); }
 .rv-dir button[aria-pressed="true"] { background: var(--ink); color: var(--card); font-weight: 600; }
 @media (max-width: 700px) { .rv-sort { margin-left: 0; width: 100%; } .rv-sort select { flex: 1; } }
+
+/* 숏폼 제작 */
+.sh-steps { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.sh-steps button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--line); border-radius: 20px; background: var(--card); font: inherit; font-size: 13.5px; color: var(--ink2); cursor: pointer; }
+.sh-steps button.on { background: var(--ink); border-color: var(--ink); color: var(--card); font-weight: 600; }
+.sh-steps button b { min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--over); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+.sh-ai { margin-left: auto; font-size: 12px; padding: 3px 10px; border-radius: 12px; background: var(--oversoft); color: var(--over); }
+.sh-ai.ok { background: var(--oksoft); color: var(--ok); }
+.sh-msg { display: flex; justify-content: space-between; gap: 10px; margin: 0 0 12px; }
+.sh-srcs { list-style: none; margin: 0 0 12px; padding: 0; }
+.sh-srcs li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line2); font-size: 13px; }
+.sh-srcs li.off .sh-sn { opacity: .55; }
+.sh-sn { flex: 1 1 260px; display: flex; flex-direction: column; min-width: 0; }
+.sh-sn small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sh-err { color: var(--over) !important; }
+.sh-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--ink2); white-space: nowrap; cursor: pointer; }
+.sh-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sh-add > input:first-child { flex: 2 1 280px; min-width: 0; }
+.sh-add > input:nth-child(2) { flex: 1 1 140px; min-width: 0; }
+.sh-adv { flex-basis: 100%; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink2); }
+.sh-q { flex: 1 1 160px; min-width: 0; padding: 5px 8px; }
+.sh-items { list-style: none; margin: 0; padding: 0; }
+.sh-items li { padding: 12px 0; border-bottom: 1px solid var(--line2); display: flex; flex-direction: column; gap: 6px; }
+.sh-ih { display: flex; flex-direction: column; gap: 2px; }
+.sh-ih a { color: var(--ink); text-decoration: none; }
+.sh-ih a:hover { text-decoration: underline; }
+.sh-body { margin: 0; font-size: 13px; color: var(--ink2); line-height: 1.6; white-space: pre-line; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; cursor: pointer; }
+.sh-body.open { display: block; max-height: 360px; overflow-y: auto; background: var(--paper); padding: 10px 12px; border-radius: 6px; cursor: auto; }
+.sh-ib { display: flex; gap: 6px; flex-wrap: wrap; }
+.sh-pick.done { border-left: 4px solid var(--ok); }
+.sh-pick h2 { font-size: 15px; }
+.sh-pa { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.sh-gen { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+.sh-cands { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.sh-cand { border: 1.5px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.sh-cand.on { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 5%, var(--card)); }
+.sh-cand label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink2); }
+.sh-cand .sh-chk { flex-direction: row; }
+.sh-cand textarea { font: inherit; font-size: 14px; line-height: 1.6; resize: vertical; }
+.sh-ch { display: flex; align-items: center; gap: 10px; }
+.sh-ok { background: var(--oksoft); color: var(--ok); }
+.sh-set { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.sh-set label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink2); }
+.sh-set .sh-wide { grid-column: 1 / -1; }
+.sh-set textarea { font: inherit; }
+.sh-num { display: flex; align-items: center; gap: 6px; }
+.sh-num input { width: 100px; }
+.sh-h2 { font-size: 15px; margin: 4px 0 10px; }
+@media (max-width: 700px) {
+  .sh-set { grid-template-columns: minmax(0, 1fr); }
+  .sh-cands { grid-template-columns: minmax(0, 1fr); }
+  .sh-ai { margin-left: 0; }
+  .sh-add .btn.primary { flex: 1; }
+}

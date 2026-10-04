@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { iso } from '../data.js';
 import { areaVar, num, useCtx } from '../shared.jsx';
 import ToolView from './ToolView.jsx';
+import ShortsStudio from './ShortsStudio.jsx';
 import { TOOL_CONFIGS } from './toolConfigs.js';
 
 /* 사업 › 콘텐츠 관리: 콘텐츠(아이디어 → 발행 보드) · 채널 계정 · 성과
@@ -34,7 +35,7 @@ export function useContent() {
 }
 
 export default function ContentView(props) {
-  const { store, now } = useCtx();
+  const { store, now, isAdmin } = useCtx();
   const [S, set] = useContent();
   const today = iso(now);
   const base = TOOL_CONFIGS[KEY];
@@ -50,7 +51,7 @@ export default function ContentView(props) {
     card: ['account', 'channel', 'date'],
   };
   const setTab = tab => set(c => ({ ...c, tab }));
-  const TABS = [['board', '콘텐츠'], ['accounts', '채널 계정'], ['perf', '성과']];
+  const TABS = [['board', '콘텐츠'], ['accounts', '채널 계정'], ['perf', '성과'], ...(isAdmin ? [['shorts', '숏폼 제작']] : [])];   // 숏폼 제작: 관리자만
   return (
     <div className="catv tv ct" style={{ '--ac': areaVar(props.area) }}>
       <header className="page-h"><h1 className="area-title">{props.cat}</h1></header>
@@ -59,6 +60,7 @@ export default function ContentView(props) {
       </div>
       {S.tab === 'accounts' ? <Accounts S={S} set={set} rows={rows} today={today} />
         : S.tab === 'perf' ? <Perf S={S} set={set} rows={rows} today={today} />
+        : S.tab === 'shorts' && isAdmin ? <ShortsStudio />
           : <ToolView {...props} config={config} noHeader />}
     </div>
   );

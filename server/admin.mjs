@@ -7,12 +7,15 @@
    node admin.mjs rename <이메일> <이름>        표시 이름 바꾸기
    node admin.mjs delete-user <이메일>          사용자와 그 사용자의 모든 데이터 삭제
    node admin.mjs role <이메일> member|suspended   권한 바꾸기 (일반 · 정지). 관리자는 OWNER_EMAILS 계정뿐
+   node admin.mjs ai-key                        숏폼 AI(Claude) 키 넣기 · 바꾸기 (입력 글자는 안 보임, 저장 뒤 서버 재시작)
    node admin.mjs signup                        회원가입 방식 · 초대 코드 보기
    node admin.mjs signup code                   초대 코드 방식 + 새 초대 코드 만들기 (예전 코드는 못 씀)
    node admin.mjs signup open | closed          누구나 가입 / 가입 막기
    (VPS 에서는 node admin.mjs 대신 jcal-admin) */
 import crypto from 'crypto';
 import readline from 'readline';
+import fs from 'fs';
+import { execSync } from 'child_process';
 import { pool } from './db.mjs';
 import { hashPassword } from './auth.mjs';
 
@@ -63,6 +66,15 @@ try {
     if (!r.rowCount) throw new Error(`없는 사용자입니다: ${email}`);
     if (name === 'suspended') await pool.query('DELETE FROM jcal.sessions WHERE user_id = $1', [r.rows[0].id]);
     console.log(`권한을 바꿨습니다: ${email} → ${{ member: '일반', suspended: '정지' }[name]}`);
+  } else if (cmd === 'ai-key') {
+    const file = process.env.JCAL_ENV_FILE || '/etc/jcalender.env';
+    const key = (await askHidden('Anthropic API 키 (sk-ant-…, 지우려면 그냥 Enter): ')).trim();
+    if (key && !/^sk-ant-[\w-]{20,}$/.test(key)) throw new Error('Anthropic API 키 형식이 아닙니다 (sk-ant- 로 시작)');
+    const lines = fs.readFileSync(file, 'utf8').split('\n').filter(l => !/^ANTHROPIC_API_KEY=/.test(l) && l !== '');
+    if (key) lines.push(`ANTHROPIC_API_KEY=${key}`);
+    fs.writeFileSync(file, `${lines.join('\n')}\n`, { mode: 0o600 }); fs.chmodSync(file, 0o600);
+    try { execSync('systemctl restart jcal-api', { stdio: 'ignore' }); console.log(key ? 'AI 키를 저장하고 서버를 다시 시작했습니다' : 'AI 키를 지우고 서버를 다시 시작했습니다'); }
+    catch { console.log('저장했습니다. 서버 재시작: systemctl restart jcal-api'); }
   } else if (cmd === 'signup') {
     const arg = emailRaw;                                         // code | open | closed | (없음)
     if (arg === 'code') { await setSetting('signup_code', newCode()); await setSetting('signup_mode', 'code'); }
@@ -79,7 +91,7 @@ try {
       FROM jcal.users u LEFT JOIN jcal.store_snapshots s ON s.user_id = u.id ORDER BY u.created_at`);
     console.table(rows.map(r => ({ 이메일: r.email, 이름: r.name, 권한: r.role, 로그인기기: Number(r.sessions), 동기화버전: r.version ?? '-', 마지막동기화: r.updated_at?.toISOString() ?? '-', 기기: r.device || '-', 크기KB: r.size_bytes ? Math.round(r.size_bytes / 1024) : '-' })));
   } else {
-    console.log('사용법: add-user <이메일> [이름] | set-password <이메일> | rename <이메일> <이름> | logout-all <이메일> | delete-user <이메일> | role <이메일> member|suspended | signup [code|open|closed] | list');
+    console.log('사용법: add-user <이메일> [이름] | set-password <이메일> | rename <이메일> <이름> | logout-all <이메일> | delete-user <이메일> | role <이메일> member|suspended | ai-key | signup [code|open|closed] | list');
     process.exitCode = 1;
   }
 } catch (e) {

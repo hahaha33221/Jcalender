@@ -8,8 +8,11 @@
     "start": "node index.mjs",
     "test": "node test.mjs"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "pg": "^8.13.1"
   }
 }

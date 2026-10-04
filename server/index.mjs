@@ -17,6 +17,7 @@
    POST /api/admin/users  {email, logout: true}     그 계정의 모든 기기 로그아웃
    GET  /api/admin/signup                           → { mode, code }
    POST /api/admin/signup {mode, newCode}           회원가입 방식 (code · open · closed) · 새 초대 코드
+   숏폼 제작 (관리자 계정만) — server/shorts.mjs: /api/shorts, /api/shorts/source · item · generate · script · settings
    동기화 단위는 "앱 데이터 전체(비밀 정보 제외)". 올릴 때마다 db/convert.mjs 규칙으로 47개 표도 함께 갱신한다. */
 import http from 'http';
 import { config } from './config.mjs';
@@ -24,8 +25,9 @@ import { pool, tx } from './db.mjs';
 import crypto from 'crypto';
 import { hashPassword, newToken, tokenHash, verifyPassword } from './auth.mjs';
 import { storeToSql } from '../db/convert.mjs';
+import { shortsRoutes, startShortsCron } from './shorts.mjs';
 
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
 const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐
@@ -274,6 +276,8 @@ const routes = {
   },
 };
 
+Object.assign(routes, shortsRoutes({ pool, tx, adminUser, HttpError }));
+
 const server = http.createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0].replace(/\/+$/, '') || '/';
   if (req.method === 'OPTIONS') return send(req, res, originOk(req.headers.origin) ? 204 : 403);
@@ -291,6 +295,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+if (process.env.SHORTS_CRON !== '0') startShortsCron(pool);   // 게시판 자동 수집 (5분마다 확인)
 server.listen(config.port, config.host, () => console.log(`Jcalender API ${VERSION} — http://${config.host}:${config.port} (허용 화면: ${config.origins.join(', ')})`));
 const stop = () => server.close(() => pool.end().then(() => process.exit(0)));
 process.on('SIGTERM', stop);

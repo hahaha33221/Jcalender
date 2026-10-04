@@ -80,6 +80,8 @@ step "4/7 설정 파일 · 데이터베이스"
 id jcal >/dev/null 2>&1 || useradd --system --home "$APP_DIR" --shell /usr/sbin/nologin jcal
 DB_PW=$(saved DATABASE_URL | sed -n 's#^postgres://jcal:\([^@]*\)@.*#\1#p')
 [ -n "$DB_PW" ] || DB_PW=$(openssl rand -hex 24)
+# 직접 넣은 설정(ANTHROPIC_API_KEY · SHORTS_MODEL · OWNER_EMAILS 등)은 다시 써도 남긴다
+EXTRA_ENV=$(grep -sE '^[A-Z_][A-Z0-9_]*=' "$ENV_FILE" | grep -vE '^(DATABASE_URL|PORT|HOST|ALLOWED_ORIGINS|SESSION_DAYS|MAX_BODY_MB|API_HOST)=' || true)
 ( umask 077; cat > "$ENV_FILE" <<EOF
 # Jcalender API 설정 (setup.sh 가 만듦, 다시 실행하면 새로 씀) — 바꾼 뒤: systemctl restart jcal-api
 DATABASE_URL=postgres://jcal:${DB_PW}@127.0.0.1:${PGPORT}/jcal
@@ -90,6 +92,7 @@ SESSION_DAYS=90
 MAX_BODY_MB=30
 API_HOST=${API_HOST}
 EOF
+[ -n "$EXTRA_ENV" ] && printf '%s\n' "$EXTRA_ENV" >> "$ENV_FILE"
 )
 chmod 600 "$ENV_FILE"
 pg_as_postgres -c "DO \$\$BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='jcal') THEN CREATE ROLE jcal LOGIN; END IF; END\$\$" -c "ALTER ROLE jcal PASSWORD '${DB_PW}'"
