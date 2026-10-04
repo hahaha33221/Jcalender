@@ -20,7 +20,7 @@ import { HOLIDAYS } from './holidays.js';
 import { annivOn, lunarTag, nextAnniv, replaceAnnivOnce, seedAnniv } from './anniv.js';
 import { FREQ, expandEvents, repeatText, skipDate } from './recur.js';
 import { ddaysOn } from './dday.js';
-import { SECRETS_KEY, mergeSecrets, migrate, purgeTrash, readSecrets, splitSecrets, toTrash } from './schema.js';
+import { SECRETS_KEY, mergeSecrets, migrate, purgeTrash, renameCategories, readSecrets, splitSecrets, toTrash } from './schema.js';
 import { useServerSync } from './serverSync.js';
 import Welcome from './Welcome.jsx';
 import { sourcesOn } from './calendarSources.js';
@@ -78,7 +78,7 @@ function useStore() {
   const [store, setStore] = useState(() => {
     let v = null;
     try { v = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* 저장소 사용 불가 또는 손상 */ }
-    const merged = renameCats({ ...INIT, ...(v || {}) });
+    const merged = renameCategories(renameCats({ ...INIT, ...(v || {}) }));   // 이름이 바뀐 카테고리의 기록을 먼저 옮긴다 (예시 목표가 새 이름으로 따로 생기지 않게)
     const base = replaceAnnivOnce(clearFinanceOnce({ ...merged, events: merged.events ?? seedEvents(), anniv: merged.anniv ?? seedAnniv(), health: merged.health ?? seedHealth(), finance: merged.finance ?? seedFinance(), goals: dropNoGoal(merged.goals ? addExampleGoals(migrateGoals(merged.goals)) : seedGoals()), people: merged.people ? migratePeople(merged.people, new Date()) : seedPeople(), leisure: merged.leisure ?? seedLeisure(), journal: merged.journal ?? seedJournal() }));
     // 저장 구조를 현재 버전으로 올리고(schema.js), 따로 둔 비밀 정보를 붙이고, 오래된 휴지통을 비운다
     try { return purgeTrash(mergeSecrets(migrate(base), readSecrets())); }

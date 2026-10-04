@@ -236,7 +236,7 @@ export const TOOL_CONFIGS = {
     upcoming: { field: 'date', days: 30, label: '다가오는 일정', sub: r => `${r.time || ''} ${r.place || ''}${r.prep ? ` · 준비: ${r.prep}` : ''}` },
     stats: (rs, c) => [{ label: '이번 주 일정', value: `${rs.filter(r => r.date >= c.today && dayDiff(c.today, r.date) < 7).length}건` }, { label: '이번 달 일정', value: `${rs.filter(r => inMonth(r.date, c)).length}건` }],
   },
-  'B|콘텐츠/브랜드': {
+  'B|콘텐츠 관리': {
     intro: '콘텐츠를 아이디어부터 발행까지 단계별로 관리하고 발행 일정을 챙깁니다.', noun: '콘텐츠', title: 'title', tick: '예약 발행',
     fields: [
       { k: 'title', label: '콘텐츠', type: 'text', req: true },

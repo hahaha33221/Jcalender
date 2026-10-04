@@ -99,6 +99,31 @@ const MIGRATIONS = {
   },
 };
 
+/* ── 카테고리 이름 바꾸기 ──
+   코드에서 카테고리 이름을 바꾸면 저장된 기록도 새 이름으로 옮긴다 (몇 번을 돌려도 같은 결과)
+   카테고리 표 · 검수 표시 · 목표 보드 · 도구 기록 · 공부 기록 · 직접 만든 체크 항목 */
+export const RENAMED = { 'B|콘텐츠/브랜드': 'B|콘텐츠 관리' };
+export function renameCategories(s) {
+  let out = s;
+  const mv = o => {
+    if (!o || typeof o !== 'object') return o;
+    let r = o;
+    Object.entries(RENAMED).forEach(([a, b]) => { if (a in r) { r = { ...r }; if (!(b in r)) r[b] = r[a]; delete r[a]; } });
+    return r;
+  };
+  ['reviewed', 'tools', 'study'].forEach(k => { if (out[k] && Object.keys(RENAMED).some(a => a in out[k])) out = { ...out, [k]: mv(out[k]) }; });
+  const bs = out.goals?.boards;
+  if (bs && Object.keys(RENAMED).some(a => a in bs)) out = { ...out, goals: { ...out.goals, boards: mv(bs) } };
+  const name = k => k.slice(k.indexOf('|') + 1);
+  if (out.categories?.some(c => RENAMED[c.key])) {
+    const have = new Set(out.categories.map(c => c.key));
+    out = { ...out, categories: out.categories.flatMap(c => { const b = RENAMED[c.key]; if (!b) return [c]; return have.has(b) ? [] : [{ ...c, key: b, name: name(b) }]; }) };
+  }
+  const cu = out.checklist?.custom;
+  if (cu?.some(r => RENAMED[`${r.a}|${r.cat}`])) out = { ...out, checklist: { ...out.checklist, custom: cu.map(r => { const b = RENAMED[`${r.a}|${r.cat}`]; return b ? { ...r, cat: name(b), item: r.item === r.cat ? name(b) : r.item } : r; }) } };
+  return out;
+}
+
 /** 저장된 데이터를 현재 버전으로 올린다 (한 단계씩, 이미 올린 단계는 건너뜀) */
 export function migrate(s) {
   let v = s.meta?.schemaVersion || 0, out = s;
@@ -107,6 +132,7 @@ export function migrate(s) {
     out = MIGRATIONS[v](out);
     out = { ...out, meta: { ...(out.meta || {}), schemaVersion: v, migratedAt: today() } };
   }
+  out = renameCategories(out);
   // 코드에 카테고리가 새로 생기면 표에도 추가
   if (out.categories && out.categories.length !== buildCategories(out.categories).length) out = { ...out, categories: buildCategories(out.categories) };
   return out;
