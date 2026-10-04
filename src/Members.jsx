@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useCtx } from './shared.jsx';
 
-/* 회원 관리 (관리자만): 회원 목록 · 권한(관리자 · 일반 · 정지) · 모든 기기 로그아웃 · 회원가입 방식 · 초대 코드
+/* 회원 관리 (관리자 계정만 — 서버 OWNER_EMAILS, 기본 koreamate2026@gmail.com)
+   회원 목록 · 권한(일반 · 정지) · 모든 기기 로그아웃 · 회원가입 방식 · 초대 코드
    서버 API: GET/POST /api/admin/users, GET/POST /api/admin/signup (server/index.mjs)
-   - 대표 관리자(서버 OWNER_EMAILS)와 내 계정의 권한은 바꿀 수 없다
+   - 관리자는 관리자 계정 하나뿐이고, 다른 회원을 관리자로 만들 수 없다
    - 정지하면 그 회원의 모든 기기가 로그아웃되고 다시 로그인할 수 없다 (데이터는 그대로) */
 export const ROLE = { admin: '관리자', member: '일반', suspended: '정지' };
 const ROLE_DESC = { admin: '회원 관리 · 진행 현황까지', member: '내 데이터만', suspended: '로그인 불가 (데이터는 보관)' };
+const CHOICES = ['member', 'suspended'];                     // 회원에게 줄 수 있는 권한
 const SIGNUP = { code: '초대 코드가 있어야 가입', open: '누구나 가입', closed: '가입 막기' };
 const dt = d => (d ? new Date(d).toLocaleString('ko-KR', { year: '2-digit', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-');
 const kb = n => (n == null ? '-' : n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`);
@@ -34,7 +36,7 @@ export default function Members() {
   useEffect(() => { load(); }, []);
 
   const setRole = async (u, role) => {
-    if ((role === 'suspended' || role === 'admin') && arm !== `${u.email}|${role}`) { setArm(`${u.email}|${role}`); setTimeout(() => setArm(a => (a === `${u.email}|${role}` ? null : a)), 4000); return; }
+    if (role === 'suspended' && arm !== `${u.email}|${role}`) { setArm(`${u.email}|${role}`); setTimeout(() => setArm(a => (a === `${u.email}|${role}` ? null : a)), 4000); return; }
     setArm(null); setBusy(true);
     try { await sync.request('/api/admin/users', { method: 'POST', body: { email: u.email, role } }); say(`${u.name || u.email}님의 권한을 "${ROLE[role]}"(으)로 바꿨습니다${role === 'suspended' ? ' · 모든 기기에서 로그아웃됨' : ''}`); await load(); }
     catch (e) { say(e.message, true); setBusy(false); }
@@ -58,12 +60,11 @@ export default function Members() {
 
   return (
     <>
-      <header className="page-h"><h1>회원 관리</h1><p>가입한 회원의 권한을 바꾸고, 회원가입 방식과 초대 코드를 관리합니다. 관리자 계정에서만 보입니다.</p></header>
+      <header className="page-h"><h1>회원 관리</h1><p>회원을 정지하거나 다시 쓰게 하고, 회원가입 방식과 초대 코드를 관리합니다. 관리자 계정({sync.conf.email})에서만 보입니다.</p></header>
       {msg && <p className={`banner ${msg.err ? '' : 'ok'} mb-msg`} role="status">{msg.text}</p>}
 
       <div className="hv-stats">
         <div className="hv-stat sl"><span className="muted">전체 회원</span><b>{users ? `${users.length}명` : '-'}</b><span className="hv-sub">최근 30일 로그인 {users ? users.filter(u => u.lastLoginAt && Date.now() - new Date(u.lastLoginAt) < 30 * 864e5).length : '-'}명</span></div>
-        <div className="hv-stat sl"><span className="muted">관리자</span><b>{users ? `${count('admin')}명` : '-'}</b><span className="hv-sub">{ROLE_DESC.admin}</span></div>
         <div className="hv-stat ex"><span className="muted">일반</span><b>{users ? `${count('member')}명` : '-'}</b><span className="hv-sub">{ROLE_DESC.member}</span></div>
         <div className="hv-stat ex"><span className="muted">정지</span><b>{users ? `${count('suspended')}명` : '-'}</b><span className="hv-sub">{ROLE_DESC.suspended}</span></div>
       </div>
@@ -95,10 +96,10 @@ export default function Members() {
             const self = u.email.toLowerCase() === me, locked = u.owner || self;
             return (
               <tr key={u.email} className={u.role === 'suspended' ? 'off' : ''}>
-                <td><b>{u.name || '(이름 없음)'}</b>{u.owner && <span className="tag mb-owner">대표</span>}{self && <span className="tag">나</span>}<br /><small className="muted">{u.email}</small></td>
+                <td><b>{u.name || '(이름 없음)'}</b>{u.owner && <span className="tag mb-owner">관리자 계정</span>}<br /><small className="muted">{u.email}</small></td>
                 <td>{locked
-                  ? <span className={`mb-role ${u.role}`} title={u.owner ? '대표 관리자는 바꿀 수 없습니다' : '내 권한은 다른 관리자가 바꿀 수 있습니다'}>{ROLE[u.role]}</span>
-                  : <div className="mb-roles" role="group" aria-label={`${u.email} 권한`}>{Object.entries(ROLE).map(([k, n]) => (
+                  ? <span className={`mb-role ${u.role}`} title="관리자 계정의 권한은 바꿀 수 없습니다">{ROLE[u.role]}</span>
+                  : <div className="mb-roles" role="group" aria-label={`${u.email} 권한`}>{CHOICES.map(k => [k, ROLE[k]]).map(([k, n]) => (
                     <button key={k} className={`${u.role === k ? `on ${k}` : ''} ${arm === `${u.email}|${k}` ? 'arm' : ''}`} aria-pressed={u.role === k} disabled={busy}
                       onClick={() => u.role !== k && setRole(u, k)} title={ROLE_DESC[k]}>{arm === `${u.email}|${k}` ? `정말 ${n}?` : n}</button>))}</div>}</td>
                 <td className="nw">{dt(u.createdAt).split(' ').slice(0, 3).join(' ')}</td>
@@ -108,7 +109,7 @@ export default function Members() {
                 <td>{!self && u.sessions > 0 && <button className="btn sm" disabled={busy} onClick={() => logoutAll(u)}>모든 기기 로그아웃</button>}</td>
               </tr>);
           })}</tbody></table></div>}
-        <p className="note">관리자: 회원 관리 · 진행 현황을 볼 수 있음 · 일반: 자기 데이터만 · 정지: 로그인할 수 없음(데이터는 지우지 않음). 회원 삭제 · 비밀번호 초기화는 VPS 에서 jcal-admin 으로 합니다.</p>
+        <p className="note">관리자: 이 계정 하나뿐 (회원 관리 · 진행 현황) · 일반: 자기 데이터만 · 정지: 로그인할 수 없음(데이터는 지우지 않음). 회원 삭제 · 비밀번호 초기화는 VPS 에서 jcal-admin 으로 합니다.</p>
       </section>
     </>
   );

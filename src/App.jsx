@@ -46,7 +46,7 @@ const seedEvents = () => {
     { id: uid(), date: d(4), time: '16:00', title: '팀 회의 (예시)', area: 'W' },
   ];
 };
-/** 관리자 계정: 진행 현황(개발 진행 · 필요한 연동 · 작업 기록)은 이 계정으로 로그인했을 때만 보인다 */
+/** 관리자 계정: 회원 관리 · 진행 현황은 이 계정으로 로그인했을 때만 보인다 (서버 OWNER_EMAILS 와 같게) */
 export const ADMIN_EMAILS = ['koreamate2026@gmail.com'];
 const PAGES = ['home', 'members', 'check', 'P', 'B', 'W', 'progress', 'settings'];
 const readHash = () => {
@@ -213,7 +213,7 @@ export default function App() {
   const go = (p, init = null) => { setCheckInit(init); nav(p); };
   const openCat = (a, c) => nav(a, c);
 
-  const isAdmin = !!sync.connected && (sync.conf.role === 'admin' || ADMIN_EMAILS.includes(String(sync.conf.email || '').trim().toLowerCase()));   // 서버 권한(관리자) 또는 대표 관리자
+  const isAdmin = !!sync.connected && (sync.conf.role === 'admin' || ADMIN_EMAILS.includes(String(sync.conf.email || '').trim().toLowerCase()));   // 서버가 관리자 계정으로 확인(role admin) 또는 관리자 이메일
   const ctx = { isAdmin, store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go, openCat, sync };
 
   // 메뉴 접기 (이 기기에만 기억)

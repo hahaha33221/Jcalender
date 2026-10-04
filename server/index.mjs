@@ -10,9 +10,9 @@
    PUT  /api/sync    {baseVersion, data, device, force}
         → 200 { version, updatedAt, tables }   서버 버전이 baseVersion 과 같을 때 (또는 force)
         → 409 { version, updatedAt, device, data }   다른 기기가 먼저 올렸을 때 (서버 최신본을 돌려줌)
-   회원 관리 (관리자만, users.role = admin 또는 OWNER_EMAILS)
+   회원 관리 (관리자 계정 = OWNER_EMAILS 만)
    GET  /api/admin/users                            → { users: [{ email, name, role, owner, createdAt, lastLoginAt, sessions, syncedAt, size }] }
-   POST /api/admin/users  {email, role}             권한 바꾸기 (admin · member · suspended, 정지하면 그 계정의 모든 기기 로그아웃)
+   POST /api/admin/users  {email, role}             권한 바꾸기 (member 일반 · suspended 정지, 정지하면 그 계정의 모든 기기 로그아웃)
    POST /api/admin/users  {email, logout: true}     그 계정의 모든 기기 로그아웃
    GET  /api/admin/signup                           → { mode, code }
    POST /api/admin/signup {mode, newCode}           회원가입 방식 (code · open · closed) · 새 초대 코드
@@ -27,7 +27,7 @@ import { storeToSql } from '../db/convert.mjs';
 const VERSION = '1.2.0';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
-const roleOf = u => (isOwner(u.email) ? 'admin' : ROLES.includes(u.role) ? u.role : 'member');
+const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐
 const SUSPENDED = '이 계정은 사용이 정지되었습니다. 관리자에게 문의하세요';
 
 /* ── 공통 ── */
@@ -208,9 +208,8 @@ const routes = {
       return { ok: true, loggedOut: r.rowCount };
     }
     const role = String(body.role || '');
-    if (!ROLES.includes(role)) throw new HttpError(400, '권한은 admin · member · suspended 중 하나입니다');
-    if (isOwner(t.email)) throw new HttpError(400, '대표 관리자 계정의 권한은 바꿀 수 없습니다');
-    if (t.id === me.id) throw new HttpError(400, '내 계정의 권한은 바꿀 수 없습니다 (다른 관리자에게 부탁하세요)');
+    if (!['member', 'suspended'].includes(role)) throw new HttpError(400, '권한은 member(일반) · suspended(정지) 중 하나입니다. 관리자는 관리자 계정뿐입니다');
+    if (isOwner(t.email) || t.id === me.id) throw new HttpError(400, '관리자 계정의 권한은 바꿀 수 없습니다');
     await tx(async c => {
       await c.query('UPDATE jcal.users SET role = $2, role_updated_at = now() WHERE id = $1', [t.id, role]);
       if (role === 'suspended') await c.query('DELETE FROM jcal.sessions WHERE user_id = $1', [t.id]);
