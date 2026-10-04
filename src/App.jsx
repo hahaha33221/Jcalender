@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import ChecklistEdit from './ChecklistEdit.jsx';
 import { ActionRow, Ctx, WEEK, areaVar, num, useCtx } from './shared.jsx';
 import NeedsPanel from './Needs.jsx';
 import WorkLog from './WorkLog.jsx';
@@ -12,7 +13,7 @@ import ShoppingList from './categories/Shopping.jsx';
 import { migratePeople, seedPeople } from './categories/RelationView.jsx';
 import { seedLeisure } from './categories/LeisureView.jsx';
 import { seedJournal } from './categories/ReviewView.jsx';
-import { AREAS, CYCLES, DEFAULT_RULES, ROWS, PRIO, applyCategories, defaultPrio, dueRule, isDue, iso, nextDue, pad, periodKey, setRules } from './data.js';
+import { AREAS, CATS, CYCLES, DEFAULT_RULES, ROWS, PRIO, applyCategories, rowsVersion, defaultPrio, dueRule, isDue, iso, nextDue, pad, periodKey, setRules } from './data.js';
 import { mockAi, mockApi } from './mock.js';
 import { SpeechRec, parseKoEvent } from './voice.js';
 import { HOLIDAYS } from './holidays.js';
@@ -68,6 +69,7 @@ const blankStore = () => {
     leisure: empty(s.leisure, ['trips', 'books', 'logs']),
     journal: empty(s.journal, ['entries', 'reviews']),
     goals: s.goals?.boards ? { ...s.goals, examples: true, miles2: true, boards: Object.fromEntries(Object.entries(s.goals.boards).map(([k, b]) => [k, { ...b, items: [], miles: [] }])) } : s.goals,
+    checklist: { base: 'none', custom: [] },               // 새 계정: 체크리스트는 비어서 시작 (직접 만들기 · 기본 항목 불러오기)
     meta: { ...(s.meta || {}), createdAt: new Date().toISOString() },
   };
 };
@@ -103,7 +105,7 @@ export default function App() {
   const [store, setStore, persist] = useStore();
   const sync = useServerSync(store, setStore, blankStore);   // 로그인 · VPS 서버 동기화 (설정 › 서버 연결)
   setRules(store.rules);                           // 도래 규칙을 저장된 설정으로 맞춘다 (렌더 전에)
-  applyCategories(store.categories);               // 카테고리 표에서 숨긴 카테고리를 목록에서 뺀다
+  applyCategories(store.categories, store.checklist);   // 카테고리 표에서 숨긴 카테고리 · 사용자 체크리스트(추가 · 수정 · 뺀 항목)를 반영
   setUserNoGoal((store.categories || []).filter(c => c.hasGoal === false).map(c => c.key));
   const [route, setRoute] = useState(readHash);    // 주소 #/페이지/카테고리 와 연동 (브라우저 뒤로가기 지원)
   const { page, cat } = route;
@@ -418,10 +420,12 @@ function CycleSummary({ c, title, note, hot }) {
 /* ───────────────────────── 체크리스트 ───────────────────────── */
 function CheckPage({ init }) {
   const { now } = useCtx();
+  const [edit, setEdit] = useState(false);              // 체크리스트 편집 (내 항목 추가 · 고치기 · 빼기)
   return (
     <>
-      <header className="page-h"><h1>체크리스트</h1><p>{now.getFullYear()}년 {now.getMonth() + 1}월 {now.getDate()}일 {WEEK[now.getDay()]}요일 · 우선순위 순으로 체크하세요. 주간은 {dueRule('W')}, 월간은 {dueRule('M')}, 년간은 {dueRule('Y')}에 도래합니다.</p></header>
-      <Checklist init={init} />
+      <header className="page-h check-h"><div><h1>체크리스트</h1><p>{now.getFullYear()}년 {now.getMonth() + 1}월 {now.getDate()}일 {WEEK[now.getDay()]}요일 · 우선순위 순으로 체크하세요. 주간은 {dueRule('W')}, 월간은 {dueRule('M')}, 년간은 {dueRule('Y')}에 도래합니다.</p></div>
+        {!edit && <button className="btn" onClick={() => setEdit(true)}>체크리스트 편집</button>}</header>
+      {edit ? <ChecklistEdit onDone={() => setEdit(false)} /> : <Checklist init={init} onEdit={() => setEdit(true)} />}
     </>
   );
 }
@@ -870,7 +874,7 @@ function VoiceDialog({ now, onDone, onClose }) {
 }
 
 /* 카테고리별·우선순위순 체크리스트 (길게 스크롤) */
-function Checklist({ init }) {
+function Checklist({ init, onEdit }) {
   const { store, now, isDone, prioOf, runMany, busy } = useCtx();
   const [cyc, setCyc] = useState(init?.cyc ? new Set([init.cyc]) : null);   // null 이면 도래한 주기를 자동으로 사용
   const [area, setArea] = useState(init?.area ?? 'ALL');
@@ -903,7 +907,7 @@ function Checklist({ init }) {
     });
     arr.sort((x, y) => (sort === 'PRIO' ? x.score - y.score : 0) || x.order - y.order);
     return arr;
-  }, [rows.map(r => r.id).join(','), store.done, store.prio, sort]);
+  }, [rows.map(r => r.id).join(','), store.done, store.prio, sort, rowsVersion()]);
 
   return (
     <section className="check" aria-label="체크리스트">
@@ -932,7 +936,8 @@ function Checklist({ init }) {
           </div>
         </div>
       </div>
-      {groups.length === 0 && <div className="empty">{status === 'TODO' && base.length ? '오늘 남은 항목이 없습니다. 모두 완료했습니다.' : '표시할 항목이 없습니다. 위에서 주기를 선택하세요.'}</div>}
+      {!ROWS.length && <div className="empty">체크리스트가 비어 있습니다. 나에게 맞는 할 일을 직접 만들어 보세요. <button className="btn primary sm" onClick={onEdit}>체크리스트 만들기</button></div>}
+      {ROWS.length > 0 && groups.length === 0 && <div className="empty">{status === 'TODO' && base.length ? '오늘 남은 항목이 없습니다. 모두 완료했습니다.' : '표시할 항목이 없습니다. 위에서 주기를 선택하세요.'}</div>}
       {groups.map(g => {
         const gd = g.rows.filter(x => isDone(x.r)).length;
         return (
@@ -954,6 +959,7 @@ const CAT_ORDER = { P: { last: ['개인 재무'] } };
 /** 영역의 카테고리 목록. 카테고리마다 세부 항목, 주기별 개수, 오늘 남은 개수를 모은다 */
 function categoriesOf(area, now, isDone, cats = []) {
   const m = new Map();
+  CATS.filter(c => c.a === area).forEach(c => m.set(c.cat, { cat: c.cat, rows: [], items: [], cyc: {} }));   // 체크 항목이 없어도 카테고리는 보인다
   ROWS.filter(r => r.a === area).forEach(r => {
     if (!m.has(r.cat)) m.set(r.cat, { cat: r.cat, rows: [], items: [], cyc: {} });
     const g = m.get(r.cat);

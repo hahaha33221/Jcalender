@@ -218,17 +218,39 @@ export const HIDDEN_CATS = new Set(['P|개인 일정/캘린더', 'P|습관/루�
     ROWS.push(row);
   }
 })();
-/* 카테고리 표(store.categories)의 "숨김"을 ROWS 에 반영한다. ROWS 는 여러 화면이 같은 배열을 보므로 제자리에서 다시 채운다 */
-let catSig = '';
-export function applyCategories(cats) {
+/* 카테고리 표(store.categories)의 "숨김"과 사용자 체크리스트(store.checklist)를 ROWS 에 반영한다.
+   ROWS 는 여러 화면이 같은 배열을 보므로 제자리에서 다시 채운다
+   store.checklist = { base: 'none'(기본 항목 안 씀, 새 계정) | 없음(기본 항목 씀),
+                       hide: [기본 항목 id] (뺀 기본 항목), edits: { id: { action, item, detail, c } } (고친 기본 항목),
+                       custom: [{ id: 'u…', a, c, cat, item, action, detail }] (직접 만든 항목) }
+   CATS: 화면에 보일 카테고리 [{ a, cat }] — 체크 항목이 하나도 없어도 카테고리 화면(재무 · 캘린더 등)은 남긴다 */
+export const CATS = [];
+let catSig = '', rowsVer = 0;
+export const rowsVersion = () => rowsVer;
+export const BASE_ROWS = () => ALL_ROWS.filter(r => !HIDDEN_CATS.has(`${r.a}|${r.cat}`));
+export function applyCategories(cats, cl) {
   const hide = new Set((cats || []).filter(c => c.hidden).map(c => c.key));
-  const sig = [...hide].sort().join(',');
+  const C = cl || {};
+  const sig = JSON.stringify([[...hide].sort(), C.base || '', C.hide || [], C.edits || {}, C.custom || []]);
   if (sig === catSig) return;
-  catSig = sig;
-  ROWS.length = 0;
-  ALL_ROWS.forEach(r => { const k = `${r.a}|${r.cat}`; if (!HIDDEN_CATS.has(k) && !hide.has(k)) ROWS.push(r); });
+  catSig = sig; rowsVer++;
+  const off = new Set(C.hide || []), edits = C.edits || {};
+  const shown = k => !HIDDEN_CATS.has(k) && !hide.has(k);
+  ROWS.length = 0; CATS.length = 0;
+  const seen = new Set(), addCat = (a, cat) => { const k = `${a}|${cat}`; if (!seen.has(k) && shown(k)) { seen.add(k); CATS.push({ a, cat }); } };
+  ALL_ROWS.forEach(r => {
+    addCat(r.a, r.cat);
+    if (C.base === 'none' || off.has(r.id) || !shown(`${r.a}|${r.cat}`)) return;
+    const e = edits[r.id];
+    ROWS.push(e ? { ...r, ...e, ty: TY[e.code || r.code], code: e.code || r.code } : r);
+  });
+  (C.custom || []).forEach(r => {
+    if (!r.action || !AREAS[r.a]) return;
+    addCat(r.a, r.cat || '기타');
+    if (!shown(`${r.a}|${r.cat || '기타'}`)) return;
+    ROWS.push({ ...r, cat: r.cat || '기타', item: r.item || r.cat || '기타', detail: r.detail || '', c: CYCLES[r.c] ? r.c : 'D', code: 'N', ty: TY.N, custom: true });
+  });
 }
-
 
 export const pad = n => String(n).padStart(2, '0');
 export const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;

@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { parseGoalBook } from '../goalImport.js';
-import { AREAS, CYCLES, ROWS, iso, periodKeysBetween } from '../data.js';
+import { AREAS, CATS, CYCLES, ROWS, iso, periodKeysBetween } from '../data.js';
 import { areaVar, useCtx } from '../shared.jsx';
 import {
   EMPTY, NO_GOAL, hasGoals, addItem, addMile, boardForYear, boardKey, checkProgress, daysBetween, delItem, delMile, flatten, progressOf, seedGoals, statusOf, toDate, updItem, updMile,
@@ -261,7 +261,7 @@ export default function GoalView({ area, cat, group }) {
   const { boards } = useGoals(area, cat);
 
   // 카테고리 순서: 영역 공통(목표 관리) → 데이터 순서. 숨긴 카테고리는 뺀다
-  const order = ['목표 관리', ...new Set(ROWS.filter(r => r.a === area && r.cat !== '목표 관리').map(r => r.cat))];
+  const order = ['목표 관리', ...new Set(CATS.filter(r => r.a === area && r.cat !== '목표 관리').map(r => r.cat))];
   const groups = order.map((c, ci) => {
     const b = boards[boardKey(area, c)];
     if (!b || !hasGoals(area, c)) return null;
@@ -451,7 +451,7 @@ export function DashYearGantt() {
     return r > l ? <span className={`gbar ${st} ${cls}`} style={{ left: `${l}%`, width: `${r - l}%` }} title={`${it.name} · ${md(it.start)} ~ ${md(it.end)} · ${p}%`}><i style={{ width: `${p}%` }} /></span> : null; };
 
   const areas = Object.keys(AREAS).map(a => {
-    const order = ['목표 관리', ...new Set(ROWS.filter(r => r.a === a && r.cat !== '목표 관리').map(r => r.cat))];
+    const order = ['목표 관리', ...new Set(CATS.filter(r => r.a === a && r.cat !== '목표 관리').map(r => r.cat))];
     const goals = order.flatMap(c => {
       const b = boards[boardKey(a, c)];
       if (!b || !hasGoals(a, c)) return [];
