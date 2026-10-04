@@ -10,10 +10,10 @@ import { AuthForm } from './Welcome.jsx';
    백업(내보내기·가져오기) · 카테고리(표시·목표 보드·순서) · 프로젝트 · 태그 · 휴지통 · 알림 */
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-export default function DataSettings() {
+export default function DataSettings({ hideBackup = false }) {   // hideBackup: 일반 회원 (관리자 계정 · 로그인 안 함에서만 백업)
   return (
     <>
-      <Backup />
+      {!hideBackup && <Backup />}
       <Notify />
       <Categories />
       <Projects />

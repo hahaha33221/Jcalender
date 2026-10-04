@@ -1091,7 +1091,8 @@ function NavIcon({ name }) {
 
 /* ───────────────────────── 설정 ───────────────────────── */
 function Settings() {
-  const { store, setStore, sync } = useCtx();
+  const { store, setStore, sync, isAdmin } = useCtx();
+  const member = sync.connected && !isAdmin;          // 일반 회원: 데이터(초기화) · 백업은 보이지 않음 (데이터는 서버에 자동 저장)
   const [arm, setArm] = useState(false);
   const rules = { ...DEFAULT_RULES, ...store.rules };
   const setRule = (k, v) => setStore(s => ({ ...s, rules: { ...DEFAULT_RULES, ...s.rules, [k]: v } }));
@@ -1104,7 +1105,7 @@ function Settings() {
   const yearDays = new Date(2025, Number(rules.yearMonth), 0).getDate();   // 윤년 아닌 해 기준
   return (
     <>
-      <header className="page-h"><h1>설정</h1><p>정기 체크가 도래하는 날과 데이터를 관리합니다. 바꾸면 대시보드, 캘린더, 체크리스트에 바로 반영됩니다.</p></header>
+      <header className="page-h"><h1>설정</h1><p>정기 체크가 도래하는 날{member ? '' : '과 데이터'}를 관리합니다. 바꾸면 대시보드, 캘린더, 체크리스트에 바로 반영됩니다.</p></header>
       <AccountPanel />
       <div className="panel">
         <div className="csum-h"><h2>체크 주기 규칙</h2>
@@ -1126,14 +1127,14 @@ function Settings() {
         </tbody></table>
         <p className="note">기본값: 주간 일요일, 월간 말일, 년간 12월 30일. 월간 기준일이 없는 달(예: 31일)은 그 달 말일에 도래합니다.</p>
       </div>
-      <div className="panel">
+      {!member && <div className="panel">
         <h2>데이터</h2>
         <p className="muted">{sync.connected
           ? '체크 상태, 일정, 기념일, 건강 기록, 설정은 내 계정(서버)과 이 브라우저에 함께 저장됩니다. 초기화하면 기록이 모두 비워지고 서버에도 반영됩니다.'
           : '체크 상태, 일정, 기념일, 건강 기록, 설정은 이 브라우저에만 저장됩니다. 아래 "백업"으로 파일을 내려받아 두세요.'}</p>
         <button className={`btn ${arm ? 'danger' : ''}`} onClick={reset}>{arm ? '정말 초기화할까요?' : '모든 데이터 초기화'}</button>
-      </div>
-      <DataSettings />
+      </div>}
+      <DataSettings hideBackup={member} />
     </>
   );
 }
