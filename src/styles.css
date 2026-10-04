@@ -1718,3 +1718,20 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .dash-start > div { flex: 1; min-width: 220px; }
 .dash-start h2 { margin: 0 0 4px; font-size: 16px; }
 .dash-start p { margin: 0; font-size: 13px; }
+.mb-areas { display: flex; gap: 4px; flex-wrap: nowrap; }
+.mb-areas label { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 14px; font-size: 12px; color: var(--ink3); cursor: pointer; white-space: nowrap; }
+.mb-areas label.on { border-color: var(--ac); color: var(--ink); background: color-mix(in srgb, var(--ac) 10%, var(--card)); }
+.mb-areas input { margin: 0; accent-color: var(--ac); }
+.cqa { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; }
+.cqa-t { font-size: 13px; white-space: nowrap; }
+.cqa-act { flex: 1 1 240px; min-width: 0; }
+.cqa-cat { flex: 0 1 150px; min-width: 0; }
+.cqa select { width: auto; }
+.cob-hb { display: flex; gap: 6px; flex: none; }
+@media (max-width: 700px) {
+  .cqa-t { flex-basis: 100%; }
+  .cqa-act { flex-basis: 100%; }
+  .cqa-cat { flex: 1 1 120px; }
+  .cqa .btn { flex: 1 1 100%; }
+  .cob-hb { flex-direction: column; align-items: flex-end; }
+}

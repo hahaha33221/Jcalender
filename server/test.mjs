@@ -109,6 +109,12 @@ try {
   const T2c = (await call('POST', '/api/login', { email: E2, password: 'new-pass-999' })).json.token;
   check('정지 풀면 다시 로그인', !!T2c);
   check('다른 회원 모든 기기 로그아웃', (await call('POST', '/api/admin/users', { email: E2, logout: true }, TA.token)).json.loggedOut >= 1 && (await call('GET', '/api/me', null, T2c)).status === 401);
+  check('처음엔 모든 영역', ul.json.users.find(u => u.email === E2)?.areas === 'PBW');
+  check('영역 바꾸기 (개인 · 근로)', (await call('POST', '/api/admin/users', { email: E2, areas: 'WP' }, TA.token)).json.areas === 'PW');
+  const T2d = (await call('POST', '/api/login', { email: E2, password: 'new-pass-999' })).json;
+  check('로그인 · me 에 영역이 보임', T2d.user?.areas === 'PW' && (await call('GET', '/api/me', null, T2d.token)).json.user.areas === 'PW');
+  check('영역 0개는 400', (await call('POST', '/api/admin/users', { email: E2, areas: '' }, TA.token)).status === 400);
+  check('관리자 계정 영역은 못 바꿈', (await call('POST', '/api/admin/users', { email: OWNER, areas: 'P' }, TA.token)).status === 400);
   check('일반 회원은 가입 설정 403', (await call('GET', '/api/admin/signup', null, T)).status === 403);
   const sg = await call('POST', '/api/admin/signup', { mode: 'code', newCode: true }, TA.token);
   check('새 초대 코드', sg.status === 200 && sg.json.mode === 'code' && sg.json.code && sg.json.code !== 'TEST-CODE');

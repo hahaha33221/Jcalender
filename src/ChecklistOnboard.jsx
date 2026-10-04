@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { AREAS, BASE_ROWS, CYCLES } from './data.js';
+import { AREAS, BASE_ROWS, CYCLES, areaEntries } from './data.js';
 import { areaVar, useCtx } from './shared.jsx';
 
 /* 체크리스트 온보딩: 클릭만으로 추천받아 만들기
@@ -64,7 +64,7 @@ export function applyPicks(cl, picks, mode) {
   return next;
 }
 
-export default function ChecklistOnboard({ onDone, onCancel }) {
+export default function ChecklistOnboard({ onDone, onCancel, onDirect }) {
   const { setStore } = useCtx();
   const [step, setStep] = useState(1);
   const [topics, setTopics] = useState([]);
@@ -95,12 +95,12 @@ export default function ChecklistOnboard({ onDone, onCancel }) {
   return (
     <section className="panel cob" aria-label="체크리스트 추천받기">
       <div className="cob-h"><div><h2>체크리스트 추천받기</h2><p className="muted">클릭만 하면 나에게 맞는 체크리스트를 만들어 드려요</p></div>
-        <button className="btn sm" onClick={onCancel}>닫기</button></div>
+        <span className="cob-hb">{onDirect && <button className="btn sm" onClick={onDirect}>추천 없이 직접 넣기</button>}<button className="btn sm" onClick={onCancel}>닫기</button></span></div>
       {Steps}
 
       {step === 1 && <>
         <p className="cob-q">무엇을 챙기고 싶나요? <span className="muted">여러 개 골라도 됩니다</span></p>
-        {Object.entries(AREAS).map(([a, A]) => (
+        {areaEntries().map(([a, A]) => (
           <div key={a} className="cob-area" style={{ '--ac': areaVar(a) }}>
             <h3><i className="dot" />{A.n}</h3>
             <div className="cob-cards">{TOPICS.filter(t => t.a === a).map(t => (

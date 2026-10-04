@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import ChecklistEdit from './ChecklistEdit.jsx';
+import ChecklistEdit, { QuickAdd } from './ChecklistEdit.jsx';
 import ChecklistOnboard from './ChecklistOnboard.jsx';
 import Members from './Members.jsx';
 import { ActionRow, Ctx, WEEK, areaVar, num, useCtx } from './shared.jsx';
@@ -15,7 +15,7 @@ import ShoppingList from './categories/Shopping.jsx';
 import { migratePeople, seedPeople } from './categories/RelationView.jsx';
 import { seedLeisure } from './categories/LeisureView.jsx';
 import { seedJournal } from './categories/ReviewView.jsx';
-import { AREAS, CATS, CYCLES, DEFAULT_RULES, ROWS, PRIO, applyCategories, rowsVersion, defaultPrio, dueRule, isDue, iso, nextDue, pad, periodKey, setRules } from './data.js';
+import { AREAS, CATS, areaEntries, CYCLES, DEFAULT_RULES, ROWS, PRIO, applyCategories, rowsVersion, defaultPrio, dueRule, isDue, iso, nextDue, pad, periodKey, setRules } from './data.js';
 import { mockAi, mockApi } from './mock.js';
 import { SpeechRec, parseKoEvent } from './voice.js';
 import { HOLIDAYS } from './holidays.js';
@@ -109,7 +109,8 @@ export default function App() {
   const [store, setStore, persist] = useStore();
   const sync = useServerSync(store, setStore, blankStore);   // 로그인 · VPS 서버 동기화 (설정 › 서버 연결)
   setRules(store.rules);                           // 도래 규칙을 저장된 설정으로 맞춘다 (렌더 전에)
-  applyCategories(store.categories, store.checklist);   // 카테고리 표에서 숨긴 카테고리 · 사용자 체크리스트(추가 · 수정 · 뺀 항목)를 반영
+  const areasAllowed = !sync.connected || sync.conf.role === 'admin' || ADMIN_EMAILS.includes(String(sync.conf.email || '').trim().toLowerCase()) ? 'PBW' : (sync.conf.areas || 'PBW');   // 회원별로 볼 수 있는 영역
+  applyCategories(store.categories, store.checklist, areasAllowed);   // 카테고리 표에서 숨긴 카테고리 · 사용자 체크리스트(추가 · 수정 · 뺀 항목)를 반영
   setUserNoGoal((store.categories || []).filter(c => c.hasGoal === false).map(c => c.key));
   const [route, setRoute] = useState(readHash);    // 주소 #/페이지/카테고리 와 연동 (브라우저 뒤로가기 지원)
   const { page, cat } = route;
@@ -215,7 +216,7 @@ export default function App() {
   const openCat = (a, c) => nav(a, c);
 
   const isAdmin = !!sync.connected && (sync.conf.role === 'admin' || ADMIN_EMAILS.includes(String(sync.conf.email || '').trim().toLowerCase()));   // 서버가 관리자 계정으로 확인(role admin) 또는 관리자 이메일
-  const ctx = { isAdmin, store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go, openCat, sync };
+  const ctx = { isAdmin, areasAllowed, store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go, openCat, sync };
 
   // 메뉴 접기 (이 기기에만 기억)
   const [navMini, setNavMini] = useState(() => { try { return localStorage.getItem('jcalender.navMini') === '1'; } catch { return false; } });
@@ -226,9 +227,7 @@ export default function App() {
     ...(isAdmin ? [{ id: 'members', label: '회원 관리', icon: 'users' }, { id: 'progress', label: '진행 현황', icon: 'progress' }] : []),   // 관리자만
     { id: 'check', label: '체크리스트', icon: 'check' },
     { sec: '상세 내용' },
-    { id: 'P', label: AREAS.P.n, color: areaVar('P') },
-    { id: 'W', label: AREAS.W.n, color: areaVar('W') },
-    { id: 'B', label: AREAS.B.n, color: areaVar('B') },
+    ...['P', 'W', 'B'].filter(a => areasAllowed.includes(a)).map(a => ({ id: a, label: AREAS[a].n, color: areaVar(a) })),
     { sec: '관리' },
     { id: 'settings', label: '설정', icon: 'settings' },
   ];
@@ -263,8 +262,9 @@ export default function App() {
           {sync.conflict && page !== 'settings' && <p className="banner">서버와 이 기기의 데이터가 다릅니다. <button className="btn" onClick={() => go('settings')}>설정에서 고르기</button></p>}
           {page === 'home' && <Home />}
           {page === 'check' && <CheckPage key={JSON.stringify(checkInit)} init={checkInit} />}
-          {AREAS[page] && !cat && <AreaPage key={page} area={page} />}
-          {AREAS[page] && cat && <CategoryPage key={`${page}|${cat}`} area={page} cat={cat} />}
+          {AREAS[page] && !areasAllowed.includes(page) && <div className="empty">{AREAS[page].n} 영역은 볼 수 있는 권한이 없습니다. 관리자에게 문의하세요. <button className="btn sm" onClick={() => go('home')}>대시보드로</button></div>}
+          {AREAS[page] && areasAllowed.includes(page) && !cat && <AreaPage key={page} area={page} />}
+          {AREAS[page] && areasAllowed.includes(page) && cat && <CategoryPage key={`${page}|${cat}`} area={page} cat={cat} />}
           {page === 'members' && (isAdmin ? <Members /> : <div className="empty">회원 관리는 관리자 계정에서만 볼 수 있습니다. <button className="btn sm" onClick={() => go('home')}>대시보드로</button></div>)}
           {page === 'progress' && (isAdmin ? <Progress /> : <div className="empty">진행 현황은 관리자 계정에서만 볼 수 있습니다. <button className="btn sm" onClick={() => go('home')}>대시보드로</button></div>)}
           {page === 'settings' && <Settings />}
@@ -436,7 +436,8 @@ function CheckPage({ init }) {
       <header className="page-h check-h"><div><h1>체크리스트</h1><p>{now.getFullYear()}년 {now.getMonth() + 1}월 {now.getDate()}일 {WEEK[now.getDay()]}요일 · 우선순위 순으로 체크하세요. 주간은 {dueRule('W')}, 월간은 {dueRule('M')}, 년간은 {dueRule('Y')}에 도래합니다.</p></div>
         {mode === 'list' && <div className="check-h-btns"><button className="btn" onClick={() => setMode('onboard')}>추천받기</button><button className="btn" onClick={() => setMode('edit')}>체크리스트 편집</button></div>}</header>
       {msg && mode === 'list' && <p className="banner ok mb-msg" role="status">{msg}</p>}
-      {mode === 'onboard' ? <ChecklistOnboard onDone={n => { setMsg(`추천 항목 ${n}개로 체크리스트를 만들었습니다. 필요 없는 건 "체크리스트 편집"에서 빼세요.`); setMode('list'); }} onCancel={() => setMode('list')} />
+      {mode === 'list' && <QuickAdd onAdded={(t, c) => setMsg(`"${t}"을(를) ${CYCLES[c]}에 추가했습니다.`)} />}
+      {mode === 'onboard' ? <ChecklistOnboard onDone={n => { setMsg(`추천 항목 ${n}개로 체크리스트를 만들었습니다. 필요 없는 건 "체크리스트 편집"에서 빼세요.`); setMode('list'); }} onCancel={() => setMode('list')} onDirect={() => setMode('list')} />
         : mode === 'edit' ? <ChecklistEdit onDone={() => setMode('list')} onRecommend={() => setMode('onboard')} />
           : <Checklist init={init} onEdit={() => setMode('edit')} onRecommend={() => setMode('onboard')} />}
     </>
@@ -664,7 +665,7 @@ function EventNotes({ notes, setStore, startDrag, drag, dragged, onSchedule }) {
       <div className="csum-h"><h2>일정 노트</h2><span className="muted">날짜가 정해지면 달력으로 끌어 넣으세요 · 누르면 날짜를 골라 넣기</span></div>
       <form className="ev-add" onSubmit={add}>
         <input value={t} onChange={e => setT(e.target.value)} placeholder="나중에 넣을 일정 (예: 치과 예약, 팀 회식)" aria-label="일정 노트 내용" />
-        <select value={area} onChange={e => setArea(e.target.value)} aria-label="영역">{Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}</select>
+        <select value={area} onChange={e => setArea(e.target.value)} aria-label="영역">{areaEntries(area).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}</select>
         <button className="btn primary" disabled={!t.trim()}>노트 추가</button>
       </form>
       {notes.length ? (
@@ -789,7 +790,7 @@ function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
           <span className="muted">{f.end && toMin(f.end) > toMin(f.time) ? `${f.time} ~ ${f.end} (${durText(toMin(f.end) - toMin(f.time))})` : f.end ? '끝 시간이 시작보다 늦어야 합니다' : '비워 두면 1시간 칸 하나로 보입니다'}</span>
         </div>}
         <label>영역<select value={f.area} onChange={e => setF({ ...f, area: e.target.value })}>
-          {Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}</select></label>
+          {areaEntries(f.area).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}</select></label>
         <div className="row2">
           <label>반복<select value={f.freq} onChange={e => setF({ ...f, freq: e.target.value })} aria-label="반복">
             {Object.entries(FREQ).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
@@ -936,7 +937,7 @@ function Checklist({ init, onEdit, onRecommend }) {
               <button key={k} aria-pressed={active.has(k)} onClick={() => toggleCyc(k)}>{n}{auto.has(k) && k !== 'D' && <small> · 오늘 도래</small>}</button>))}
           </div>
           <div className="chips" role="group" aria-label="영역">
-            {[['ALL', '전체 영역'], ...Object.entries(AREAS).map(([k, v]) => [k, v.n])].map(([k, n]) => <button key={k} aria-pressed={area === k} onClick={() => setArea(k)}>{n}</button>)}
+            {[['ALL', '전체 영역'], ...areaEntries().map(([k, v]) => [k, v.n])].map(([k, n]) => <button key={k} aria-pressed={area === k} onClick={() => setArea(k)}>{n}</button>)}
           </div>
           <div className="chips" role="group" aria-label="보기">
             <button aria-pressed={status === 'TODO'} onClick={() => setStatus('TODO')}>미완료만</button>
@@ -949,7 +950,7 @@ function Checklist({ init, onEdit, onRecommend }) {
           </div>
         </div>
       </div>
-      {!ROWS.length && <div className="empty">체크리스트가 비어 있습니다. 몇 번 클릭으로 추천받거나 직접 만들어 보세요. <button className="btn primary sm" onClick={onRecommend}>추천받아 만들기</button> <button className="btn sm" onClick={onEdit}>직접 만들기</button></div>}
+      {!ROWS.length && <div className="empty">체크리스트가 비어 있습니다. 위 "직접 추가"에 할 일을 적거나, 몇 번 클릭으로 추천받아 보세요. <button className="btn primary sm" onClick={onRecommend}>추천받아 만들기</button> <button className="btn sm" onClick={onEdit}>여러 개 한 번에 만들기</button></div>}
       {ROWS.length > 0 && groups.length === 0 && <div className="empty">{status === 'TODO' && base.length ? '오늘 남은 항목이 없습니다. 모두 완료했습니다.' : '표시할 항목이 없습니다. 위에서 주기를 선택하세요.'}</div>}
       {groups.map(g => {
         const gd = g.rows.filter(x => isDone(x.r)).length;

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { AREAS } from './data.js';
 import { useCtx } from './shared.jsx';
 
 /* 회원 관리 (관리자 계정만 — 서버 OWNER_EMAILS, 기본 koreamate2026@gmail.com)
@@ -39,6 +40,13 @@ export default function Members() {
     if (role === 'suspended' && arm !== `${u.email}|${role}`) { setArm(`${u.email}|${role}`); setTimeout(() => setArm(a => (a === `${u.email}|${role}` ? null : a)), 4000); return; }
     setArm(null); setBusy(true);
     try { await sync.request('/api/admin/users', { method: 'POST', body: { email: u.email, role } }); say(`${u.name || u.email}님의 권한을 "${ROLE[role]}"(으)로 바꿨습니다${role === 'suspended' ? ' · 모든 기기에서 로그아웃됨' : ''}`); await load(); }
+    catch (e) { say(e.message, true); setBusy(false); }
+  };
+  const setAreas = async (u, a, on) => {
+    const next = ['P', 'B', 'W'].filter(k => (k === a ? on : (u.areas || 'PBW').includes(k))).join('');
+    if (!next) { say('영역은 하나 이상 남겨야 합니다', true); return; }
+    setBusy(true);
+    try { await sync.request('/api/admin/users', { method: 'POST', body: { email: u.email, areas: next } }); say(`${u.name || u.email}님이 볼 수 있는 영역: ${[...next].map(k => AREAS[k].n).join(' · ')}`); await load(); }
     catch (e) { say(e.message, true); setBusy(false); }
   };
   const logoutAll = async u => {
@@ -91,7 +99,7 @@ export default function Members() {
           <input type="search" className="mb-q" value={q} onChange={e => setQ(e.target.value)} placeholder="이름 · 이메일 검색" aria-label="회원 검색" />
           <button className="btn sm grow-r" onClick={load} disabled={busy}>{busy ? '불러오는 중…' : '새로고침'}</button></div>
         {users && <div className="tablewrap"><table className="prog fv-table mb-table">
-          <thead><tr><th>회원</th><th>권한</th><th>가입</th><th>마지막 로그인</th><th>로그인 기기</th><th>데이터</th><th /></tr></thead>
+          <thead><tr><th>회원</th><th>권한</th><th>볼 수 있는 영역</th><th>가입</th><th>마지막 로그인</th><th>로그인 기기</th><th>데이터</th><th /></tr></thead>
           <tbody>{list.map(u => {
             const self = u.email.toLowerCase() === me, locked = u.owner || self;
             return (
@@ -102,6 +110,9 @@ export default function Members() {
                   : <div className="mb-roles" role="group" aria-label={`${u.email} 권한`}>{CHOICES.map(k => [k, ROLE[k]]).map(([k, n]) => (
                     <button key={k} className={`${u.role === k ? `on ${k}` : ''} ${arm === `${u.email}|${k}` ? 'arm' : ''}`} aria-pressed={u.role === k} disabled={busy}
                       onClick={() => u.role !== k && setRole(u, k)} title={ROLE_DESC[k]}>{arm === `${u.email}|${k}` ? `정말 ${n}?` : n}</button>))}</div>}</td>
+                <td><div className="mb-areas" role="group" aria-label={`${u.email} 볼 수 있는 영역`}>{['P', 'B', 'W'].map(k => (
+                  <label key={k} className={(u.areas || 'PBW').includes(k) ? 'on' : ''} style={{ '--ac': `var(${AREAS[k].v})` }} title={u.owner ? '관리자 계정은 모든 영역을 봅니다' : `${AREAS[k].n} 영역 보기`}>
+                    <input type="checkbox" checked={(u.areas || 'PBW').includes(k)} disabled={busy || u.owner} onChange={e => setAreas(u, k, e.target.checked)} />{AREAS[k].n}</label>))}</div></td>
                 <td className="nw">{dt(u.createdAt).split(' ').slice(0, 3).join(' ')}</td>
                 <td className="nw">{dt(u.lastLoginAt)}</td>
                 <td className="c">{u.sessions}대</td>
@@ -109,7 +120,7 @@ export default function Members() {
                 <td>{!self && u.sessions > 0 && <button className="btn sm" disabled={busy} onClick={() => logoutAll(u)}>모든 기기 로그아웃</button>}</td>
               </tr>);
           })}</tbody></table></div>}
-        <p className="note">관리자: 이 계정 하나뿐 (회원 관리 · 진행 현황) · 일반: 자기 데이터만 · 정지: 로그인할 수 없음(데이터는 지우지 않음). 회원 삭제 · 비밀번호 초기화는 VPS 에서 jcal-admin 으로 합니다.</p>
+        <p className="note">관리자: 이 계정 하나뿐 (회원 관리 · 진행 현황) · 일반: 자기 데이터만 · 정지: 로그인할 수 없음(데이터는 지우지 않음). 볼 수 있는 영역: 체크를 푼 영역(개인 · 사업 · 근로)은 그 회원의 메뉴 · 체크리스트 · 대시보드에서 빠집니다(데이터는 그대로). 회원 삭제 · 비밀번호 초기화는 VPS 에서 jcal-admin 으로 합니다.</p>
       </section>
     </>
   );

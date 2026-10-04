@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AREAS, BASE_ROWS, CATS, CYCLES, PRIO, ROWS, defaultPrio } from './data.js';
+import { AREAS, BASE_ROWS, allowedAreas, areaEntries, CATS, CYCLES, PRIO, ROWS, defaultPrio } from './data.js';
 import { areaVar, useCtx } from './shared.jsx';
 
 /* 체크리스트 › 편집: 계정마다 체크리스트를 직접 만든다 (store.checklist, data.js applyCategories 참고)
@@ -18,7 +18,7 @@ export default function ChecklistEdit({ onDone, onRecommend }) {
   const base = BASE_ROWS();
   const hiddenRows = useBase ? base.filter(r => hidden.has(r.id)) : [];
 
-  const blank = { a: 'P', cat: '', item: '', action: '', c: 'D', detail: '', prio: 2 };
+  const blank = { a: allowedAreas()[0], cat: '', item: '', action: '', c: 'D', detail: '', prio: 2 };
   const [form, setForm] = useState(blank);
   const [area, setArea] = useState('ALL');
   const [arm, setArm] = useState(null);
@@ -65,7 +65,7 @@ export default function ChecklistEdit({ onDone, onRecommend }) {
       <form className="panel cle-form" onSubmit={add}>
         <h2>항목 추가</h2>
         <div className="cle-grid">
-          <label>영역<select value={form.a} onChange={e => setForm({ ...form, a: e.target.value, cat: '' })}>{Object.entries(AREAS).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}</select></label>
+          <label>영역<select value={form.a} onChange={e => setForm({ ...form, a: e.target.value, cat: '' })}>{areaEntries(form.a).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}</select></label>
           <label>카테고리<input list="cle-cats" value={form.cat} onChange={e => setForm({ ...form, cat: e.target.value })} placeholder="고르거나 새 이름 (예: 운동)" />
             <datalist id="cle-cats">{catsOf(form.a).map(c => <option key={c} value={c} />)}</datalist></label>
           <label>묶음 (선택)<input value={form.item} onChange={e => setForm({ ...form, item: e.target.value })} placeholder="예: 아침 루틴" /></label>
@@ -79,7 +79,7 @@ export default function ChecklistEdit({ onDone, onRecommend }) {
 
       <div className="panel">
         <div className="csum-h"><h2>항목 고치기</h2><span className="muted">{rows.length}개 · 칸을 바로 고치면 저장됩니다</span>
-          <div className="chips grow-r" role="group" aria-label="영역">{[['ALL', '전체'], ...Object.entries(AREAS).map(([k, v]) => [k, v.n])].map(([k, n]) => <button key={k} aria-pressed={area === k} onClick={() => setArea(k)}>{n}</button>)}</div></div>
+          <div className="chips grow-r" role="group" aria-label="영역">{[['ALL', '전체'], ...areaEntries().map(([k, v]) => [k, v.n])].map(([k, n]) => <button key={k} aria-pressed={area === k} onClick={() => setArea(k)}>{n}</button>)}</div></div>
         {!groups.length && <p className="muted">항목이 없습니다.</p>}
         {groups.map(g => (
           <div key={g.k} className="cle-group" style={{ '--ac': areaVar(g.a) }}>
@@ -105,5 +105,32 @@ export default function ChecklistEdit({ onDone, onRecommend }) {
               <button className="btn sm" onClick={() => unhide(r.id)}>다시 넣기</button></li>))}</ul>
         </div>)}
     </section>
+  );
+}
+
+/** 체크리스트 화면 위의 "직접 추가" 한 줄: 할 일 · 영역 · 카테고리 · 주기만 넣으면 내 항목으로 추가 */
+export function QuickAdd({ onAdded }) {
+  const { setStore } = useCtx();
+  const [f, setF] = useState(() => ({ action: '', a: allowedAreas()[0], cat: '', c: 'D' }));
+  const cats = [...new Set(CATS.filter(c => c.a === f.a).map(c => c.cat))];
+  const add = e => {
+    e.preventDefault();
+    const action = f.action.trim();
+    if (!action) return;
+    const cat = f.cat.trim() || '내 할 일';
+    setStore(s => { const c = s.checklist || {}; return { ...s, checklist: { ...c, custom: [...(c.custom || []), { id: uid(), a: f.a, c: f.c, cat, item: cat, action, detail: '' }] } }; });
+    setF(x => ({ ...x, action: '' }));
+    onAdded?.(action, f.c);
+  };
+  return (
+    <form className="panel cqa" onSubmit={add} aria-label="체크리스트 직접 추가">
+      <b className="cqa-t">직접 추가</b>
+      <input className="cqa-act" value={f.action} onChange={e => setF({ ...f, action: e.target.value })} placeholder="할 일을 적으세요 (예: 영양제 먹기)" aria-label="할 일" />
+      <select value={f.a} onChange={e => setF({ ...f, a: e.target.value, cat: '' })} aria-label="영역">{areaEntries(f.a).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}</select>
+      <input className="cqa-cat" list="cqa-cats" value={f.cat} onChange={e => setF({ ...f, cat: e.target.value })} placeholder="카테고리 (선택)" aria-label="카테고리" />
+      <datalist id="cqa-cats">{cats.map(c => <option key={c} value={c} />)}</datalist>
+      <select value={f.c} onChange={e => setF({ ...f, c: e.target.value })} aria-label="주기">{Object.entries(CYCLES).map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
+      <button className="btn primary" disabled={!f.action.trim()}>추가</button>
+    </form>
   );
 }

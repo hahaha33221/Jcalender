@@ -225,17 +225,21 @@ export const HIDDEN_CATS = new Set(['P|개인 일정/캘린더', 'P|습관/루�
                        custom: [{ id: 'u…', a, c, cat, item, action, detail }] (직접 만든 항목) }
    CATS: 화면에 보일 카테고리 [{ a, cat }] — 체크 항목이 하나도 없어도 카테고리 화면(재무 · 캘린더 등)은 남긴다 */
 export const CATS = [];
+/** 이 계정이 볼 수 있는 영역 (applyCategories 가 맞춤) · 고르기 목록용 [키, 영역] (keep: 지금 값이면 막힌 영역이어도 남김) */
+let ALLOWED = 'PBW';
+export const allowedAreas = () => ALLOWED;
+export const areaEntries = keep => Object.entries(AREAS).filter(([k]) => ALLOWED.includes(k) || k === keep);
 let catSig = '', rowsVer = 0;
 export const rowsVersion = () => rowsVer;
 export const BASE_ROWS = () => ALL_ROWS.filter(r => !HIDDEN_CATS.has(`${r.a}|${r.cat}`));
-export function applyCategories(cats, cl) {
+export function applyCategories(cats, cl, areas = 'PBW') {
   const hide = new Set((cats || []).filter(c => c.hidden).map(c => c.key));
   const C = cl || {};
-  const sig = JSON.stringify([[...hide].sort(), C.base || '', C.hide || [], C.edits || {}, C.custom || []]);
+  const sig = JSON.stringify([[...hide].sort(), C.base || '', C.hide || [], C.edits || {}, C.custom || [], areas]);
   if (sig === catSig) return;
-  catSig = sig; rowsVer++;
+  catSig = sig; rowsVer++; ALLOWED = areas;
   const off = new Set(C.hide || []), edits = C.edits || {};
-  const shown = k => !HIDDEN_CATS.has(k) && !hide.has(k);
+  const shown = k => !HIDDEN_CATS.has(k) && !hide.has(k) && areas.includes(k[0]);   // 볼 수 없는 영역(회원 관리에서 막은 영역)은 뺀다
   ROWS.length = 0; CATS.length = 0;
   const seen = new Set(), addCat = (a, cat) => { const k = `${a}|${cat}`; if (!seen.has(k) && shown(k)) { seen.add(k); CATS.push({ a, cat }); } };
   ALL_ROWS.forEach(r => {

@@ -134,4 +134,5 @@
 | 정지 (suspended) | 관리자가 정지한 회원 | 로그인 불가, 로그인 중인 기기도 모두 로그아웃. 데이터는 지우지 않음 |
 
 - 다른 회원을 관리자로 만들 수 없음 (관리자 계정을 바꾸려면 `/etc/jcalender.env` 의 `OWNER_EMAILS` 를 고치고 `systemctl restart jcal-api`)
-- DB: `db/migrations/003_user_roles.sql` (users.role). `bash server/deploy/update.sh` 가 자동으로 적용
+- 볼 수 있는 영역: 회원 관리 표에서 회원마다 개인 · 사업 · 근로를 체크 (하나 이상). 체크를 푼 영역은 그 회원의 메뉴 · 체크리스트 · 대시보드에서 빠지고 데이터는 그대로 (`users.areas`, 004)
+- DB: `db/migrations/003_user_roles.sql` (users.role), `004_user_areas.sql` (users.areas). `bash server/deploy/update.sh` 가 자동으로 적용

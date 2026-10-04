@@ -34,6 +34,7 @@ CREATE TABLE users (
   password_hash  text NOT NULL,                              -- argon2id / bcrypt
   role           varchar(20) NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member', 'suspended')),   -- 회원 권한 (003)
   role_updated_at timestamptz,
+  areas          varchar(3) NOT NULL DEFAULT 'PBW' CHECK (areas ~ '^[PBW]{1,3}$'),   -- 볼 수 있는 영역 (004)
   created_at     timestamptz NOT NULL DEFAULT now(),
   last_login_at  timestamptz
 );
