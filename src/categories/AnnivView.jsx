@@ -9,6 +9,25 @@ import { toTrash } from '../schema.js';
 
 /* 개인 › 기념일 관리 전용 화면: 다가오는 기념일, D-day 관리(DdayPanel), 월별 달력형 목록, 기념일 편집 */
 const uid = () => Math.random().toString(36).slice(2, 10);
+/* 기념일 목록 정렬: store.annivSort = { key, dir } */
+const A_SORTS = [['next', '다가오는 순'], ['name', '이름'], ['person', '관련 인물'], ['date', '날짜 (월 · 일)'], ['kind', '종류'], ['added', '등록순']];
+function sortAnniv(list, sort, now) {
+  const { key = 'next', dir = 'asc' } = sort || {};
+  const ko = (a, b) => String(a || '').localeCompare(String(b || ''), 'ko', { numeric: true });
+  const idx = new Map(list.map((a, i) => [a.id, i]));
+  const nd = a => nextAnniv(a, now)?.dday;
+  const has = key === 'next' ? a => nd(a) != null : key === 'person' ? a => !!a.person : () => true;   // 값 없는 것(지난 날 · 인물 없음)은 늘 뒤로
+  const cmp = {
+    next: (a, b) => nd(a) - nd(b) || ko(a.name, b.name),
+    name: (a, b) => ko(a.name, b.name),
+    person: (a, b) => ko(a.person, b.person) || ko(a.name, b.name),
+    date: (a, b) => a.date.slice(5).localeCompare(b.date.slice(5)) || ko(a.name, b.name),
+    kind: (a, b) => ko(a.kind, b.kind) || ko(a.name, b.name),
+    added: (a, b) => idx.get(a.id) - idx.get(b.id),
+  }[key] || ((a, b) => nd(a) - nd(b));
+  const yes = list.filter(has).sort(cmp), no = list.filter(a => !has(a)).sort((a, b) => ko(a.name, b.name));
+  return [...(dir === 'desc' ? yes.reverse() : yes), ...no];
+}
 const fmtMD = d => `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`;
 
 export default function AnnivView({ area, cat, group }) {
@@ -154,10 +173,16 @@ function AnnivManager({ onOpen }) {
     setStore(s => ({ ...s, anniv: [...s.anniv, { id: uid(), ...f, name: f.name.trim(), person: f.person.trim() }] }));
     setF(blank);
   };
-  const sorted = [...store.anniv].sort((x, y) => (nextAnniv(x, now)?.dday ?? 9999) - (nextAnniv(y, now)?.dday ?? 9999));
+  const sort = store.annivSort || { key: 'next', dir: 'asc' };
+  const setSort = patch => setStore(s => ({ ...s, annivSort: { ...(s.annivSort || { key: 'next', dir: 'asc' }), ...patch } }));
+  const sorted = sortAnniv(store.anniv, sort, now);
   return (
     <div className="panel">
-      <h2>기념일 목록</h2>
+      <div className="csum-h"><h2>기념일 목록</h2><span className="muted">{store.anniv.length}건</span>
+        <span className="rv-sort" role="group" aria-label="정렬">
+          <select value={sort.key} onChange={e => setSort({ key: e.target.value })} aria-label="정렬 기준">{A_SORTS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
+          <span className="rv-dir">{[['asc', '오름차순 ↑'], ['desc', '내림차순 ↓']].map(([k, n]) => <button key={k} type="button" aria-pressed={sort.dir === k} onClick={() => setSort({ dir: k })}>{n}</button>)}</span>
+        </span></div>
       <label className="anniv-days">대시보드 표시 기간
         <span><b>D-</b><input type="number" min="0" max="365" value={store.annivDays} onChange={e => setDays(e.target.value)} aria-label="며칠 전부터 표시" />일 전부터 표시</span></label>
       <div className="tablewrap">
