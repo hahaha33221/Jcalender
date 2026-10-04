@@ -47,7 +47,7 @@ function Field({ f, value, onChange, compact }) {
   return <input value={value ?? ''} onChange={e => onChange(e.target.value)} placeholder={compact ? '' : f.label} inputMode={f.type === 'phone' ? 'tel' : undefined} {...common} />;
 }
 
-export default function ToolView({ area, cat, group, config: C }) {
+export default function ToolView({ area, cat, group, config: C, noHeader }) {
   const { store, setStore, now, isDone, finish } = useCtx();
   const today = iso(now);
   const key = `${area}|${cat}`;
@@ -121,9 +121,9 @@ export default function ToolView({ area, cat, group, config: C }) {
 
   return (
     <div className="catv tv" style={{ '--ac': areaVar(area) }}>
-      <header className="page-h">
+      {!noHeader && <header className="page-h">
         <h1 className="area-title">{cat}</h1>
-      </header>
+      </header>}
 
       {stats.length > 0 && <div className="hv-stats">{stats.map(s => (
         <div key={s.label} className={`hv-stat ${s.tone || 'sl'}`}><span className="muted">{s.label}</span><b>{s.value}</b>

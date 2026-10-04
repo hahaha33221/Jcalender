@@ -45,6 +45,8 @@ const seedEvents = () => {
     { id: uid(), date: d(4), time: '16:00', title: '팀 회의 (예시)', area: 'W' },
   ];
 };
+/** 관리자 계정: 진행 현황(개발 진행 · 필요한 연동 · 작업 기록)은 이 계정으로 로그인했을 때만 보인다 */
+export const ADMIN_EMAILS = ['koreamate2026@gmail.com'];
 const PAGES = ['home', 'check', 'P', 'B', 'W', 'progress', 'settings'];
 const readHash = () => {
   let [p, c] = window.location.hash.replace(/^#\/?/, '').split('/');
@@ -210,7 +212,8 @@ export default function App() {
   const go = (p, init = null) => { setCheckInit(init); nav(p); };
   const openCat = (a, c) => nav(a, c);
 
-  const ctx = { store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go, openCat, sync };
+  const isAdmin = !!sync.connected && ADMIN_EMAILS.includes(String(sync.conf.email || '').trim().toLowerCase());
+  const ctx = { isAdmin, store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go, openCat, sync };
 
   // 메뉴 접기 (이 기기에만 기억)
   const [navMini, setNavMini] = useState(() => { try { return localStorage.getItem('jcalender.navMini') === '1'; } catch { return false; } });
@@ -218,7 +221,7 @@ export default function App() {
 
   const NAV = [
     { id: 'home', label: '대시보드', icon: 'home' },
-    { id: 'progress', label: '진행 현황', icon: 'progress' },
+    ...(isAdmin ? [{ id: 'progress', label: '진행 현황', icon: 'progress' }] : []),   // 관리자만
     { id: 'check', label: '체크리스트', icon: 'check' },
     { sec: '상세 내용' },
     { id: 'P', label: AREAS.P.n, color: areaVar('P') },
@@ -260,7 +263,7 @@ export default function App() {
           {page === 'check' && <CheckPage key={JSON.stringify(checkInit)} init={checkInit} />}
           {AREAS[page] && !cat && <AreaPage key={page} area={page} />}
           {AREAS[page] && cat && <CategoryPage key={`${page}|${cat}`} area={page} cat={cat} />}
-          {page === 'progress' && <Progress />}
+          {page === 'progress' && (isAdmin ? <Progress /> : <div className="empty">진행 현황은 관리자 계정에서만 볼 수 있습니다. <button className="btn sm" onClick={() => go('home')}>대시보드로</button></div>)}
           {page === 'settings' && <Settings />}
         </main>
         {panel && <Drawer key={`${panel.row.id}-${panel.kind}`} panel={panel} onClose={() => setPanel(null)} />}

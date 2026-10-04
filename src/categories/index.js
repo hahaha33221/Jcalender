@@ -1,3 +1,4 @@
+import ContentView from './ContentView.jsx';
 import { createElement } from 'react';
 import DefaultView from './DefaultView.jsx';
 import HealthView from './HealthView.jsx';
@@ -36,6 +37,7 @@ export const CATEGORY_VIEWS = {
   'W|업무 문서': DocsView,
   'W|업무 연락처': props => createElement(RelationView, { ...props, fixedArea: 'W' }),   // 인맥 관리와 같은 사람 데이터 (영역 근로)
   ...Object.fromEntries(Object.entries(TOOL_CONFIGS).map(([k, c]) => [k, withConfig(c)])),
+  'B|콘텐츠 관리': ContentView,                                    // 콘텐츠 보드 + 채널 계정 + 성과
 };
 
 export const viewFor = (area, cat) => CATEGORY_VIEWS[`${area}|${cat}`] || DefaultView;
