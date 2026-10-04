@@ -28,6 +28,27 @@ function nextDay(dateStr, today) {
 }
 const fmt = d => `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`;
 const dd = n => (n === 0 ? '오늘' : `D-${n}`);
+/* 연락처 정렬: 기준 + 오름차순(asc) · 내림차순(desc). store.peopleSort = { key, dir } */
+export const SORTS = [['name', '이름'], ['company', '회사'], ['group', '관계'], ['birthday', '생일 (다가오는 순)'], ['added', '등록순']];
+export function sortPeople(list, sort, all, groups, today) {
+  const { key = 'name', dir = 'asc' } = sort || {};
+  const idx = new Map(all.map((p, i) => [p.id, i]));
+  const ko = (a, b) => String(a || '').localeCompare(String(b || ''), 'ko', { numeric: true });
+  const val = p => (key === 'birthday' ? nextDay(p.birthday, today)?.dday ?? null : null);
+  const cmp = {
+    name: (a, b) => ko(a.name, b.name),
+    company: (a, b) => (!a.company - !b.company) || ko(a.company, b.company) || ko(a.name, b.name),     // 회사 없는 사람은 늘 뒤로
+    group: (a, b) => (groups.indexOf(a.group) - groups.indexOf(b.group)) || ko(a.name, b.name),
+    birthday: (a, b) => { const x = val(a), y = val(b); return ((x == null) - (y == null)) || (x - y) || ko(a.name, b.name); },
+    added: (a, b) => idx.get(a.id) - idx.get(b.id),
+  }[key] || ((a, b) => ko(a.name, b.name));
+  const out = [...list].sort(cmp);
+  if (dir === 'desc') {                                      // 내림차순: 값이 없는 사람(회사 · 생일 없음)은 그대로 뒤에
+    const has = key === 'company' ? p => !!p.company : key === 'birthday' ? p => val(p) != null : () => true;
+    return [...out.filter(has).reverse(), ...out.filter(p => !has(p))];
+  }
+  return out;
+}
 
 /** 예시용 명함 이미지 (SVG) */
 export function sampleCard(p, hue = 210) {
@@ -95,8 +116,11 @@ export default function RelationView({ area, cat, fixedArea }) {
   const inArea = p => { const a = areasOf(p); return ar === 'ALL' || (ar === 'NONE' ? !a.length : a.includes(ar)); };
   const matched = people.filter(p => (grp === 'ALL' || p.group === grp) && inArea(p) && (!co || p.company === co)
     && (!ql || [p.name, p.company, p.dept, p.title, p.phone, p.phone2, p.tel, p.email, p.email2, p.note].join(' ').toLowerCase().includes(ql)));
-  const shown = matched.slice(0, limit);
-  useEffect(() => { setLimit(24); }, [grp, ar, co, q]);
+  const sort = store.peopleSort || { key: 'name', dir: 'asc' };
+  const setSort = patch => setStore(s => ({ ...s, peopleSort: { ...(s.peopleSort || { key: 'name', dir: 'asc' }), ...patch } }));
+  const sorted = sortPeople(matched, sort, people, G, today);
+  const shown = sorted.slice(0, limit);
+  useEffect(() => { setLimit(24); }, [grp, ar, co, q, sort.key, sort.dir]);
   const noArea = people.filter(p => !areasOf(p).length).length;
   const checks = people.filter(p => p.check), cards = people.filter(p => p.card);
   // 상세에서 항목을 누르면 아래 연락처 목록을 그 조건으로 거르고 목록으로 내려간다
@@ -149,7 +173,7 @@ export default function RelationView({ area, cat, fixedArea }) {
       {focus && <Popup wide onClose={() => setFocus(null)} title={{ people: '등록한 사람', soon: '다가오는 생일 · 기념일', check: '번호 확인 필요', card: '명함 모아 보기' }[focus]}
         sub={{ people: `${people.length}명 · 관계 카테고리를 누르면 누가 있는지 보고, 카테고리 이름도 고칠 수 있습니다`, soon: '60일 이내', check: `${checks.length}명`, card: `${cards.length}장` }[focus]}>
 
-        {focus === 'people' && <PeopleGroups people={people} setPeople={setPeople} groups={G} setStore={setStore} companies={companies} noArea={noArea}
+        {focus === 'people' && <PeopleGroups sort={sort} today={today} people={people} setPeople={setPeople} groups={G} setStore={setStore} companies={companies} noArea={noArea}
           openPerson={setOpenId} showList={f => { setFocus(null); showList(f); }} />}
 
         {focus === 'soon' && (events.length ? <>
@@ -192,6 +216,10 @@ export default function RelationView({ area, cat, fixedArea }) {
           <button className="btn sm" onClick={() => setStore(undoImport)}>되돌리기</button></p>}
         {showImport && <ContactImport people={people} setStore={setStore} now={now} onClose={() => setShowImport(false)} />}
         <div className="rv-countbar"><span className="muted rv-count">{matched.length}명{matched.length > shown.length ? ` 중 ${shown.length}명 표시` : ''}</span>
+          <span className="rv-sort" role="group" aria-label="정렬">
+            <select value={sort.key} onChange={e => setSort({ key: e.target.value })} aria-label="정렬 기준">{SORTS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
+            <span className="rv-dir">{[['asc', '오름차순 ↑'], ['desc', '내림차순 ↓']].map(([k, n]) => <button key={k} type="button" aria-pressed={sort.dir === k} onClick={() => setSort({ dir: k })}>{n}</button>)}</span>
+          </span>
           {matched.length > 0 && <button className="btn sm" onClick={() => setBulk(v => !v)} aria-expanded={bulk}>영역 한꺼번에 설정</button>}</div>
         {bulk && matched.length > 0 && <div className="rv-bulk"><span>지금 보이는 <b>{matched.length}명</b>을</span>
           {AREA_KEYS.map(([k, n]) => <span key={k} className="rv-bulk-a"><b>{n}</b><button className="btn sm" onClick={() => bulkSet(k, true)}>넣기</button><button className="btn sm" onClick={() => bulkSet(k, false)}>빼기</button></span>)}
@@ -248,7 +276,7 @@ export default function RelationView({ area, cat, fixedArea }) {
 
 /* 등록한 사람 팝업: 관계 카테고리별 사람 · 카테고리 이름 바꾸기 · 추가 · 삭제 / 영역 · 회사별
    카테고리 목록은 store.peopleGroups (CardScan.groupsOf) */
-function PeopleGroups({ people, setPeople, groups, setStore, companies, noArea, openPerson, showList }) {
+function PeopleGroups({ sort, today, people, setPeople, groups, setStore, companies, noArea, openPerson, showList }) {
   const [tab, setTab] = useState('groups');
   const [sel, setSel] = useState(() => groups.find(g => people.some(p => p.group === g)) || groups[0]);
   const [edit, setEdit] = useState(false);
@@ -283,7 +311,7 @@ function PeopleGroups({ people, setPeople, groups, setStore, companies, noArea, 
     setGroups(gs => [...gs, n]); setNewG(''); setSel(n);
   };
   const ql = q.trim().toLowerCase();
-  const list = people.filter(p => p.group === sel && (!ql || [p.name, p.company, p.title, p.phone, p.dept].join(' ').toLowerCase().includes(ql)));
+  const list = sortPeople(people.filter(p => p.group === sel && (!ql || [p.name, p.company, p.title, p.phone, p.dept].join(' ').toLowerCase().includes(ql))), sort, people, groups, today);
   return (
     <>
       <div className="fv-tabs pg-tabs" role="tablist">

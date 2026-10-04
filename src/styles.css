@@ -1838,3 +1838,10 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .an-form .an-date input[type=date] { flex: 1 1 180px; }
 .an-form .an-date label { flex-direction: row; align-items: center; gap: 4px; color: var(--ink2); }
 .pg-edit .tl-del { flex: none; }
+.rv-sort { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.rv-sort select { width: auto; padding: 4px 8px; font-size: 13px; }
+.rv-dir { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.rv-dir button { border: 0; background: var(--card); color: var(--ink2); padding: 5px 10px; font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.rv-dir button + button { border-left: 1px solid var(--line); }
+.rv-dir button[aria-pressed="true"] { background: var(--ink); color: var(--card); font-weight: 600; }
+@media (max-width: 700px) { .rv-sort { margin-left: 0; width: 100%; } .rv-sort select { flex: 1; } }
