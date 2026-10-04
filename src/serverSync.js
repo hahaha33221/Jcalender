@@ -110,6 +110,7 @@ export function useServerSync(store, setStore, blank) {
       if (me.user?.name && me.user.name !== c.name) setConf({ name: me.user.name });
       if ((me.user?.role || '') !== (c.role || '')) setConf({ role: me.user?.role || '' });   // 회원 권한 (관리자가 바꾸면 반영)
       if ((me.user?.areas || '') !== (c.areas || '')) setConf({ areas: me.user?.areas || '' }); // 볼 수 있는 영역 (관리자가 회원 관리에서 체크)
+      if (JSON.stringify(me.user?.screen ?? null) !== JSON.stringify(c.screen ?? null)) setConf({ screen: me.user?.screen ?? null });   // 회원 화면 (검수 완료 카테고리만)
       const sv = me.snapshot?.version || 0, mine = c.version || 0;
       const mineOwner = c.owner === c.email, otherOwner = c.owner && c.owner !== c.email;   // '-'(비어 있음) 도 "다른 사람"으로 본다
       if (!sv) {
@@ -154,7 +155,7 @@ export function useServerSync(store, setStore, blank) {
       const c = confRef.current;
       const same = c.url === base && c.email === r.user.email;
       if (r.created) { replaceStore(blank()); }                  // 새 사용자는 빈 데이터로 시작 (이 기기에 있던 데이터는 올리지 않음)
-      setConf({ url: base, token: r.token, email: r.user.email, name: r.user.name, role: r.user.role || '', areas: r.user.areas || '', guest: false,
+      setConf({ url: base, token: r.token, email: r.user.email, name: r.user.name, role: r.user.role || '', areas: r.user.areas || '', screen: r.user.screen ?? null, guest: false,
         ...(same ? {} : { version: 0, dirty: false, lastSync: null }), ...(r.created ? { owner: r.user.email } : {}) });
       say(r.created ? `${r.user.name}님, 가입을 환영합니다` : `${r.user.name || r.user.email}님으로 로그인했습니다`);
       return true;

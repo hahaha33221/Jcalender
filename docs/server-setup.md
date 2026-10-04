@@ -138,3 +138,9 @@
 - 다른 회원을 관리자로 만들 수 없음 (관리자 계정을 바꾸려면 `/etc/jcalender.env` 의 `OWNER_EMAILS` 를 고치고 `systemctl restart jcal-api`)
 - 볼 수 있는 영역: 회원 관리 표에서 회원마다 개인 · 사업 · 근로를 체크 (하나 이상). 체크를 푼 영역은 그 회원의 메뉴 · 체크리스트 · 대시보드에서 빠지고 데이터는 그대로 (`users.areas`, 004)
 - DB: `db/migrations/003_user_roles.sql` (users.role), `004_user_areas.sql` (users.areas). `bash server/deploy/update.sh` 가 자동으로 적용
+
+## 회원 화면 키 (2026-10-04, 서버 1.4.1)
+
+- 회원 관리 › 회원 화면: 켜면 회원에게는 관리자가 "검수 완료로 표시"한 기본 카테고리만 보인다 (메뉴 · 영역 화면 · 체크리스트 · 추천받기). 회원이 직접 만든 카테고리는 그대로 보인다
+- 관리자 계정에는 적용되지 않는다. 검수 표시를 바꾸면 서버 목록이 자동으로 바뀌고, 회원 화면은 회원이 앱을 새로 열거나 5분 안에 반영된다
+- 서버: `server_settings.member_screen` = `{ on, cats }`, `GET/POST /api/admin/screen`

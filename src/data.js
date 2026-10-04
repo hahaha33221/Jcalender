@@ -232,14 +232,21 @@ export const areaEntries = keep => Object.entries(AREAS).filter(([k]) => ALLOWED
 let catSig = '', rowsVer = 0;
 export const rowsVersion = () => rowsVer;
 export const BASE_ROWS = () => ALL_ROWS.filter(r => !HIDDEN_CATS.has(`${r.a}|${r.cat}`));
-export function applyCategories(cats, cl, areas = 'PBW') {
+/** 지금 보이는 카테고리인지 (회원 화면 · 영역 권한 · 숨김 반영) */
+export const catShown = (a, cat) => CATS.some(c => c.a === a && c.cat === cat);
+let BUILTIN = null;
+/** 넣을 수 있는 카테고리인지: 기본 카테고리면 지금 보여야 하고, 직접 만든 이름이면 늘 됨 */
+export const catUsable = (a, cat) => { BUILTIN ||= new Set(ALL_ROWS.map(r => `${r.a}|${r.cat}`)); return !BUILTIN.has(`${a}|${cat}`) || catShown(a, cat); };
+/** only: 회원 화면이 켜졌을 때 보이는 기본 카테고리 키 Set (관리자가 검수 완료한 것) — 회원이 직접 만든 카테고리는 늘 보임 */
+export function applyCategories(cats, cl, areas = 'PBW', only = null) {
   const hide = new Set((cats || []).filter(c => c.hidden).map(c => c.key));
   const C = cl || {};
-  const sig = JSON.stringify([[...hide].sort(), C.base || '', C.hide || [], C.edits || {}, C.custom || [], areas]);
+  const sig = JSON.stringify([[...hide].sort(), C.base || '', C.hide || [], C.edits || {}, C.custom || [], areas, only ? [...only].sort() : null]);
   if (sig === catSig) return;
   catSig = sig; rowsVer++; ALLOWED = areas;
   const off = new Set(C.hide || []), edits = C.edits || {};
-  const shown = k => !HIDDEN_CATS.has(k) && !hide.has(k) && areas.includes(k[0]);   // 볼 수 없는 영역(회원 관리에서 막은 영역)은 뺀다
+  BUILTIN ||= new Set(ALL_ROWS.map(r => `${r.a}|${r.cat}`));
+  const shown = k => !HIDDEN_CATS.has(k) && !hide.has(k) && areas.includes(k[0]) && (!only || !BUILTIN.has(k) || only.has(k));   // 볼 수 없는 영역 · 회원 화면에서 뺀 기본 카테고리는 숨김
   ROWS.length = 0; CATS.length = 0;
   const seen = new Set(), addCat = (a, cat) => { const k = `${a}|${cat}`; if (!seen.has(k) && shown(k)) { seen.add(k); CATS.push({ a, cat }); } };
   ALL_ROWS.forEach(r => {

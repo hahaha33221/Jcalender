@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { AREAS, BASE_ROWS, CYCLES, areaEntries } from './data.js';
+import { AREAS, BASE_ROWS, CYCLES, areaEntries, catShown, catUsable } from './data.js';
 import { areaVar, useCtx } from './shared.jsx';
 
 /* 체크리스트 온보딩: 클릭만으로 추천받아 만들기
@@ -42,8 +42,8 @@ const key = (a, cat, action) => `${a}|${cat}|${action}`;
 export function recommend(topicIds, rhythm) {
   const R = RHYTHM[rhythm] || RHYTHM.basic, base = BASE_ROWS();
   return TOPICS.filter(t => topicIds.includes(t.id)).map(t => {
-    const ex = t.extras.filter(x => R.cycles.includes(x.c)).map(x => ({ k: `x:${t.id}:${x.action}`, a: t.a, c: x.c, cat: x.cat, action: x.action, detail: x.detail, extra: x }));
-    const rows = base.filter(r => r.a === t.a && t.cats.includes(r.cat) && R.cycles.includes(r.c))
+    const ex = t.extras.filter(x => R.cycles.includes(x.c) && catUsable(t.a, x.cat)).map(x => ({ k: `x:${t.id}:${x.action}`, a: t.a, c: x.c, cat: x.cat, action: x.action, detail: x.detail, extra: x }));
+    const rows = base.filter(r => r.a === t.a && t.cats.includes(r.cat) && catShown(r.a, r.cat) && R.cycles.includes(r.c))   // 지금 보이는 카테고리만 (회원 화면)
       .sort((x, y) => ORDER[x.c] - ORDER[y.c]).map(r => ({ k: r.id, a: r.a, c: r.c, cat: r.cat, action: r.action.replace(' (제안)', ''), detail: r.detail, row: r }));
     return { topic: t, items: [...ex, ...rows].slice(0, Math.max(R.max, ex.length)) };
   }).filter(g => g.items.length);
@@ -103,7 +103,7 @@ export default function ChecklistOnboard({ onDone, onCancel, onDirect }) {
         {areaEntries().map(([a, A]) => (
           <div key={a} className="cob-area" style={{ '--ac': areaVar(a) }}>
             <h3><i className="dot" />{A.n}</h3>
-            <div className="cob-cards">{TOPICS.filter(t => t.a === a).map(t => (
+            <div className="cob-cards">{TOPICS.filter(t => t.a === a && (t.extras.some(x => catUsable(t.a, x.cat)) || t.cats.some(c => catShown(t.a, c)))).map(t => (
               <button key={t.id} type="button" className={`cob-card ${topics.includes(t.id) ? 'on' : ''}`} aria-pressed={topics.includes(t.id)} onClick={() => toggleTopic(t.id)}>
                 <b>{t.label}</b><small>{t.desc}</small><span className="cob-tick" aria-hidden="true">{topics.includes(t.id) ? '✓' : '+'}</span></button>))}</div>
           </div>))}

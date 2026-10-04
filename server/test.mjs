@@ -165,6 +165,15 @@ try {
   check('로그인 · me 에 영역이 보임', T2d.user?.areas === 'PW' && (await call('GET', '/api/me', null, T2d.token)).json.user.areas === 'PW');
   check('영역 0개는 400', (await call('POST', '/api/admin/users', { email: E2, areas: '' }, TA.token)).status === 400);
   check('관리자 계정 영역은 못 바꿈', (await call('POST', '/api/admin/users', { email: OWNER, areas: 'P' }, TA.token)).status === 400);
+  check('회원 화면: 처음엔 꺼짐', (await call('GET', '/api/admin/screen', null, TA.token)).json.on === false);
+  check('일반 회원은 회원 화면 설정 403', (await call('POST', '/api/admin/screen', { on: true }, T)).status === 403);
+  const scr = await call('POST', '/api/admin/screen', { on: true, cats: ['P|건강 관리', 'B|콘텐츠 관리', 'B|콘텐츠 관리', 'X|잘못', 'P|' + 'x'.repeat(80)] }, TA.token);
+  check('회원 화면 켜기 · 카테고리 정리 저장', scr.json.on === true && scr.json.cats.join() === 'P|건강 관리,B|콘텐츠 관리', JSON.stringify(scr.json));
+  const meScr = (await call('POST', '/api/login', { email: E2, password: 'new-pass-999' })).json;
+  check('회원 로그인 · me 에 회원 화면 설정', meScr.user?.screen?.on === true && (await call('GET', '/api/me', null, meScr.token)).json.user.screen.cats.length === 2);
+  check('관리자 계정에는 회원 화면 적용 안 함', (await call('GET', '/api/me', null, TA.token)).json.user.screen === null);
+  await call('POST', '/api/admin/screen', { on: false }, TA.token);
+  check('끄기 (카테고리 목록은 유지)', (await call('GET', '/api/admin/screen', null, TA.token)).json.cats.length === 2);
   check('일반 회원은 가입 설정 403', (await call('GET', '/api/admin/signup', null, T)).status === 403);
   const sg = await call('POST', '/api/admin/signup', { mode: 'code', newCode: true }, TA.token);
   check('새 초대 코드', sg.status === 200 && sg.json.mode === 'code' && sg.json.code && sg.json.code !== 'TEST-CODE');

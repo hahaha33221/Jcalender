@@ -110,7 +110,10 @@ export default function App() {
   const sync = useServerSync(store, setStore, blankStore);   // 로그인 · VPS 서버 동기화 (설정 › 서버 연결)
   setRules(store.rules);                           // 도래 규칙을 저장된 설정으로 맞춘다 (렌더 전에)
   const areasAllowed = !sync.connected || sync.conf.role === 'admin' || ADMIN_EMAILS.includes(String(sync.conf.email || '').trim().toLowerCase()) ? 'PBW' : (sync.conf.areas || 'PBW');   // 회원별로 볼 수 있는 영역
-  applyCategories(store.categories, store.checklist, areasAllowed);   // 카테고리 표에서 숨긴 카테고리 · 사용자 체크리스트(추가 · 수정 · 뺀 항목)를 반영
+  const adminNow = sync.conf.role === 'admin' || ADMIN_EMAILS.includes(String(sync.conf.email || '').trim().toLowerCase());
+  const screenKey = sync.connected && !adminNow && sync.conf.screen?.on ? JSON.stringify(sync.conf.screen.cats || []) : '';
+  const screenOnly = useMemo(() => (screenKey ? new Set(JSON.parse(screenKey)) : null), [screenKey]);   // 회원 화면: 관리자가 검수 완료한 카테고리만
+  applyCategories(store.categories, store.checklist, areasAllowed, screenOnly);   // 카테고리 표에서 숨긴 카테고리 · 사용자 체크리스트(추가 · 수정 · 뺀 항목)를 반영
   setUserNoGoal((store.categories || []).filter(c => c.hasGoal === false).map(c => c.key));
   const [route, setRoute] = useState(readHash);    // 주소 #/페이지/카테고리 와 연동 (브라우저 뒤로가기 지원)
   const { page, cat } = route;
@@ -216,6 +219,17 @@ export default function App() {
   const openCat = (a, c) => nav(a, c);
 
   const isAdmin = !!sync.connected && (sync.conf.role === 'admin' || ADMIN_EMAILS.includes(String(sync.conf.email || '').trim().toLowerCase()));   // 서버가 관리자 계정으로 확인(role admin) 또는 관리자 이메일
+  // 관리자: 검수 완료 표시가 바뀌면 회원 화면(보이는 카테고리 목록)에 바로 반영 (서버 1.4.1 이상)
+  const reviewedKey = isAdmin && sync.connected ? Object.keys(store.reviewed || {}).sort().join('\n') : null;
+  const pushedReviewed = useRef(null);
+  useEffect(() => {
+    if (reviewedKey === null || reviewedKey === pushedReviewed.current) return undefined;
+    const t = setTimeout(() => {
+      sync.request('/api/admin/screen', { method: 'POST', body: { cats: reviewedKey ? reviewedKey.split('\n') : [] } })
+        .then(() => { pushedReviewed.current = reviewedKey; }).catch(() => { /* 서버가 아직 옛 버전이면 무시 */ });
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [reviewedKey]);
   const ctx = { isAdmin, areasAllowed, store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go, openCat, sync };
 
   // 메뉴 접기 (이 기기에만 기억)
@@ -227,7 +241,7 @@ export default function App() {
     ...(isAdmin ? [{ id: 'members', label: '회원 관리', icon: 'users' }, { id: 'progress', label: '진행 현황', icon: 'progress' }] : []),   // 관리자만
     { id: 'check', label: '체크리스트', icon: 'check' },
     { sec: '상세 내용' },
-    ...['P', 'W', 'B'].filter(a => areasAllowed.includes(a)).map(a => ({ id: a, label: AREAS[a].n, color: areaVar(a) })),
+    ...['P', 'W', 'B'].filter(a => areasAllowed.includes(a) && (!screenOnly || CATS.some(c => c.a === a))).map(a => ({ id: a, label: AREAS[a].n, color: areaVar(a) })),
     { sec: '관리' },
     { id: 'settings', label: '설정', icon: 'settings' },
   ];

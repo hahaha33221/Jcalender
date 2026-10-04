@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AREAS } from './data.js';
+import { AREAS, BASE_ROWS } from './data.js';
 import { useCtx } from './shared.jsx';
 
 /* 회원 관리 (관리자 계정만 — 서버 OWNER_EMAILS, 기본 koreamate2026@gmail.com)
@@ -15,8 +15,9 @@ const dt = d => (d ? new Date(d).toLocaleString('ko-KR', { year: '2-digit', mont
 const kb = n => (n == null ? '-' : n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`);
 
 export default function Members() {
-  const { sync } = useCtx();
+  const { sync, store, openCat } = useCtx();
   const [users, setUsers] = useState(null);
+  const [screen, setScreen] = useState(null);                // 회원 화면 { on, cats }
   const [signup, setSignup] = useState(null);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -30,6 +31,7 @@ export default function Members() {
     try {
       const [u, s] = await Promise.all([sync.request('/api/admin/users'), sync.request('/api/admin/signup')]);
       setUsers(u.users); setSignup(s);
+      sync.request('/api/admin/screen').then(setScreen).catch(() => setScreen(false));   // 서버 1.4.1 이상
     } catch (e) {
       say(e.status === 404 ? '서버가 아직 회원 관리를 지원하지 않습니다. VPS 서버를 업데이트하세요 (bash server/deploy/update.sh)' : e.message, true);
     } finally { setBusy(false); }
@@ -54,6 +56,13 @@ export default function Members() {
     try { const r = await sync.request('/api/admin/users', { method: 'POST', body: { email: u.email, logout: true } }); say(`${u.name || u.email}님의 기기 ${r.loggedOut}대를 로그아웃했습니다`); await load(); }
     catch (e) { say(e.message, true); setBusy(false); }
   };
+  const reviewed = Object.keys(store.reviewed || {});
+  const setScreenOn = async on => {
+    setBusy(true);
+    try { setScreen(await sync.request('/api/admin/screen', { method: 'POST', body: { on, cats: reviewed } })); say(on ? `회원 화면을 켰습니다. 회원에게는 검수 완료한 카테고리 ${reviewed.length}개만 보입니다` : '회원 화면을 껐습니다. 회원에게 모든 카테고리가 보입니다'); }
+    catch (e) { say(e.message, true); }
+    finally { setBusy(false); }
+  };
   const setMode = async (body, text) => {
     setBusy(true);
     try { setSignup(await sync.request('/api/admin/signup', { method: 'POST', body })); say(text); }
@@ -76,6 +85,8 @@ export default function Members() {
         <div className="hv-stat ex"><span className="muted">일반</span><b>{users ? `${count('member')}명` : '-'}</b><span className="hv-sub">{ROLE_DESC.member}</span></div>
         <div className="hv-stat ex"><span className="muted">정지</span><b>{users ? `${count('suspended')}명` : '-'}</b><span className="hv-sub">{ROLE_DESC.suspended}</span></div>
       </div>
+
+      <ScreenPanel screen={screen} reviewed={reviewed} busy={busy} onToggle={setScreenOn} openCat={openCat} />
 
       <section className="panel">
         <div className="csum-h"><h2>회원가입 방식</h2>{signup && <span className="muted">지금: {SIGNUP[signup.mode]}</span>}</div>
@@ -123,5 +134,29 @@ export default function Members() {
         <p className="note">관리자: 이 계정 하나뿐 (회원 관리 · 진행 현황) · 일반: 자기 데이터만 · 정지: 로그인할 수 없음(데이터는 지우지 않음). 볼 수 있는 영역: 체크를 푼 영역(개인 · 사업 · 근로)은 그 회원의 메뉴 · 체크리스트 · 대시보드에서 빠집니다(데이터는 그대로). 회원 삭제 · 비밀번호 초기화는 VPS 에서 jcal-admin 으로 합니다.</p>
       </section>
     </>
+  );
+}
+
+/** 회원 화면 키: 켜면 회원에게는 관리자가 "검수 완료로 표시"한 카테고리만 보인다 (회원이 직접 만든 카테고리는 그대로) */
+function ScreenPanel({ screen, reviewed, busy, onToggle, openCat }) {
+  const all = [];
+  BASE_ROWS().forEach(r => { const k = `${r.a}|${r.cat}`; if (!all.some(x => x.k === k)) all.push({ k, a: r.a, cat: r.cat }); });
+  const on = !!screen?.on, set = new Set(reviewed);
+  const synced = screen && JSON.stringify([...screen.cats].sort()) === JSON.stringify([...reviewed].sort());
+  return (
+    <section className="panel mb-screen">
+      <div className="csum-h"><h2>회원 화면</h2><span className="muted">관리자 계정에는 늘 전부 보입니다</span></div>
+      {screen === false ? <p className="banner">서버를 업데이트하면 쓸 수 있습니다 (bash server/deploy/update.sh)</p> : <>
+        <label className={`mb-switch ${on ? 'on' : ''}`}>
+          <input type="checkbox" checked={on} disabled={busy || !screen} onChange={e => onToggle(e.target.checked)} />
+          <span className="mb-knob" aria-hidden="true" />
+          <span><b>회원에게는 검수 완료한 카테고리만 보이기</b><small className="muted">{on ? `켜짐 · 회원 화면에 ${reviewed.length}개 카테고리만 보입니다` : '꺼짐 · 회원에게 모든 카테고리가 보입니다'}</small></span>
+        </label>
+        <div className="mb-cats">{['P', 'W', 'B'].map(a => (
+          <div key={a}><h3>{AREAS[a].n}</h3><ul>{all.filter(x => x.a === a).map(x => (
+            <li key={x.k} className={set.has(x.k) ? 'on' : ''}><button className="linkish" onClick={() => openCat(x.a, x.cat)} title="카테고리에 들어가 검수 완료로 표시 · 취소">{x.cat}</button><span>{set.has(x.k) ? '검수 완료' : '미완료'}</span></li>))}</ul></div>))}</div>
+        <p className="note">카테고리에 들어가 오른쪽 위 "검수 완료로 표시"를 누르면 여기 목록과 회원 화면에 바로 반영됩니다{screen && !synced ? ' (반영 중…)' : ''}. 회원이 직접 만든 체크리스트 카테고리는 그 회원에게 늘 보입니다. 회원 화면은 회원이 앱을 새로 열거나 5분 안에 바뀝니다.</p>
+      </>}
+    </section>
   );
 }

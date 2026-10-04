@@ -15,6 +15,7 @@
    POST /api/admin/users  {email, role}             권한 바꾸기 (member 일반 · suspended 정지, 정지하면 그 계정의 모든 기기 로그아웃)
    POST /api/admin/users  {email, areas: 'PBW'}     볼 수 있는 영역 (P 개인 · B 사업 · W 근로, 하나 이상)
    POST /api/admin/users  {email, logout: true}     그 계정의 모든 기기 로그아웃
+   GET  /api/admin/screen · POST {on?, cats?}       회원 화면: 켜면 회원에게는 cats(관리자가 검수 완료한 카테고리)만 보임
    GET  /api/admin/signup                           → { mode, code }
    POST /api/admin/signup {mode, newCode}           회원가입 방식 (code · open · closed) · 새 초대 코드
    숏폼 제작 (관리자 계정만) — server/shorts.mjs: /api/shorts, /api/shorts/source · item · generate · script · settings
@@ -28,12 +29,18 @@ import { storeToSql } from '../db/convert.mjs';
 import { shortsRoutes, startShortsCron } from './shorts.mjs';
 import { assetRoutes, assetData, RAW } from './shortsAssets.mjs';
 
-const VERSION = '1.4.0';
+const VERSION = '1.4.1';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
 const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐
 const AREA_ORDER = 'PBW';
 const areasOf = u => (isOwner(u.email) ? AREA_ORDER : [...AREA_ORDER].filter(a => String(u.areas ?? AREA_ORDER).includes(a)).join('') || AREA_ORDER);
+/** 회원 화면 설정 (server_settings.member_screen = { on, cats: ['영역|카테고리'] }) — 관리자 계정에는 적용 안 함 */
+async function memberScreen() {
+  const { rows } = await pool.query("SELECT value FROM jcal.server_settings WHERE key = 'member_screen'");
+  try { const v = JSON.parse(rows[0]?.value || '{}'); return { on: !!v.on, cats: Array.isArray(v.cats) ? v.cats.filter(c => typeof c === 'string').slice(0, 300) : [] }; } catch { return { on: false, cats: [] }; }
+}
+const screenFor = async u => (roleOf(u) === 'admin' ? null : memberScreen());
 const SUSPENDED = '이 계정은 사용이 정지되었습니다. 관리자에게 문의하세요';
 
 /* ── 공통 ── */
@@ -175,7 +182,7 @@ const routes = {
     fails.delete(key);
     if (roleOf(u) === 'suspended') throw new HttpError(403, SUSPENDED);
     const ses = await tx(c => newSession(c, req, u.id, body.device));
-    return { token: ses.token, user: { email: u.email, name: u.name, role: roleOf(u), areas: areasOf(u) }, expiresAt: ses.expiresAt };
+    return { token: ses.token, user: { email: u.email, name: u.name, role: roleOf(u), areas: areasOf(u), screen: await screenFor(u) }, expiresAt: ses.expiresAt };
   },
 
   'POST /api/logout': async req => {
@@ -188,7 +195,7 @@ const routes = {
     const u = await authUser(req);
     const { rows } = await pool.query('SELECT version, updated_at, device, size_bytes FROM jcal.store_snapshots WHERE user_id = $1', [u.id]);
     const s = rows[0];
-    return { user: { email: u.email, name: u.name, role: u.role, areas: u.areas }, snapshot: s ? { version: Number(s.version), updatedAt: s.updated_at, device: s.device, size: s.size_bytes } : null };
+    return { user: { email: u.email, name: u.name, role: u.role, areas: u.areas, screen: await screenFor(u) }, snapshot: s ? { version: Number(s.version), updatedAt: s.updated_at, device: s.device, size: s.size_bytes } : null };
   },
 
   /* ── 회원 관리 (관리자) ── */
@@ -228,6 +235,16 @@ const routes = {
       if (role === 'suspended') await c.query('DELETE FROM jcal.sessions WHERE user_id = $1', [t.id]);
     });
     return { ok: true, email: t.email, role };
+  },
+
+  'GET /api/admin/screen': async req => { await adminUser(req); return memberScreen(); },
+
+  'POST /api/admin/screen': async (req, body) => {
+    await adminUser(req);
+    const cur = await memberScreen();
+    const next = { on: body.on !== undefined ? !!body.on : cur.on, cats: Array.isArray(body.cats) ? [...new Set(body.cats.map(String).filter(c => /^[PBW]\|.{1,60}$/.test(c)))].slice(0, 300) : cur.cats };
+    await setSetting('member_screen', JSON.stringify(next));
+    return next;
   },
 
   'GET /api/admin/signup': async req => { await adminUser(req); return signupSettings(); },
