@@ -197,7 +197,7 @@ function Settings({ d, act, busy }) {
       <section className="panel">
         <div className="csum-h"><h2>AI 연결</h2><span className={`sh-ai ${d.ai.ready ? 'ok' : ''}`}>{d.ai.ready ? `준비됨 · ${d.ai.model}` : '키 없음'}</span></div>
         {d.ai.ready
-          ? <p className="note">스크립트는 Anthropic Claude 로 만듭니다. 비용은 서버에 넣은 API 키로 나갑니다 (스크립트 1번에 약 수십 원).</p>
+          ? <p className="note">스크립트는 Anthropic Claude 로 만듭니다. 비용은 서버에 넣은 API 키로 나갑니다 (스크립트 만들기 1번에 약 100원 안팎, 글 길이 · 후보 수에 따라 달라짐).</p>
           : <p className="note">VPS 터미널에서 <code>jcal-admin ai-key</code> 를 실행하고 Anthropic API 키(sk-ant-…)를 붙여 넣으세요. 입력한 글자는 화면에 보이지 않고, 저장 뒤 서버가 다시 시작됩니다. 키는 채팅이나 GitHub 에 올리지 마세요.</p>}
       </section>
     </>
