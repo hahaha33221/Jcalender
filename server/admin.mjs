@@ -7,7 +7,7 @@
    node admin.mjs rename <이메일> <이름>        표시 이름 바꾸기
    node admin.mjs delete-user <이메일>          사용자와 그 사용자의 모든 데이터 삭제
    node admin.mjs role <이메일> member|suspended   권한 바꾸기 (일반 · 정지). 관리자는 OWNER_EMAILS 계정뿐
-   node admin.mjs ai-key                        숏폼 AI(Claude) 키 넣기 · 바꾸기 (입력 글자는 안 보임, 저장 뒤 서버 재시작)
+   node admin.mjs ai-key                        숏폼 AI 키 넣기 · 바꾸기 (ChatGPT sk-… / Claude sk-ant-…, 입력 글자는 안 보임, 저장 뒤 서버 재시작)
    node admin.mjs signup                        회원가입 방식 · 초대 코드 보기
    node admin.mjs signup code                   초대 코드 방식 + 새 초대 코드 만들기 (예전 코드는 못 씀)
    node admin.mjs signup open | closed          누구나 가입 / 가입 막기
@@ -67,13 +67,18 @@ try {
     if (name === 'suspended') await pool.query('DELETE FROM jcal.sessions WHERE user_id = $1', [r.rows[0].id]);
     console.log(`권한을 바꿨습니다: ${email} → ${{ member: '일반', suspended: '정지' }[name]}`);
   } else if (cmd === 'ai-key') {
+    // OpenAI(sk-… · sk-proj-…) 또는 Anthropic(sk-ant-…) 키를 넣으면 그 회사 AI 로 바꾼다. 빈 Enter = 키 지우기
     const file = process.env.JCAL_ENV_FILE || '/etc/jcalender.env';
-    const key = (await askHidden('Anthropic API 키 (sk-ant-…, 지우려면 그냥 Enter): ')).trim();
-    if (key && !/^sk-ant-[\w-]{20,}$/.test(key)) throw new Error('Anthropic API 키 형식이 아닙니다 (sk-ant- 로 시작)');
-    const lines = fs.readFileSync(file, 'utf8').split('\n').filter(l => !/^ANTHROPIC_API_KEY=/.test(l) && l !== '');
-    if (key) lines.push(`ANTHROPIC_API_KEY=${key}`);
+    const key = (await askHidden('ChatGPT(OpenAI) API 키 (sk-…, 지우려면 그냥 Enter): ')).trim();
+    const kind = !key ? '' : /^sk-ant-[\w-]{20,}$/.test(key) ? 'anthropic' : /^sk-[\w-]{20,}$/.test(key) ? 'openai' : null;
+    if (kind === null) throw new Error('API 키 형식이 아닙니다 (OpenAI 키는 sk- 로 시작)');
+    const NAME = { openai: 'OPENAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY' };
+    const drop = kind ? [NAME[kind], 'AI_PROVIDER'] : ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'AI_PROVIDER'];
+    const lines = fs.readFileSync(file, 'utf8').split('\n').filter(l => l !== '' && !drop.some(k => l.startsWith(`${k}=`)));
+    if (kind) lines.push(`${NAME[kind]}=${key}`, `AI_PROVIDER=${kind}`);
     fs.writeFileSync(file, `${lines.join('\n')}\n`, { mode: 0o600 }); fs.chmodSync(file, 0o600);
-    try { execSync('systemctl restart jcal-api', { stdio: 'ignore' }); console.log(key ? 'AI 키를 저장하고 서버를 다시 시작했습니다' : 'AI 키를 지우고 서버를 다시 시작했습니다'); }
+    const what = kind === 'openai' ? 'ChatGPT(OpenAI) 키' : kind === 'anthropic' ? 'Claude(Anthropic) 키' : 'AI 키';
+    try { execSync('systemctl restart jcal-api', { stdio: 'ignore' }); console.log(kind ? `${what}를 저장하고 서버를 다시 시작했습니다` : 'AI 키를 지우고 서버를 다시 시작했습니다'); }
     catch { console.log('저장했습니다. 서버 재시작: systemctl restart jcal-api'); }
   } else if (cmd === 'signup') {
     const arg = emailRaw;                                         // code | open | closed | (없음)

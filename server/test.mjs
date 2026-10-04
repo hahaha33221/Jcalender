@@ -28,7 +28,7 @@ const call = async (method, path, body, token, origin = ORIGIN) => {
 };
 
 await pool.query(`INSERT INTO jcal.users (email, name, password_hash) VALUES ($1, '테스트', $2)`, [EMAIL, await hashPassword(PW)]);
-// 숏폼 시험용: 가짜 게시판(RSS · 글 페이지) + 가짜 Claude API (실제 AI 호출 없음)
+// 숏폼 시험용: 가짜 게시판(RSS · 글 페이지) + 가짜 OpenAI API (실제 AI 호출 없음)
 const FAKE = 18788, F = `http://127.0.0.1:${FAKE}`;
 const aiCalls = [];
 const eucKr = Buffer.from('3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d226575632d6b72223f3e3c7273733e3c6368616e6e656c3e3c6974656d3e3c7469746c653ec7d1b1dbc1a6b8f13c2f7469746c653e3c6c696e6b3e687474703a2f2f3132372e302e302e313a31383738382f706f73742f6b723c2f6c696e6b3e3c6465736372697074696f6e3ebabbb9ae3c2f6465736372697074696f6e3e3c2f6974656d3e3c2f6368616e6e656c3e3c2f7273733e', 'hex');   // EUC-KR: 한글제목 / 본문
@@ -40,19 +40,19 @@ const fake = http.createServer((req, res) => {
   if (req.url === '/board') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end(`<html><head><link rel="alternate" type="application/rss+xml" href="/feed.xml"></head><body>게시판</body></html>`); }
   if (req.url === '/nofeed') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end('<html><body>RSS 없음</body></html>'); }
   if (req.url.startsWith('/post/')) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(`<html><body><nav>메뉴</nav><article><h1>제목</h1><p>${'본문 내용이 아주 깁니다. '.repeat(12)}</p><script>x()</script></article></body></html>`); }
-  if (req.url.startsWith('/v1/messages')) {
+  if (req.url === '/v1/chat/completions') {
     let b = ''; req.on('data', c => { b += c; }); req.on('end', () => {
       aiCalls.push({ url: req.url, headers: req.headers, body: JSON.parse(b) });
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ id: 'msg_test', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 },
-        content: [{ type: 'text', text: JSON.stringify({ candidates: [{ title: '회사에서 생긴 반전', script: '여러분 이거 실화입니다. 어떻게 생각하세요?', hashtags: ['#회사', '썰'] }, { title: '두 번째 후보', script: '스크립트 둘', hashtags: [] }] }) }] }));
+      res.end(JSON.stringify({ id: 'chatcmpl-test', object: 'chat.completion', model: 'gpt-5-mini', choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', refusal: null,
+        content: JSON.stringify({ candidates: [{ title: '회사에서 생긴 반전', script: '여러분 이거 실화입니다. 어떻게 생각하세요?', hashtags: ['#회사', '썰'] }, { title: '두 번째 후보', script: '스크립트 둘', hashtags: [] }] }) } }] }));
     }); return;
   }
   res.writeHead(404); res.end();
 });
 await new Promise(r => fake.listen(FAKE, '127.0.0.1', r));
 const srv = spawn(process.execPath, ['index.mjs'], { env: { ...process.env, PORT: String(PORT), ALLOWED_ORIGINS: 'https://*.vercel.app', OWNER_EMAILS: OWNER,
-  SHORTS_ALLOW_PRIVATE: '1', SHORTS_CRON: '0', ANTHROPIC_API_KEY: 'test-key', ANTHROPIC_BASE_URL: F }, stdio: ['ignore', 'pipe', 'inherit'] });
+  SHORTS_ALLOW_PRIVATE: '1', SHORTS_CRON: '0', OPENAI_API_KEY: 'sk-test-key', OPENAI_BASE_URL: `${F}/v1`, ANTHROPIC_API_KEY: '', AI_PROVIDER: '' }, stdio: ['ignore', 'pipe', 'inherit'] });
 await new Promise(r => srv.stdout.once('data', r));
 
 try {
@@ -154,7 +154,7 @@ try {
   check('일반 회원은 숏폼 403', (await call('GET', '/api/shorts', null, T)).status === 403);
   const sh_T0 = TA.token;
   const sh_g0 = await call('GET', '/api/shorts', null, sh_T0);
-  check('처음: 설정 기본값 · AI 준비됨', sh_g0.status === 200 && sh_g0.json.settings.scriptChars === 350 && sh_g0.json.ai.ready === true, JSON.stringify(sh_g0.json).slice(0, 200));
+  check('처음: 설정 기본값 · AI 준비됨 (ChatGPT)', sh_g0.status === 200 && sh_g0.json.settings.scriptChars === 350 && sh_g0.json.ai.ready === true && sh_g0.json.ai.provider === 'openai' && sh_g0.json.ai.model === 'gpt-5-mini', JSON.stringify(sh_g0.json).slice(0, 200));
   const sh_add1 = await call('POST', '/api/shorts/source', { action: 'add', url: `${F}/board`, name: '시험 게시판', fullText: true }, sh_T0);
   check('게시판 페이지 주소 → RSS 찾아 등록 + 바로 수집 2개', sh_add1.status === 200 && sh_add1.json.source.feed_url === `${F}/feed.xml` && sh_add1.json.added === 2, JSON.stringify(sh_add1.json));
   check('같은 게시판 다시 등록 409', (await call('POST', '/api/shorts/source', { action: 'add', url: `${F}/feed.xml` }, sh_T0)).status === 409);
@@ -171,8 +171,10 @@ try {
   const sh_gen = await call('POST', '/api/shorts/generate', { itemId: sh_it1.id }, sh_T0);
   check('AI 스크립트 후보 2개 저장', sh_gen.status === 200 && sh_gen.json.scripts.length === 2 && sh_gen.json.scripts[0].title === '회사에서 생긴 반전' && sh_gen.json.scripts[0].hashtags === '회사 썰', JSON.stringify(sh_gen.json).slice(0, 300));
   const sh_call0 = aiCalls[0];
-  check('AI 요청: 모델 · JSON 형식 · 대체 모델 · 설정 반영', sh_call0 && sh_call0.body.model === 'claude-opus-5-5' && sh_call0.body.output_config?.format?.type === 'json_schema' && sh_call0.body.fallbacks === 'default'
-    && String(sh_call0.headers['anthropic-beta']).includes('server-side-fallback-2026-07-01') && sh_call0.body.messages[0].content.includes('약 300자') && sh_call0.body.messages[0].content.includes('100자 이내') && sh_call0.body.messages[0].content.includes('본문 내용이 아주'), JSON.stringify(sh_call0?.body).slice(0, 300));
+  check('AI 요청: ChatGPT 모델 · 키 · JSON 스키마 · 설정 반영', sh_call0 && sh_call0.body.model === 'gpt-5-mini' && sh_call0.headers.authorization === 'Bearer sk-test-key'
+    && sh_call0.body.response_format?.type === 'json_schema' && sh_call0.body.response_format.json_schema.strict === true && sh_call0.body.messages[0].role === 'system'
+    && sh_call0.body.messages[1].content.includes('약 300자') && sh_call0.body.messages[1].content.includes('100자 이내') && sh_call0.body.messages[1].content.includes('본문 내용이 아주'), JSON.stringify(sh_call0?.body).slice(0, 300));
+  check('후보에 AI 이름 저장', sh_gen.json.scripts[0].model === 'ChatGPT · gpt-5-mini');
   const [sh_s1, sh_s2] = sh_gen.json.scripts;
   const sh_order = (await call('GET', '/api/shorts', null, sh_T0)).json.scripts.map(x => x.id).join();
   check('후보 순서가 항상 같음', sh_order === `${sh_s1.id},${sh_s2.id}`);

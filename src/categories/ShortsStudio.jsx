@@ -40,7 +40,7 @@ export default function ShortsStudio() {
       <div className="sh-steps" role="tablist" aria-label="숏폼 제작 단계">
         {STEPS.map(([k, n]) => <button key={k} role="tab" aria-selected={step === k} className={step === k ? 'on' : ''} onClick={() => setStep(k)}>{n}
           {k === 'inbox' && counts.new > 0 && <b>{counts.new}</b>}{k === 'scripts' && counts.picked > 0 && <b>{counts.picked}</b>}</button>)}
-        <span className={`sh-ai ${d.ai.ready ? 'ok' : ''}`} title={d.ai.model}>{d.ai.ready ? `AI 준비됨 · ${d.ai.model}` : 'AI 키 없음 (설정 참고)'}</span>
+        <span className={`sh-ai ${d.ai.ready ? 'ok' : ''}`} title={d.ai.model}>{d.ai.ready ? `AI 준비됨 · ${d.ai.provider === 'anthropic' ? 'Claude' : 'ChatGPT'} ${d.ai.model}` : 'AI 키 없음 (설정 참고)'}</span>
       </div>
       {msg && <p className={`banner ${msg.bad ? '' : 'ok'} sh-msg`} role="status">{msg.t}<button className="linkish" onClick={() => setMsg(null)}>닫기</button></p>}
       {step === 'inbox' && <Inbox d={d} act={act} busy={busy} srcName={srcName} goScripts={() => setStep('scripts')} />}
@@ -195,10 +195,10 @@ function Settings({ d, act, busy }) {
           {dirty && <button className="btn" onClick={() => setV(d.settings)}>되돌리기</button>}</div>
       </section>
       <section className="panel">
-        <div className="csum-h"><h2>AI 연결</h2><span className={`sh-ai ${d.ai.ready ? 'ok' : ''}`}>{d.ai.ready ? `준비됨 · ${d.ai.model}` : '키 없음'}</span></div>
+        <div className="csum-h"><h2>AI 연결</h2><span className={`sh-ai ${d.ai.ready ? 'ok' : ''}`}>{d.ai.ready ? `준비됨 · ${d.ai.provider === 'anthropic' ? 'Claude' : 'ChatGPT'} ${d.ai.model}` : '키 없음'}</span></div>
         {d.ai.ready
-          ? <p className="note">스크립트는 Anthropic Claude 로 만듭니다. 비용은 서버에 넣은 API 키로 나갑니다 (스크립트 만들기 1번에 약 100원 안팎, 글 길이 · 후보 수에 따라 달라짐).</p>
-          : <p className="note">VPS 터미널에서 <code>jcal-admin ai-key</code> 를 실행하고 Anthropic API 키(sk-ant-…)를 붙여 넣으세요. 입력한 글자는 화면에 보이지 않고, 저장 뒤 서버가 다시 시작됩니다. 키는 채팅이나 GitHub 에 올리지 마세요.</p>}
+          ? <p className="note">스크립트는 {d.ai.provider === 'anthropic' ? 'Anthropic Claude' : 'OpenAI ChatGPT'}({d.ai.model})로 만듭니다. 비용은 서버에 넣은 API 키로 나갑니다 (글 길이 · 후보 수 · 모델에 따라 달라짐). 모델을 바꾸려면 VPS 의 /etc/jcalender.env 에 SHORTS_MODEL=모델이름 을 넣고 systemctl restart jcal-api 를 실행하세요.</p>
+          : <p className="note">VPS 터미널에서 <code>jcal-admin ai-key</code> 를 실행하고 ChatGPT(OpenAI) API 키(sk-…)를 붙여 넣으세요. 키는 platform.openai.com › API keys 에서 만들고, Billing 에 잔액이 있어야 합니다. 입력한 글자는 화면에 보이지 않고, 저장 뒤 서버가 다시 시작됩니다. 키는 채팅이나 GitHub 에 올리지 마세요.</p>}
       </section>
     </>
   );

@@ -24,11 +24,13 @@
 | 순서 | 할 일 | 어디서 |
 |---|---|---|
 | 1 | `cd ~/Jcalender && git pull && bash server/deploy/update.sh` | 맥 터미널 |
-| 2 | `jcal-admin ai-key` → Anthropic API 키(sk-ant-…) 붙여 넣기 (화면에 안 보임, 저장 뒤 서버 재시작) | VPS 터미널 |
-| 3 | 앱 › 사업 › 콘텐츠 관리 › 숏폼 제작 › 설정 에서 "AI 준비됨" 확인 | 앱 |
+| 2 | platform.openai.com › API keys 에서 키 만들기 (Billing 에 잔액 필요) | 브라우저 |
+| 3 | `ssh root@31.97.71.87` 접속 후 `jcal-admin ai-key` → ChatGPT(OpenAI) API 키(sk-…) 붙여 넣기 (화면에 안 보임, 저장 뒤 서버 재시작) | VPS 터미널 |
+| 4 | 앱 › 사업 › 콘텐츠 관리 › 숏폼 제작 › 설정 에서 "AI 준비됨 · ChatGPT" 확인 | 앱 |
 
 - 키는 `/etc/jcalender.env` 에만 저장된다 (update.sh 를 다시 실행해도 남음). 채팅 · GitHub 에 올리지 않는다.
-- 모델: 기본 `claude-opus-5-5` (바꾸려면 env 에 `SHORTS_MODEL=` 추가 후 `systemctl restart jcal-api`). 거절되면 Anthropic 권장 모델로 자동 재시도(fallbacks).
+- AI: 기본은 OpenAI ChatGPT, 모델 `gpt-5-mini` (바꾸려면 env 에 `SHORTS_MODEL=모델이름` 추가 후 `systemctl restart jcal-api`). JSON 스키마(structured outputs)로 받음.
+- Anthropic Claude 키(sk-ant-…)를 `jcal-admin ai-key` 로 넣으면 Claude 로 바뀜 (`AI_PROVIDER` 가 자동으로 바뀜, 기본 모델 `claude-opus-5-5`).
 
 ### 3-2. 화면 사용 순서
 
@@ -72,4 +74,4 @@
 ## 6. 기타
 
 - 서버 시험: `server/test.mjs` 의 "숏폼 제작" 항목 (가짜 게시판 · 가짜 AI 서버로 실제 비용 없이 확인)
-- API: `GET /api/shorts`, `POST /api/shorts/source · item · generate · script · settings` (server/shorts.mjs 머리말)
+- API: `GET /api/shorts`, `POST /api/shorts/source · item · generate · script · settings` (server/shorts.mjs 머리말). 시험은 가짜 OpenAI 서버로 함

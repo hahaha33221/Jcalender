@@ -7,7 +7,8 @@
    POST /api/shorts/settings {…}                                            설정 저장
    - 수집: 서버가 5분마다 확인해서 주기(기본 60분)가 지난 게시판을 읽는다. RSS 가 없는 페이지 주소는 페이지 안의 RSS 링크를 찾아 쓴다
    - 보안: http(s) 만, 내부망 주소(127.0.0.1 · 10.x · 192.168.x 등)는 읽지 않음 (리디렉션도 확인), 3MB · 15초 제한
-   - AI: Anthropic Claude (환경 변수 ANTHROPIC_API_KEY, 모델 SHORTS_MODEL 기본 claude-opus-5-5) — 키가 없으면 생성 버튼만 막힘 */
+   - AI: OpenAI ChatGPT (환경 변수 OPENAI_API_KEY, 모델 SHORTS_MODEL 기본 gpt-5-mini) 또는 Anthropic Claude (ANTHROPIC_API_KEY)
+     둘 다 있으면 AI_PROVIDER=openai | anthropic 로 고름 (없으면 OpenAI 우선). 키가 없으면 생성 버튼만 막힘 */
 import dns from 'dns/promises';
 import net from 'net';
 import Anthropic from '@anthropic-ai/sdk';
@@ -184,10 +185,15 @@ export function startShortsCron(pool, everyMs = 5 * 60 * 1000) {
 }
 
 /* ── AI 제목 · 스크립트 ── */
-const MODEL = process.env.SHORTS_MODEL || 'claude-opus-5-5';
+const env = process.env;
+export const aiProvider = () => (env.AI_PROVIDER === 'anthropic' || env.AI_PROVIDER === 'openai' ? env.AI_PROVIDER
+  : env.OPENAI_API_KEY ? 'openai' : (env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN) ? 'anthropic' : 'openai');
+export const aiModel = () => env.SHORTS_MODEL || (aiProvider() === 'openai' ? 'gpt-5-mini' : 'claude-opus-5-5');
+export const aiReady = () => (aiProvider() === 'openai' ? !!env.OPENAI_API_KEY : !!(env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN));
 let client = null;
-const ai = () => (client ||= new Anthropic());               // ANTHROPIC_API_KEY (서버 /etc/jcalender.env)
-export const aiReady = () => !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+const anthropic = () => (client ||= new Anthropic());        // ANTHROPIC_API_KEY (서버 /etc/jcalender.env)
+/** AI 오류를 화면에 보일 말로: status 는 HTTP 상태로 그대로 씀 */
+export class AiError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
 const SCHEMA = {
   type: 'object', additionalProperties: false, required: ['candidates'],
   properties: { candidates: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['title', 'script', 'hashtags'],
@@ -200,6 +206,56 @@ const SYSTEM = `당신은 한국어 숏폼(유튜브 쇼츠 · 인스타 릴스 
 - 소리 내어 읽기 좋게 짧은 문장으로 씁니다. 이모지 · 괄호 · 특수기호 · 머리말("스크립트:")은 쓰지 않습니다.
 - 마지막은 시청자에게 묻는 한 문장(댓글 유도)으로 끝냅니다.
 - 원문에 없는 사실을 지어내지 않습니다. 글이 혐오 · 개인 공격 · 성적인 내용 중심이면 그 부분은 빼고 씁니다.`;
+/** OpenAI Chat Completions + JSON 스키마(structured outputs) */
+async function askOpenAI(prompt) {
+  let r;
+  try {
+    r = await fetch(`${(env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '')}/chat/completions`, {
+      method: 'POST', signal: AbortSignal.timeout(180000),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: aiModel(), max_completion_tokens: 16000,
+        messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: prompt }],
+        response_format: { type: 'json_schema', json_schema: { name: 'shorts_scripts', strict: true, schema: SCHEMA } },
+      }),
+    });
+  } catch (e) { throw new AiError(502, e.name === 'TimeoutError' ? 'AI 응답이 너무 오래 걸립니다. 다시 시도해 주세요' : 'AI 서버에 연결하지 못했습니다'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const code = j.error?.code || j.error?.type || '';
+    console.error('[숏폼 AI · OpenAI]', r.status, code, j.error?.message);
+    if (r.status === 401) throw new AiError(503, 'OpenAI API 키가 올바르지 않습니다 (jcal-admin ai-key 로 다시 넣기)');
+    if (code === 'insufficient_quota') throw new AiError(402, 'OpenAI 크레딧(잔액)이 없습니다. platform.openai.com › Billing 에서 충전하세요');
+    if (r.status === 429) throw new AiError(429, 'OpenAI 사용량 한도에 걸렸습니다. 잠시 뒤 다시 시도하세요');
+    if (r.status === 404 || code === 'model_not_found') throw new AiError(503, `OpenAI 모델을 쓸 수 없습니다: ${aiModel()} (SHORTS_MODEL 확인)`);
+    throw new AiError(502, `AI 서버 오류 (${r.status})`);
+  }
+  const ch = j.choices?.[0] || {};
+  if (ch.message?.refusal) throw new AiError(422, 'AI 가 이 글로는 스크립트를 만들지 않았습니다. 다른 글을 골라 주세요');
+  if (ch.finish_reason === 'length') throw new AiError(502, 'AI 응답이 너무 길어 잘렸습니다. 스크립트 글자 수를 줄여 주세요');
+  return ch.message?.content || '';
+}
+/** Anthropic Claude (Messages API + JSON 스키마, 거절되면 권장 모델로 자동 재시도) */
+async function askClaude(prompt) {
+  let res;
+  try {
+    res = await anthropic().beta.messages.create({
+      model: aiModel(), max_tokens: 16000,
+      betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
+      system: SYSTEM,
+      messages: [{ role: 'user', content: prompt }],
+    });
+  } catch (e) {
+    if (e instanceof Anthropic.AuthenticationError) throw new AiError(503, 'Anthropic API 키가 올바르지 않습니다 (jcal-admin ai-key 로 다시 넣기)');
+    if (e instanceof Anthropic.RateLimitError) throw new AiError(429, 'AI 사용량 한도에 걸렸습니다. 잠시 뒤 다시 시도하세요');
+    if (e instanceof Anthropic.APIError) { console.error('[숏폼 AI · Claude]', e.status, e.message); throw new AiError(502, `AI 서버 오류 (${e.status ?? '연결'})`); }
+    throw e;
+  }
+  if (res.stop_reason === 'refusal') throw new AiError(422, 'AI 가 이 글로는 스크립트를 만들지 않았습니다. 다른 글을 골라 주세요');
+  if (res.stop_reason === 'max_tokens') throw new AiError(502, 'AI 응답이 너무 길어 잘렸습니다. 스크립트 글자 수를 줄여 주세요');
+  return res.content.filter(b => b.type === 'text').map(b => b.text).join('');
+}
 export async function generateScripts(item, settings) {
   const S = clampSettings(settings);
   const prompt = `[설정]
@@ -213,21 +269,12 @@ export async function generateScripts(item, settings) {
 제목: ${item.title}
 본문:
 ${String(item.body || '').slice(0, 12000) || '(본문 없음 — 제목만으로 씁니다)'}`;
-  const res = await ai().beta.messages.create({
-    model: MODEL, max_tokens: 16000,
-    betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',   // 거절되면 Anthropic 권장 모델로 자동 재시도
-    output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
-    system: SYSTEM,
-    messages: [{ role: 'user', content: prompt }],
-  });
-  if (res.stop_reason === 'refusal') throw Object.assign(new Error('AI 가 이 글로는 스크립트를 만들지 않았습니다. 다른 글을 골라 주세요'), { status: 422 });
-  if (res.stop_reason === 'max_tokens') throw new Error('AI 응답이 너무 길어 잘렸습니다. 스크립트 글자 수를 줄여 주세요');
-  const text = res.content.filter(b => b.type === 'text').map(b => b.text).join('');
+  const text = aiProvider() === 'openai' ? await askOpenAI(prompt) : await askClaude(prompt);
   let data;
-  try { data = JSON.parse(text); } catch { throw new Error('AI 응답을 읽지 못했습니다. 다시 시도해 주세요'); }
+  try { data = JSON.parse(text); } catch { throw new AiError(502, 'AI 응답을 읽지 못했습니다. 다시 시도해 주세요'); }
   const list = (data.candidates || []).filter(c => c.title && c.script).slice(0, S.count);
-  if (!list.length) throw new Error('AI 가 후보를 만들지 못했습니다. 다시 시도해 주세요');
-  return { model: res.model || MODEL, list: list.map(c => ({ title: c.title.trim(), script: c.script.trim(), hashtags: (c.hashtags || []).map(h => String(h).replace(/^#/, '').trim()).filter(Boolean).slice(0, 8) })) };
+  if (!list.length) throw new AiError(502, 'AI 가 후보를 만들지 못했습니다. 다시 시도해 주세요');
+  return { model: `${aiProvider() === 'openai' ? 'ChatGPT' : 'Claude'} · ${aiModel()}`, list: list.map(c => ({ title: c.title.trim(), script: c.script.trim(), hashtags: (c.hashtags || []).map(h => String(h).replace(/^#/, '').trim()).filter(Boolean).slice(0, 8) })) };
 }
 
 /* ── 경로 ── */
@@ -245,7 +292,7 @@ export function shortsRoutes({ pool, tx, adminUser, HttpError }) {
         pool.query(`SELECT i.id, i.source_id, i.link, i.title, i.body, i.published_at, i.status, i.fetched_at FROM jcal.shorts_items i WHERE i.user_id = $1 ORDER BY COALESCE(i.published_at, i.fetched_at) DESC LIMIT 400`, [u.id]),
         pool.query('SELECT id, item_id, title, script, hashtags, chosen, model, created_at FROM jcal.shorts_scripts WHERE user_id = $1 ORDER BY created_at, id', [u.id]),
       ]);
-      return { settings, sources: sources.rows, items: items.rows, scripts: scripts.rows, ai: { ready: aiReady(), model: MODEL } };
+      return { settings, sources: sources.rows, items: items.rows, scripts: scripts.rows, ai: { ready: aiReady(), provider: aiProvider(), model: aiModel() } };
     },
 
     'POST /api/shorts/settings': async (req, body) => {
@@ -290,17 +337,11 @@ export function shortsRoutes({ pool, tx, adminUser, HttpError }) {
 
     'POST /api/shorts/generate': async (req, body) => {
       const u = await user(req);
-      if (!aiReady()) throw new HttpError(503, 'AI 키가 서버에 없습니다. VPS 의 /etc/jcalender.env 에 ANTHROPIC_API_KEY 를 넣고 systemctl restart jcal-api 를 실행하세요');
+      if (!aiReady()) throw new HttpError(503, 'AI 키가 서버에 없습니다. VPS 터미널에서 jcal-admin ai-key 로 OpenAI API 키를 넣어 주세요');
       const it = await own('shorts_items', need(body.itemId), u.id);
       let out;
       try { out = await generateScripts(it, await settingsOf(pool, u.id)); }
-      catch (e) {
-        if (e.status === 422 || e instanceof HttpError) throw e.status === 422 ? new HttpError(422, e.message) : e;
-        if (e instanceof Anthropic.AuthenticationError) throw new HttpError(503, 'AI 키가 올바르지 않습니다 (ANTHROPIC_API_KEY 확인)');
-        if (e instanceof Anthropic.RateLimitError) throw new HttpError(429, 'AI 사용량 한도에 걸렸습니다. 잠시 뒤 다시 시도하세요');
-        if (e instanceof Anthropic.APIError) { console.error('[숏폼 AI]', e.status, e.message); throw new HttpError(502, `AI 서버 오류 (${e.status ?? '연결'})`); }
-        throw new HttpError(500, e.message);
-      }
+      catch (e) { if (e instanceof AiError) throw new HttpError(e.status, e.message); console.error('[숏폼 AI]', e); throw new HttpError(500, 'AI 스크립트를 만들지 못했습니다'); }
       const rows = await tx(async c => {
         await c.query("UPDATE jcal.shorts_items SET status = 'picked' WHERE id = $1", [it.id]);
         const r = [];
