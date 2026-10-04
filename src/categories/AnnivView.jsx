@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { iso } from '../data.js';
 import { ANNIV_HEAD, ANNIV_KINDS, annivDateText, lunarTag, mergeAnniv, nextAnniv, parseAnnivRows, replaceAnniv } from '../anniv.js';
-import { WEEK, areaVar, useCtx } from '../shared.jsx';
+import { Popup, WEEK, areaVar, useCtx } from '../shared.jsx';
 import { download, excelDate, readXlsx, writeXlsx } from '../xlsx.js';
 import { parseCsv } from './samsungHealth.js';
 import DdayPanel from './DdayPanel.jsx';
@@ -19,6 +19,8 @@ export default function AnnivView({ area, cat, group }) {
   const months = Array.from({ length: 12 }, (_, i) => new Date(now.getFullYear(), now.getMonth() + i, 1));
   const byMonth = months.map(m => ({ m, list: all.filter(x => x.n.date.getFullYear() === m.getFullYear() && x.n.date.getMonth() === m.getMonth()) }));
   const items = group.items.map(it => ({ it, rows: group.rows.filter(r => r.item === it) }));
+  const [openId, setOpenId] = useState(null);             // 기념일을 누르면 상세 팝업
+  const opened = store.anniv.find(a => a.id === openId);
 
   return (
     <div className="catv" style={{ '--ac': areaVar(area) }}>
@@ -30,11 +32,11 @@ export default function AnnivView({ area, cat, group }) {
         <div className="csum-h"><h2>다가오는 기념일</h2><span className="muted">D-{store.annivDays}일 이내 · {soon.length}건</span></div>
         {soon.length ? (
           <div className="anniv-list">{soon.map(({ a, n }) => (
-            <div key={a.id} className={`anniv-card ${n.dday === 0 ? 'hot' : n.dday <= 3 ? 'soon' : ''}`}>
+            <button type="button" key={a.id} className={`anniv-card an-click ${n.dday === 0 ? 'hot' : n.dday <= 3 ? 'soon' : ''}`} onClick={() => setOpenId(a.id)} aria-haspopup="dialog">
               <b className="anniv-d">{n.dday === 0 ? '오늘' : `D-${n.dday}`}</b>
               <span className="anniv-n">{a.name}</span>
               <span className="anniv-m">{a.kind} · {fmtMD(n.date)}{lunarTag(a)}{a.kind === '기념일' && n.years > 0 ? ` · ${n.years}주년` : ''}{a.person ? ` · ${a.person}` : ''}</span>
-            </div>))}</div>
+            </button>))}</div>
         ) : <p className="muted anniv-empty">{store.annivDays}일 이내에 다가오는 기념일이 없습니다.</p>}
       </section>
 
@@ -46,14 +48,16 @@ export default function AnnivView({ area, cat, group }) {
           <div key={m.getMonth()} className={`anniv-month ${list.length ? '' : 'none'}`}>
             <b>{m.getFullYear() !== now.getFullYear() ? `${m.getFullYear()}년 ` : ''}{m.getMonth() + 1}월</b>
             {list.length ? list.map(({ a, n }) => (
-              <span key={a.id}><em>{n.date.getDate()}일</em> {a.name}<small>{lunarTag(a)}{a.person ? ` · ${a.person}` : ''} · D-{n.dday}</small></span>
+              <button type="button" key={a.id} className="an-mi" onClick={() => setOpenId(a.id)}><em>{n.date.getDate()}일</em> {a.name}<small>{lunarTag(a)}{a.person ? ` · ${a.person}` : ''} · D-{n.dday}</small></button>
             )) : <span className="muted">없음</span>}
           </div>))}</div>
       </section>
 
       <AnnivExcel />
 
-      <AnnivManager />
+      <AnnivManager onOpen={setOpenId} />
+
+      {opened && <AnnivDetail a={opened} onClose={() => setOpenId(null)} />}
 
     </div>
   );
@@ -134,7 +138,7 @@ function AnnivExcel() {
 }
 
 /* 기념일 목록 편집 (표시 기간, 수정, 삭제, 추가) */
-function AnnivManager() {
+function AnnivManager({ onOpen }) {
   const { store, setStore, now } = useCtx();
   const blank = { name: '', person: '', date: iso(now), kind: '생일', yearly: true, lunar: false, noYear: false };
   const [f, setF] = useState(blank);
@@ -172,7 +176,7 @@ function AnnivManager() {
                 <td><select value={a.kind} onChange={e => upd(a.id, { kind: e.target.value })} aria-label="종류">{ANNIV_KINDS.map(k => <option key={k}>{k}</option>)}</select></td>
                 <td><input type="checkbox" checked={a.yearly} onChange={e => upd(a.id, { yearly: e.target.checked })} aria-label="매년 반복" /></td>
                 <td className="nowrap">{n ? <>{n.dday === 0 ? '오늘' : `D-${n.dday}`}{a.lunar && <small className="muted"> · 양력 {n.date.getMonth() + 1}/{n.date.getDate()}</small>}</> : '지남'}</td>
-                <td><button className="btn sm" onClick={() => del(a.id)}>삭제</button></td>
+                <td className="nowrap"><button className="btn sm" onClick={() => onOpen(a.id)}>상세</button> <button className="btn sm" onClick={() => del(a.id)}>삭제</button></td>
               </tr>
             );
           })}</tbody>
@@ -190,6 +194,39 @@ function AnnivManager() {
       </form>
       <p className="note">기념일 종류는 처음 날짜의 연도로 몇 주년인지 계산합니다(연도 모름이면 주년 없음). 매년 반복을 끄면 그 날짜 한 번만 표시됩니다. 음력은 해마다 양력 날짜로 바꿔 달력·D-day에 보여 줍니다.</p>
     </div>
+  );
+}
+
+/* 기념일 상세 팝업: 다음 날짜 · 앞으로 3번 · 관련 인물(인맥) · 바로 고치기 · 삭제 */
+function AnnivDetail({ a, onClose }) {
+  const { store, setStore, now } = useCtx();
+  const upd = patch => setStore(s => ({ ...s, anniv: s.anniv.map(x => (x.id === a.id ? { ...x, ...patch } : x)) }));
+  const people = store.people || [];
+  const person = people.find(p => p.id === a.personId) || people.find(p => a.person && (p.name === a.person || p.name.replace(/\s*\(.*\)$/, '') === a.person));
+  const n = nextAnniv(a, now);
+  // 앞으로 세 번 (매년 반복일 때)
+  const nexts = [];
+  if (n) { let d = n.date; for (let i = 0; i < 3 && d; i++) { const x = nextAnniv(a, d); if (!x) break; nexts.push(x); d = new Date(x.date.getFullYear(), x.date.getMonth(), x.date.getDate() + 1); if (!a.yearly) break; } }
+  const [arm, setArm] = useState(false);
+  const del = () => { if (!arm) { setArm(true); setTimeout(() => setArm(false), 3000); return; } setStore(s => toTrash(s, 'anniv', a.id)); onClose(); };
+  return (
+    <Popup title={a.name} sub={`${a.kind}${a.person ? ` · ${a.person}` : ''}`} onClose={onClose}>
+      <div className={`an-dd ${n && n.dday <= 3 ? 'soon' : ''}`}>
+        {n ? <><b>{n.dday === 0 ? '오늘' : `D-${n.dday}`}</b><span>{fmtMD(n.date)}{a.lunar ? ` (음력 ${annivDateText(a)})` : ''}{a.kind === '기념일' && n.years > 0 ? ` · ${n.years}주년` : ''}</span></> : <span className="muted">지난 날짜입니다 (한 번만)</span>}
+      </div>
+      {nexts.length > 1 && <ul className="an-next">{nexts.map(x => <li key={x.key}><span>{x.date.getFullYear()}년</span>{fmtMD(x.date)}<small className="muted">D-{Math.round((x.date - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5)}{a.kind === '기념일' && x.years > 0 ? ` · ${x.years}주년` : ''}</small></li>)}</ul>}
+      {person && <div className="an-person-card"><span className="rv-av" aria-hidden="true">{person.name.slice(0, 1)}</span><span><b>{person.name}</b><small className="muted">{[person.group, person.company, person.phone].filter(Boolean).join(' · ')}</small></span><small className="an-link">인맥 연결</small></div>}
+      <div className="an-form">
+        <label>이름<input value={a.name} onChange={e => upd({ name: e.target.value })} /></label>
+        <label>관련 인물<input list="an-people" value={a.person || ''} onChange={e => { const v = e.target.value; upd({ person: v, personId: people.find(p => p.name === v)?.id || null }); }} /></label>
+        <label>종류<select value={a.kind} onChange={e => upd({ kind: e.target.value })}>{ANNIV_KINDS.map(k => <option key={k}>{k}</option>)}</select></label>
+        <label>양력 / 음력<select value={a.lunar ? (a.leap ? 'L2' : 'L') : 'S'} onChange={e => upd({ lunar: e.target.value !== 'S', leap: e.target.value === 'L2' })}><option value="S">양력</option><option value="L">음력</option><option value="L2">음력 윤달</option></select></label>
+        <label className="an-wide">날짜<DateCell a={a} onChange={upd} /></label>
+        <label className="an-chk"><input type="checkbox" checked={a.yearly} onChange={e => upd({ yearly: e.target.checked })} />매년 반복</label>
+      </div>
+      <datalist id="an-people">{people.map(p => <option key={p.id} value={p.name} />)}</datalist>
+      <div className="btns"><span className="grow note">고치면 바로 저장됩니다.</span><button className={`btn ${arm ? 'danger' : ''}`} onClick={del}>{arm ? '정말 삭제?' : '삭제 (휴지통)'}</button></div>
+    </Popup>
   );
 }
 

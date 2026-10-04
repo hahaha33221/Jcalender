@@ -8,6 +8,8 @@ import { useCtx } from '../shared.jsx';
    3) 온보딩: 명함마다 결과 확인 → 관계 → 생일·기념일 → 완료 순서로 묻고 저장, 다음 명함으로
    onSave(person, annivs) 로 연락처와 기념일 관리에 넣는다 */
 export const GROUPS = ['가족', '친구', '동료', '지인', '업무'];
+/** 인맥 관계 카테고리: 계정마다 바꿀 수 있음 (store.peopleGroups, 없으면 기본 5개) + 사람에게 붙어 있는데 목록에 없는 관계 */
+export const groupsOf = store => { const g = store.peopleGroups?.length ? store.peopleGroups : GROUPS; return [...g, ...new Set((store.people || []).map(p => p.group).filter(x => x && !g.includes(x)))]; };
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 /** 사진을 긴 변 1,000px 이하 JPEG 로 줄여 data URL 로 (브라우저 저장 공간 절약) */
@@ -131,6 +133,7 @@ const STEPS = ['결과 확인', '관계', '생일·기념일', '완료'];
 
 /* 명함 한 장 등록 온보딩 */
 function Onboarding({ item, index, total, onDone, onSkip, onClose }) {
+  const { store } = useCtx();
   const r = item.result || {};
   const [step, setStep] = useState(0);
   const [f, setF] = useState({ name: r.name || '', company: r.company || '', title: r.title || '', phone: r.phone || '', email: r.email || '', address: r.address || '' });
@@ -174,7 +177,7 @@ function Onboarding({ item, index, total, onDone, onSkip, onClose }) {
 
         {step === 1 && <>
           <p className="ob-q">{f.name}님과 어떤 관계인가요?</p>
-          <div className="ob-pick">{GROUPS.map(g => <button key={g} aria-pressed={group === g} onClick={() => { setGroup(g); setStep(2); }}>{g}</button>)}</div>
+          <div className="ob-pick">{groupsOf(store).map(g => <button key={g} aria-pressed={group === g} onClick={() => { setGroup(g); setStep(2); }}>{g}</button>)}</div>
         </>}
 
         {step === 2 && <>

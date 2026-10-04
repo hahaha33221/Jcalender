@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { planImport, readContactBook, suggestCompany } from '../contactImport.js';
-import { GROUPS } from './CardScan.jsx';
+import { groupsOf } from './CardScan.jsx';
+import { useCtx } from '../shared.jsx';
 import { AREA_KEYS } from './RelationView.jsx';
 
 /* 인맥 관리 › 엑셀로 연락처 가져오기
@@ -11,6 +12,7 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 const isSample = p => p.name.includes('(예시)');
 
 export default function ContactImport({ people, setStore, now, onClose }) {
+  const { store } = useCtx();
   const [file, setFile] = useState(null);
   const [sheets, setSheets] = useState(null);
   const [pick, setPick] = useState({});
@@ -92,7 +94,7 @@ export default function ContactImport({ people, setStore, now, onClose }) {
         <div className="ci-opts">
           <span className="rv-achk" role="group" aria-label="영역"><b>영역</b>{AREA_KEYS.map(([k, n]) => <label key={k}><input type="checkbox" checked={areas.includes(k)}
             onChange={e => setAreas(AREA_KEYS.map(([x]) => x).filter(x => (x === k ? e.target.checked : areas.includes(x))))} />{n}</label>)}</span>
-          <label>관계<select value={group} onChange={e => setGroup(e.target.value)}>{GROUPS.map(g => <option key={g}>{g}</option>)}</select></label>
+          <label>관계<select value={group} onChange={e => setGroup(e.target.value)}>{groupsOf(store).map(g => <option key={g}>{g}</option>)}</select></label>
           {samples.length > 0 && <label className="ci-chk"><input type="checkbox" checked={dropSample} onChange={e => setDropSample(e.target.checked)} />예시 연락처 {samples.length}명 지우기</label>}
         </div>
 

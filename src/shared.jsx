@@ -1,8 +1,26 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect, useRef } from 'react';
 import { AREAS, CYCLES, PRIO } from './data.js';
 
 /* 여러 화면(App, 카테고리 전용 화면)이 함께 쓰는 공통 요소 */
 export const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
+/** 팝업 창: 바깥을 누르거나 Esc 로 닫힘. wide 면 넓게 */
+export function Popup({ title, sub, onClose, wide, children, actions }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const esc = e => { const all = document.querySelectorAll('.modal-bg'); if (e.key === 'Escape' && all[all.length - 1] === ref.current) onClose(); };   // 맨 위 창만 닫기
+    window.addEventListener('keydown', esc);
+    const prev = document.body.style.overflow; document.body.style.overflow = 'hidden';   // 뒤 화면은 스크롤되지 않게
+    return () => { window.removeEventListener('keydown', esc); document.body.style.overflow = prev; };
+  }, [onClose]);
+  return (
+    <div className="modal-bg" ref={ref} onClick={onClose}>
+      <div className={`modal pop ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()}>
+        <div className="pop-h"><div><h2>{title}</h2>{sub && <p className="muted">{sub}</p>}</div>{actions}<button className="btn sm" onClick={onClose}>닫기</button></div>
+        <div className="pop-b">{children}</div>
+      </div>
+    </div>
+  );
+}
 export const SENS = /검진|결과지|급여|명세|계약|명함|공제/;
 /** 숫자를 세 자리마다 쉼표로 (1000000 → 1,000,000) */
 export const num = n => Number(n || 0).toLocaleString('ko-KR');
