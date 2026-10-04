@@ -6,7 +6,7 @@ import Members from './Members.jsx';
 import { ActionRow, Ctx, WEEK, areaVar, num, useCtx } from './shared.jsx';
 import NeedsPanel from './Needs.jsx';
 import WorkLog from './WorkLog.jsx';
-import { hasCustomView, isFirstReviewed, viewFor } from './categories/index.js';
+import { viewFor } from './categories/index.js';
 import { seedHealth } from './categories/health.js';
 import { clearFinanceOnce, seedFinance } from './categories/finance.js';
 import { addExampleGoals, boardForYear, boardKey, dropNoGoal, hasGoals, migrateGoals, seedGoals, setUserNoGoal } from './categories/goals.js';
@@ -993,7 +993,7 @@ function categoriesOf(area, now, isDone, cats = []) {
 }
 
 function AreaPage({ area }) {
-  const { store, isDone, now, openCat } = useCtx();
+  const { store, isDone, now, openCat, isAdmin } = useCtx();
   const boards = store.goals?.boards || {};
   const goalsOf = c => (hasGoals(area, c) && boards[boardKey(area, c)] ? boardForYear(boards[boardKey(area, c)], now.getFullYear()).items.filter(i => !i.parent).length : 0);
   const cats = categoriesOf(area, now, isDone, store.categories);
@@ -1005,7 +1005,7 @@ function AreaPage({ area }) {
       <div className="tiles" style={{ '--ac': areaVar(area) }}>
         {cats.map(g => (
           <button key={g.cat} className="tile" onClick={() => openCat(area, g.cat)}>
-            <span className="tile-h"><b>{g.cat}</b>{isFirstReviewed(area, g.cat) ? <span className="tile-done first" title="1차 검수 완료">1차 검수</span> : hasCustomView(area, g.cat) && <span className="tile-done" title="전용 상세 화면 완료">완료</span>}{store.reviewed?.[`${area}|${g.cat}`] && <span className="tile-rev" title="검수 완료">검수 완료</span>}<span className="tile-go" aria-hidden="true">›</span></span>
+            <span className="tile-h"><b>{g.cat}</b>{isAdmin && (store.reviewed?.[`${area}|${g.cat}`] ? <span className="tile-rev" title={`검수 완료 (${store.reviewed[`${area}|${g.cat}`]})`}>검수 완료</span> : <span className="tile-todo" title="아직 검수하지 않음 · 카테고리에 들어가 '검수 완료로 표시'">미완료</span>)}<span className="tile-go" aria-hidden="true">›</span></span>
             <span className="tile-items">{g.items.slice(0, 5).map(it => <span key={it} className="tile-item">{it}</span>)}{g.items.length > 5 && <span className="tile-item more">외 {g.items.length - 5}</span>}</span>
             <span className="tile-cyc">{Object.keys(CYCLES).filter(c => g.cyc[c]).map(c => <span key={c} className={`cyc c-${c}`}>{CYCLES[c].slice(0, 2)} {g.cyc[c]}</span>)}
               {goalsOf(g.cat) > 0 && <span className="cyc goal">{now.getFullYear()}년 목표 {goalsOf(g.cat)}</span>}</span>
@@ -1023,7 +1023,7 @@ function AreaPage({ area }) {
 
 /* ───────────────────────── 상세: 카테고리 페이지 ───────────────────────── */
 function CategoryPage({ area, cat }) {
-  const { now, isDone, openCat, go, store, setStore } = useCtx();
+  const { now, isDone, openCat, go, store, setStore, isAdmin } = useCtx();
   const cats = categoriesOf(area, now, isDone);
   const rkey = `${area}|${cat}`, reviewed = !!store.reviewed?.[rkey];
   const toggleReviewed = () => setStore(s => { const r = { ...(s.reviewed || {}) }; if (r[rkey]) delete r[rkey]; else r[rkey] = iso(new Date()); return { ...s, reviewed: r }; });
@@ -1034,8 +1034,8 @@ function CategoryPage({ area, cat }) {
     <>
       <nav className="crumb" aria-label="위치">
         <button onClick={() => go(area)}>{AREAS[area].n}</button><span aria-hidden="true">›</span><b>{cat}</b>
-        <button className={`btn sm review-btn ${reviewed ? 'on' : ''}`} onClick={toggleReviewed} aria-pressed={reviewed}
-          title={reviewed ? `검수 완료 (${store.reviewed[rkey]}) · 누르면 취소` : '마음에 들면 검수 완료로 표시'}>{reviewed ? '검수 완료됨' : '검수 완료로 표시'}</button>
+        {isAdmin && <button className={`btn sm review-btn ${reviewed ? 'on' : ''}`} onClick={toggleReviewed} aria-pressed={reviewed}
+          title={reviewed ? `검수 완료 (${store.reviewed[rkey]}) · 누르면 취소` : '마음에 들면 검수 완료로 표시'}>{reviewed ? '검수 완료됨' : '검수 완료로 표시'}</button>}
       </nav>
       <View area={area} cat={cat} group={g} />
       {cat !== '목표 관리' && hasGoals(area, cat) && <GoalBoard area={area} cat={cat} title={`${cat} 목표`} />}

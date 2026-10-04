@@ -133,6 +133,8 @@ export function migrate(s) {
     out = { ...out, meta: { ...(out.meta || {}), schemaVersion: v, migratedAt: today() } };
   }
   out = renameCategories(out);
+  // 2026-10-04 카테고리 검수 표시를 모두 미완료로 (한 번만): 다시 하나씩 검수한다
+  if (!out.meta?.reviewReset) out = { ...out, reviewed: {}, meta: { ...(out.meta || {}), reviewReset: today() } };
   // 2026-10-04 체크리스트 새로 시작: 예전 체크리스트(기본 항목 · 직접 만든 항목)를 한 번 비우고 추천받기(온보딩)부터 시작 (체크 기록은 남김)
   if (!out.checklist?.v2) out = { ...out, checklist: { base: 'none', custom: [], v2: true } };
   // 코드에 카테고리가 새로 생기면 표에도 추가

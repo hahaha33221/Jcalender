@@ -44,5 +44,5 @@ export const viewFor = (area, cat) => CATEGORY_VIEWS[`${area}|${cat}`] || Defaul
 /** 전용 화면이 만들어진 카테고리인지 (영역 페이지 타일에 "완료" 표시) */
 export const hasCustomView = (area, cat) => !!CATEGORY_VIEWS[`${area}|${cat}`];
 /** 1차 검수를 마친 카테고리 (영역 페이지 타일에 "완료" 대신 "1차 검수" 표시). 목표 관리는 개인·사업·근로 모두 */
-const FIRST_REVIEW = new Set(['P|건강 관리', 'P|기념일 관리', 'P|인맥 관리', 'P|여가 관리', 'P|저널링', 'P|개인 재무', 'P|자기계발/학습', 'P|목표 관리', 'B|목표 관리', 'W|목표 관리']);
+const FIRST_REVIEW = new Set([]);   // 2026-10-04 모두 미완료로 되돌림 (검수는 카테고리 화면의 "검수 완료로 표시"로 다시)
 export const isFirstReviewed = (area, cat) => FIRST_REVIEW.has(`${area}|${cat}`);
