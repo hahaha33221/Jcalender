@@ -78,6 +78,7 @@
 |---|---|
 | `jcal-admin signup` | 회원가입 방식 · 초대 코드 보기 |
 | `jcal-admin signup code` | 새 초대 코드 만들기 (예전 코드는 못 씀) |
+| `jcal-admin role <이메일> admin\|member\|suspended` | 권한 바꾸기: 관리자 · 일반 · 정지(로그인 불가). 앱의 "회원 관리" 메뉴에서도 바꿀 수 있음 |
 | `jcal-admin signup open` / `closed` | 누구나 가입 / 가입 막기 |
 | `jcal-admin list` | 사용자 · 동기화 현황 |
 | `jcal-admin rename 이메일 새이름` | 표시 이름 바꾸기 |
@@ -123,3 +124,15 @@
   - `set -a; . /etc/jcalender.env; set +a; gunzip -c /var/backups/jcalender/jcal_날짜.sql.gz | psql "$DATABASE_URL" && systemctl start jcal-api`
 - Hostinger hPanel › VPS › 방화벽을 따로 켜 두었다면 80 · 443 번도 허용해야 인증서가 발급된다.
 - Nginx 로그: `/var/log/nginx/jcalender.access.log` · `jcalender.error.log`
+
+## 회원 권한 (2026-10-04, 서버 1.2.0)
+
+| 권한 | 할 수 있는 것 |
+|---|---|
+| 관리자 (admin) | 내 데이터 + 회원 관리(권한 · 기기 로그아웃 · 회원가입 방식 · 초대 코드) + 진행 현황 |
+| 일반 (member) | 내 데이터만 (새로 가입하면 일반) |
+| 정지 (suspended) | 로그인 불가, 로그인 중인 기기도 모두 로그아웃. 데이터는 지우지 않음 |
+
+- 대표 관리자: `/etc/jcalender.env` 의 `OWNER_EMAILS` (없으면 koreamate2026@gmail.com). 항상 관리자이고 화면에서 바꿀 수 없음
+- 내 계정의 권한은 내가 바꿀 수 없음 (관리자가 0명이 되는 것을 막음)
+- DB: `db/migrations/003_user_roles.sql` (users.role). `bash server/deploy/update.sh` 가 자동으로 적용

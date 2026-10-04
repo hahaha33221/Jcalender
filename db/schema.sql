@@ -32,6 +32,8 @@ CREATE TABLE users (
   email          varchar(255) NOT NULL UNIQUE,
   name           varchar(100) NOT NULL DEFAULT '',
   password_hash  text NOT NULL,                              -- argon2id / bcrypt
+  role           varchar(20) NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member', 'suspended')),   -- 회원 권한 (003)
+  role_updated_at timestamptz,
   created_at     timestamptz NOT NULL DEFAULT now(),
   last_login_at  timestamptz
 );

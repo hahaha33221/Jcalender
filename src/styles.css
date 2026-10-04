@@ -1632,3 +1632,25 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
   .ct-accs { grid-template-columns: minmax(0, 1fr); }
   .ct-trend .fi-v { display: block; font-size: 9.5px; }
 }
+
+/* 회원 관리 */
+.banner.ok { background: var(--oksoft); color: var(--ok); }
+.mb-msg { margin: 0 0 12px; }
+.mb-code { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.mb-code code { font-size: 15px; letter-spacing: 1px; padding: 3px 10px; border-radius: 6px; background: var(--code); border: 1px solid var(--line); }
+.mb-q { width: 200px; max-width: 100%; padding: 4px 8px; }
+.mb-table td { vertical-align: middle; }
+.mb-table .nw { white-space: nowrap; }
+.mb-table tr.off td { opacity: .6; }
+.mb-owner { background: var(--apisoft); color: var(--a3); margin-left: 4px; }
+.mb-table .tag { margin-left: 4px; }
+.mb-roles { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.mb-roles button { border: 0; background: var(--card); color: var(--ink2); padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.mb-roles button + button { border-left: 1px solid var(--line); }
+.mb-roles button.on { cursor: default; font-weight: 600; }
+.mb-roles button.on.admin, .mb-role.admin { background: var(--apisoft); color: var(--a3); }
+.mb-roles button.on.member, .mb-role.member { background: var(--oksoft); color: var(--ok); }
+.mb-roles button.on.suspended, .mb-role.suspended { background: var(--oversoft); color: var(--over); }
+.mb-roles button.arm { background: var(--over); color: #fff; }
+.mb-role { display: inline-block; padding: 3px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; }
+.mb-table td .btn { white-space: nowrap; }

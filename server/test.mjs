@@ -6,7 +6,7 @@ import { pool } from './db.mjs';
 import { hashPassword } from './auth.mjs';
 
 const PORT = 18787, BASE = `http://127.0.0.1:${PORT}`, ORIGIN = 'https://jcalender-test.vercel.app';
-const EMAIL = `test-${Date.now()}@example.com`, PW = 'test-password-1';
+const EMAIL = `test-${Date.now()}@example.com`, PW = 'test-password-1', OWNER = `owner-${Date.now()}@example.com`;
 const fixture = process.env.FIXTURE ? JSON.parse(fs.readFileSync(process.env.FIXTURE, 'utf8')) : null;
 const store = fixture ? (fixture.data || fixture) : {
   done: { 'r1@2026-10-01': { at: '2026-10-01 09:00' } }, prio: {}, outs: {}, log: [],
@@ -26,7 +26,7 @@ const call = async (method, path, body, token, origin = ORIGIN) => {
 };
 
 await pool.query(`INSERT INTO jcal.users (email, name, password_hash) VALUES ($1, '테스트', $2)`, [EMAIL, await hashPassword(PW)]);
-const srv = spawn(process.execPath, ['index.mjs'], { env: { ...process.env, PORT: String(PORT), ALLOWED_ORIGINS: 'https://*.vercel.app' }, stdio: ['ignore', 'pipe', 'inherit'] });
+const srv = spawn(process.execPath, ['index.mjs'], { env: { ...process.env, PORT: String(PORT), ALLOWED_ORIGINS: 'https://*.vercel.app', OWNER_EMAILS: OWNER }, stdio: ['ignore', 'pipe', 'inherit'] });
 await new Promise(r => srv.stdout.once('data', r));
 
 try {
@@ -87,6 +87,31 @@ try {
   check('비밀번호 바꾸기: 틀린 현재 비밀번호 400', (await call('POST', '/api/password', { current: 'nope', next: 'new-pass-999' }, T2)).status === 400);
   check('비밀번호 바꾸기', (await call('POST', '/api/password', { current: 'pw-12345678', next: 'new-pass-999' }, T2)).status === 200);
   check('새 비밀번호로 로그인', (await call('POST', '/api/login', { email: E2, password: 'new-pass-999' })).status === 200);
+
+  console.log('회원 관리 (권한)');
+  check('일반 회원은 회원 목록 403', (await call('GET', '/api/admin/users', null, T2)).status === 403);
+  check('가입한 회원 권한 = member', su.json.user.role === 'member');
+  await pool.query("UPDATE jcal.users SET role = 'admin' WHERE email = $1", [EMAIL]);
+  const ul = await call('GET', '/api/admin/users', null, T);
+  check('관리자는 회원 목록', ul.status === 200 && ul.json.users.some(u => u.email === E2 && u.role === 'member'), JSON.stringify(ul.json).slice(0, 200));
+  check('관리자로 바꾸기', (await call('POST', '/api/admin/users', { email: E2, role: 'admin' }, T)).status === 200);
+  const T2b = (await call('POST', '/api/login', { email: E2, password: 'new-pass-999' })).json.token;
+  check('바뀐 권한이 me 에 보임', (await call('GET', '/api/me', null, T2b)).json.user.role === 'admin');
+  check('내 권한은 못 바꿈', (await call('POST', '/api/admin/users', { email: EMAIL, role: 'member' }, T)).status === 400);
+  await pool.query(`INSERT INTO jcal.users (email, name, password_hash, role) VALUES ($1, '대표', 'x', 'member')`, [OWNER]);
+  check('대표 관리자 권한은 못 바꿈', (await call('POST', '/api/admin/users', { email: OWNER, role: 'suspended' }, T)).status === 400);
+  check('대표 관리자는 role 값과 상관없이 admin', (await call('GET', '/api/admin/users', null, T)).json.users.find(u => u.email === OWNER)?.role === 'admin');
+  check('잘못된 권한 400', (await call('POST', '/api/admin/users', { email: E2, role: 'king' }, T)).status === 400);
+  check('정지', (await call('POST', '/api/admin/users', { email: E2, role: 'suspended' }, T)).status === 200);
+  check('정지하면 기존 로그인 끊김', (await call('GET', '/api/me', null, T2b)).status === 401);
+  check('정지된 계정은 로그인 403', (await call('POST', '/api/login', { email: E2, password: 'new-pass-999' })).status === 403);
+  await call('POST', '/api/admin/users', { email: E2, role: 'member' }, T);
+  const T2c = (await call('POST', '/api/login', { email: E2, password: 'new-pass-999' })).json.token;
+  check('정지 풀면 다시 로그인', !!T2c);
+  check('다른 회원 모든 기기 로그아웃', (await call('POST', '/api/admin/users', { email: E2, logout: true }, T)).json.loggedOut >= 1 && (await call('GET', '/api/me', null, T2c)).status === 401);
+  const sg = await call('POST', '/api/admin/signup', { mode: 'code', newCode: true }, T);
+  check('새 초대 코드', sg.status === 200 && sg.json.mode === 'code' && sg.json.code && sg.json.code !== 'TEST-CODE');
+  await pool.query('DELETE FROM jcal.users WHERE email = $1', [OWNER]);
   await setS('signup_mode', 'closed');
   check('가입 막기 → 403', (await call('POST', '/api/signup', { email: `x${E2}`, password: 'pw-12345678', name: 'x', code: 'TEST-CODE' })).status === 403);
   await pool.query('DELETE FROM jcal.users WHERE email = $1', [E2]);

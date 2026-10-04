@@ -108,6 +108,7 @@ export function useServerSync(store, setStore, blank) {
     try {
       const me = await api(c.url, '/api/me', { token: c.token });
       if (me.user?.name && me.user.name !== c.name) setConf({ name: me.user.name });
+      if ((me.user?.role || '') !== (c.role || '')) setConf({ role: me.user?.role || '' });   // 회원 권한 (관리자가 바꾸면 반영)
       const sv = me.snapshot?.version || 0, mine = c.version || 0;
       const mineOwner = c.owner === c.email, otherOwner = c.owner && c.owner !== c.email;   // '-'(비어 있음) 도 "다른 사람"으로 본다
       if (!sv) {
@@ -152,7 +153,7 @@ export function useServerSync(store, setStore, blank) {
       const c = confRef.current;
       const same = c.url === base && c.email === r.user.email;
       if (r.created) { replaceStore(blank()); }                  // 새 사용자는 빈 데이터로 시작 (이 기기에 있던 데이터는 올리지 않음)
-      setConf({ url: base, token: r.token, email: r.user.email, name: r.user.name, guest: false,
+      setConf({ url: base, token: r.token, email: r.user.email, name: r.user.name, role: r.user.role || '', guest: false,
         ...(same ? {} : { version: 0, dirty: false, lastSync: null }), ...(r.created ? { owner: r.user.email } : {}) });
       say(r.created ? `${r.user.name}님, 가입을 환영합니다` : `${r.user.name || r.user.email}님으로 로그인했습니다`);
       return true;
@@ -192,6 +193,8 @@ export function useServerSync(store, setStore, blank) {
 
   return {
     connected: !!conf.token, guest: !conf.token && !!conf.guest, conf, ...st, login, signup, logout, enterGuest, leaveGuest, changePassword,
+    /** 로그인한 계정으로 서버 API 부르기 (회원 관리 등) */
+    request: (path, opts = {}) => api(confRef.current.url, path, { ...opts, token: confRef.current.token }).catch(e => { authFail(e); throw e; }),
     syncNow: () => (conf.dirty ? push() : check()), takeServer, keepMine,
     status: !conf.token ? (conf.guest ? '로그인 안 함 (이 기기에만 저장)' : '연결 안 됨') : st.conflict ? '선택 필요' : st.busy ? '동기화 중…' : conf.dirty ? '저장 대기 중' : `동기화됨${conf.lastSync ? ` · ${fmt(conf.lastSync)}` : ''}`,
     fmt,

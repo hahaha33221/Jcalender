@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ChecklistEdit from './ChecklistEdit.jsx';
+import Members from './Members.jsx';
 import { ActionRow, Ctx, WEEK, areaVar, num, useCtx } from './shared.jsx';
 import NeedsPanel from './Needs.jsx';
 import WorkLog from './WorkLog.jsx';
@@ -47,7 +48,7 @@ const seedEvents = () => {
 };
 /** 관리자 계정: 진행 현황(개발 진행 · 필요한 연동 · 작업 기록)은 이 계정으로 로그인했을 때만 보인다 */
 export const ADMIN_EMAILS = ['koreamate2026@gmail.com'];
-const PAGES = ['home', 'check', 'P', 'B', 'W', 'progress', 'settings'];
+const PAGES = ['home', 'members', 'check', 'P', 'B', 'W', 'progress', 'settings'];
 const readHash = () => {
   let [p, c] = window.location.hash.replace(/^#\/?/, '').split('/');
   try { p = decodeURIComponent(p || ''); c = c ? decodeURIComponent(c) : null; } catch (e) { p = ''; c = null; }
@@ -212,7 +213,7 @@ export default function App() {
   const go = (p, init = null) => { setCheckInit(init); nav(p); };
   const openCat = (a, c) => nav(a, c);
 
-  const isAdmin = !!sync.connected && ADMIN_EMAILS.includes(String(sync.conf.email || '').trim().toLowerCase());
+  const isAdmin = !!sync.connected && (sync.conf.role === 'admin' || ADMIN_EMAILS.includes(String(sync.conf.email || '').trim().toLowerCase()));   // 서버 권한(관리자) 또는 대표 관리자
   const ctx = { isAdmin, store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go, openCat, sync };
 
   // 메뉴 접기 (이 기기에만 기억)
@@ -221,7 +222,7 @@ export default function App() {
 
   const NAV = [
     { id: 'home', label: '대시보드', icon: 'home' },
-    ...(isAdmin ? [{ id: 'progress', label: '진행 현황', icon: 'progress' }] : []),   // 관리자만
+    ...(isAdmin ? [{ id: 'members', label: '회원 관리', icon: 'users' }, { id: 'progress', label: '진행 현황', icon: 'progress' }] : []),   // 관리자만
     { id: 'check', label: '체크리스트', icon: 'check' },
     { sec: '상세 내용' },
     { id: 'P', label: AREAS.P.n, color: areaVar('P') },
@@ -263,6 +264,7 @@ export default function App() {
           {page === 'check' && <CheckPage key={JSON.stringify(checkInit)} init={checkInit} />}
           {AREAS[page] && !cat && <AreaPage key={page} area={page} />}
           {AREAS[page] && cat && <CategoryPage key={`${page}|${cat}`} area={page} cat={cat} />}
+          {page === 'members' && (isAdmin ? <Members /> : <div className="empty">회원 관리는 관리자 계정에서만 볼 수 있습니다. <button className="btn sm" onClick={() => go('home')}>대시보드로</button></div>)}
           {page === 'progress' && (isAdmin ? <Progress /> : <div className="empty">진행 현황은 관리자 계정에서만 볼 수 있습니다. <button className="btn sm" onClick={() => go('home')}>대시보드로</button></div>)}
           {page === 'settings' && <Settings />}
         </main>
@@ -1070,6 +1072,7 @@ function Progress() {
 const NAV_ICONS = {
   home: 'M3 9.5L10 4l7 5.5V16a1 1 0 0 1-1 1h-3.5v-4.5h-5V17H4a1 1 0 0 1-1-1z',
   progress: 'M4 16V11M8.5 16V7M13 16V9.5M17 16V4',
+  users: 'M7.5 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2.5 17c0-2.8 2.2-5 5-5s5 2.2 5 5M13.5 9.2a2.6 2.6 0 1 0-.6-5.1M14.5 12.2c1.8.5 3 2.2 3 4.8',
   check: 'M4 5.5l1.5 1.5L8 4.5M4 11l1.5 1.5L8 10M4 16.5l1.5 1.5L8 15.5M10.5 6h6M10.5 11.5h6M10.5 17h6',
   settings: 'M10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4',
 };

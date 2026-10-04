@@ -10,6 +10,12 @@
    PUT  /api/sync    {baseVersion, data, device, force}
         → 200 { version, updatedAt, tables }   서버 버전이 baseVersion 과 같을 때 (또는 force)
         → 409 { version, updatedAt, device, data }   다른 기기가 먼저 올렸을 때 (서버 최신본을 돌려줌)
+   회원 관리 (관리자만, users.role = admin 또는 OWNER_EMAILS)
+   GET  /api/admin/users                            → { users: [{ email, name, role, owner, createdAt, lastLoginAt, sessions, syncedAt, size }] }
+   POST /api/admin/users  {email, role}             권한 바꾸기 (admin · member · suspended, 정지하면 그 계정의 모든 기기 로그아웃)
+   POST /api/admin/users  {email, logout: true}     그 계정의 모든 기기 로그아웃
+   GET  /api/admin/signup                           → { mode, code }
+   POST /api/admin/signup {mode, newCode}           회원가입 방식 (code · open · closed) · 새 초대 코드
    동기화 단위는 "앱 데이터 전체(비밀 정보 제외)". 올릴 때마다 db/convert.mjs 규칙으로 47개 표도 함께 갱신한다. */
 import http from 'http';
 import { config } from './config.mjs';
@@ -18,7 +24,11 @@ import crypto from 'crypto';
 import { hashPassword, newToken, tokenHash, verifyPassword } from './auth.mjs';
 import { storeToSql } from '../db/convert.mjs';
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
+const ROLES = ['admin', 'member', 'suspended'];
+const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
+const roleOf = u => (isOwner(u.email) ? 'admin' : ROLES.includes(u.role) ? u.role : 'member');
+const SUSPENDED = '이 계정은 사용이 정지되었습니다. 관리자에게 문의하세요';
 
 /* ── 공통 ── */
 class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
@@ -65,11 +75,20 @@ async function authUser(req) {
   const m = String(req.headers.authorization || '').match(/^Bearer\s+(\S+)$/i);
   if (!m) throw new HttpError(401, '로그인이 필요합니다');
   const { rows } = await pool.query(
-    `SELECT u.id, u.email, u.name, s.id AS sid FROM jcal.sessions s JOIN jcal.users u ON u.id = s.user_id
+    `SELECT u.id, u.email, u.name, u.role, s.id AS sid FROM jcal.sessions s JOIN jcal.users u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.expires_at > now()`, [tokenHash(m[1])]);
   if (!rows[0]) throw new HttpError(401, '로그인이 만료되었습니다. 다시 로그인하세요');
-  return rows[0];
+  const u = { ...rows[0], role: roleOf(rows[0]) };
+  if (u.role === 'suspended') throw new HttpError(401, SUSPENDED);
+  return u;
 }
+async function adminUser(req) {
+  const u = await authUser(req);
+  if (u.role !== 'admin') throw new HttpError(403, '관리자만 쓸 수 있습니다');
+  return u;
+}
+const setSetting = (k, v) => pool.query(`INSERT INTO jcal.server_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [k, v]);
+const newCode = () => Array.from(crypto.randomBytes(8), b => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('').replace(/^(.{4})/, '$1-');
 
 /** 비밀 정보는 서버에 두지 않는다 (앱도 떼어 내고 보내지만 한 번 더) */
 function stripSecrets(d) {
@@ -122,7 +141,7 @@ const routes = {
       if (!u.rows[0]) throw new HttpError(409, '이미 가입된 이메일입니다. 로그인하세요');
       const ses = await newSession(c, req, u.rows[0].id, body.device);
       addFail(key);                                                 // 같은 곳에서 15분에 10명까지만 가입
-      return { token: ses.token, user: { email: u.rows[0].email, name: u.rows[0].name }, expiresAt: ses.expiresAt, created: true };
+      return { token: ses.token, user: { email: u.rows[0].email, name: u.rows[0].name, role: roleOf({ ...u.rows[0], role: 'member' }) }, expiresAt: ses.expiresAt, created: true };
     });
   },
 
@@ -144,12 +163,13 @@ const routes = {
     if (!email || !pw) throw new HttpError(400, '이메일과 비밀번호를 입력하세요');
     const key = `${clientIp(req)}|${email}`;
     checkFails(key);
-    const { rows } = await pool.query('SELECT id, email, name, password_hash FROM jcal.users WHERE lower(email) = $1', [email]);
+    const { rows } = await pool.query('SELECT id, email, name, role, password_hash FROM jcal.users WHERE lower(email) = $1', [email]);
     const u = rows[0];
     if (!u || !(await verifyPassword(pw, u.password_hash))) { addFail(key); throw new HttpError(401, '이메일 또는 비밀번호가 맞지 않습니다'); }
     fails.delete(key);
+    if (roleOf(u) === 'suspended') throw new HttpError(403, SUSPENDED);
     const ses = await tx(c => newSession(c, req, u.id, body.device));
-    return { token: ses.token, user: { email: u.email, name: u.name }, expiresAt: ses.expiresAt };
+    return { token: ses.token, user: { email: u.email, name: u.name, role: roleOf(u) }, expiresAt: ses.expiresAt };
   },
 
   'POST /api/logout': async req => {
@@ -162,7 +182,51 @@ const routes = {
     const u = await authUser(req);
     const { rows } = await pool.query('SELECT version, updated_at, device, size_bytes FROM jcal.store_snapshots WHERE user_id = $1', [u.id]);
     const s = rows[0];
-    return { user: { email: u.email, name: u.name }, snapshot: s ? { version: Number(s.version), updatedAt: s.updated_at, device: s.device, size: s.size_bytes } : null };
+    return { user: { email: u.email, name: u.name, role: u.role }, snapshot: s ? { version: Number(s.version), updatedAt: s.updated_at, device: s.device, size: s.size_bytes } : null };
+  },
+
+  /* ── 회원 관리 (관리자) ── */
+  'GET /api/admin/users': async req => {
+    await adminUser(req);
+    const { rows } = await pool.query(
+      `SELECT u.email, u.name, u.role, u.created_at, u.last_login_at, u.role_updated_at,
+              (SELECT count(*) FROM jcal.sessions s WHERE s.user_id = u.id AND s.expires_at > now())::int AS sessions,
+              ss.updated_at AS synced_at, ss.size_bytes
+       FROM jcal.users u LEFT JOIN jcal.store_snapshots ss ON ss.user_id = u.id
+       WHERE u.password_hash <> '!not-set' ORDER BY u.created_at`);
+    return { users: rows.map(r => ({ email: r.email, name: r.name, role: roleOf(r), owner: isOwner(r.email), createdAt: r.created_at, lastLoginAt: r.last_login_at, roleUpdatedAt: r.role_updated_at, sessions: r.sessions, syncedAt: r.synced_at, size: r.size_bytes == null ? null : Number(r.size_bytes) })) };
+  },
+
+  'POST /api/admin/users': async (req, body) => {
+    const me = await adminUser(req);
+    const email = String(body.email || '').trim().toLowerCase();
+    const { rows } = await pool.query('SELECT id, email, role FROM jcal.users WHERE lower(email) = $1', [email]);
+    const t = rows[0];
+    if (!t) throw new HttpError(404, '없는 회원입니다');
+    if (body.logout) {
+      const r = await pool.query('DELETE FROM jcal.sessions WHERE user_id = $1 AND id <> $2', [t.id, me.sid]);
+      return { ok: true, loggedOut: r.rowCount };
+    }
+    const role = String(body.role || '');
+    if (!ROLES.includes(role)) throw new HttpError(400, '권한은 admin · member · suspended 중 하나입니다');
+    if (isOwner(t.email)) throw new HttpError(400, '대표 관리자 계정의 권한은 바꿀 수 없습니다');
+    if (t.id === me.id) throw new HttpError(400, '내 계정의 권한은 바꿀 수 없습니다 (다른 관리자에게 부탁하세요)');
+    await tx(async c => {
+      await c.query('UPDATE jcal.users SET role = $2, role_updated_at = now() WHERE id = $1', [t.id, role]);
+      if (role === 'suspended') await c.query('DELETE FROM jcal.sessions WHERE user_id = $1', [t.id]);
+    });
+    return { ok: true, email: t.email, role };
+  },
+
+  'GET /api/admin/signup': async req => { await adminUser(req); return signupSettings(); },
+
+  'POST /api/admin/signup': async (req, body) => {
+    await adminUser(req);
+    const mode = String(body.mode || '');
+    if (mode && !['code', 'open', 'closed'].includes(mode)) throw new HttpError(400, '회원가입 방식은 code · open · closed 중 하나입니다');
+    if (body.newCode || (mode === 'code' && !(await signupSettings()).code)) await setSetting('signup_code', newCode());
+    if (mode) await setSetting('signup_mode', mode);
+    return signupSettings();
   },
 
   'GET /api/sync': async req => {
