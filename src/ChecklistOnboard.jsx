@@ -94,8 +94,8 @@ export default function ChecklistOnboard({ onDone, onCancel }) {
 
   return (
     <section className="panel cob" aria-label="체크리스트 추천받기">
-      <div className="cob-h"><h2>체크리스트 추천받기</h2><span className="muted">클릭만 하면 나에게 맞는 체크리스트를 만들어 드려요</span>
-        <button className="btn sm grow-r" onClick={onCancel}>닫기</button></div>
+      <div className="cob-h"><div><h2>체크리스트 추천받기</h2><p className="muted">클릭만 하면 나에게 맞는 체크리스트를 만들어 드려요</p></div>
+        <button className="btn sm" onClick={onCancel}>닫기</button></div>
       {Steps}
 
       {step === 1 && <>
@@ -135,7 +135,7 @@ export default function ChecklistOnboard({ onDone, onCancel }) {
               {g.items.map(i => (
                 <label key={i.k} className={`cob-item ${off.has(i.k) ? 'off' : ''}`}>
                   <input type="checkbox" checked={!off.has(i.k)} onChange={() => toggle(i.k)} />
-                  <span className="grow"><b>{i.action}</b>{i.detail && <small className="muted"> · {i.detail}</small>}</span>
+                  <span className="cob-txt"><b>{i.action}</b>{i.detail && <small title={i.detail}>{i.detail}</small>}</span>
                   <span className={`cyc c-${i.c}`}>{CYCLES[i.c].replace('체크', '').replace('-루틴', '')}</span>
                 </label>))}
             </div>);
@@ -144,8 +144,10 @@ export default function ChecklistOnboard({ onDone, onCancel }) {
           <label><input type="radio" name="cob-mode" checked={mode === 'add'} onChange={() => setMode('add')} /> 지금 체크리스트에 더하기</label>
           <label><input type="radio" name="cob-mode" checked={mode === 'replace'} onChange={() => setMode('replace')} /> 이 추천으로 새로 만들기 <small className="muted">(지금 목록은 빼고, 체크 기록은 남음)</small></label>
         </div>}
-        <div className="cob-foot"><button className="btn" onClick={() => setStep(2)}>이전</button>
-          <button className="btn primary grow-r" disabled={!picked.length} onClick={create}>{picked.length}개로 체크리스트 만들기</button></div>
+        <div className="cob-foot cob-sticky">
+          <button className="btn" onClick={() => setStep(2)}>이전</button>
+          <span className="cob-sum" aria-live="polite"><b>{picked.length}개</b> 선택{picked.length > 0 && <small className="muted"> · {Object.keys(CYCLES).map(c => [c, picked.filter(i => i.c === c).length]).filter(([, n]) => n).map(([c, n]) => `${CYCLES[c].replace('체크', '').replace('-루틴', '')} ${n}`).join(' · ')}</small>}</span>
+          <button className="btn primary" disabled={!picked.length} onClick={create}>체크리스트 만들기</button></div>
       </>}
     </section>
   );
