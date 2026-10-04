@@ -73,7 +73,7 @@ const blankStore = () => {
     leisure: empty(s.leisure, ['trips', 'books', 'logs']),
     journal: empty(s.journal, ['entries', 'reviews']),
     goals: s.goals?.boards ? { ...s.goals, examples: true, miles2: true, boards: Object.fromEntries(Object.entries(s.goals.boards).map(([k, b]) => [k, { ...b, items: [], miles: [] }])) } : s.goals,
-    checklist: { base: 'none', custom: [] },               // 새 계정: 체크리스트는 비어서 시작 (직접 만들기 · 기본 항목 불러오기)
+    checklist: { base: 'none', custom: [], v2: true },               // 새 계정: 체크리스트는 비어서 시작 (직접 만들기 · 기본 항목 불러오기)
     meta: { ...(s.meta || {}), createdAt: new Date().toISOString() },
   };
 };
@@ -281,12 +281,15 @@ const fmtMD = d => `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]
 const dayDiff = (a, b) => Math.round((b - a) / 864e5);
 
 function Home() {
-  const { now } = useCtx();
+  const { now, go } = useCtx();
   const [sel, setSel] = useState(iso(now));
   const dueToday = ['W', 'M', 'Y'].filter(c => isDue(c, now));
   return (
     <>
       <header className="page-h"><h1>대시보드</h1><p>{now.getFullYear()}년 {now.getMonth() + 1}월 {now.getDate()}일 {WEEK[now.getDay()]}요일 · 일정과 오늘 남은 항목을 한눈에 확인하세요.</p></header>
+      {!ROWS.length && <section className="panel dash-start" aria-label="체크리스트 만들기">
+        <div><h2>체크리스트부터 만들어 볼까요?</h2><p className="muted">관리하고 싶은 것과 체크 리듬을 클릭으로 고르면 나에게 맞는 체크리스트를 추천해 드려요. 1분이면 됩니다.</p></div>
+        <button className="btn primary" onClick={() => go('check')}>추천받아 시작하기</button></section>}
       <div className="dash-top">
         <Remain />
         <DueCards />
