@@ -11,7 +11,6 @@
      둘 다 있으면 AI_PROVIDER=openai | anthropic 로 고름 (없으면 OpenAI 우선). 키가 없으면 생성 버튼만 막힘 */
 import dns from 'dns/promises';
 import net from 'net';
-import Anthropic from '@anthropic-ai/sdk';
 
 export const DEFAULT_SETTINGS = {
   titleMax: 30,                 // 제목 최대 글자 수
@@ -190,8 +189,9 @@ export const aiProvider = () => (env.AI_PROVIDER === 'anthropic' || env.AI_PROVI
   : env.OPENAI_API_KEY ? 'openai' : (env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN) ? 'anthropic' : 'openai');
 export const aiModel = () => env.SHORTS_MODEL || (aiProvider() === 'openai' ? 'gpt-5-mini' : 'claude-opus-5-5');
 export const aiReady = () => (aiProvider() === 'openai' ? !!env.OPENAI_API_KEY : !!(env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN));
-let client = null;
-const anthropic = () => (client ||= new Anthropic());        // ANTHROPIC_API_KEY (서버 /etc/jcalender.env)
+// Claude SDK 는 쓸 때만 불러온다 (라이브러리가 아직 설치 안 됐어도 서버 · ChatGPT 는 동작)
+let Anthropic = null, client = null;
+const anthropic = async () => { Anthropic ||= (await import('@anthropic-ai/sdk')).default; return (client ||= new Anthropic()); };
 /** AI 오류를 화면에 보일 말로: status 는 HTTP 상태로 그대로 씀 */
 export class AiError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
 const SCHEMA = {
@@ -239,7 +239,7 @@ async function askOpenAI(prompt) {
 async function askClaude(prompt) {
   let res;
   try {
-    res = await anthropic().beta.messages.create({
+    res = await (await anthropic()).beta.messages.create({
       model: aiModel(), max_tokens: 16000,
       betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
       output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
@@ -247,6 +247,7 @@ async function askClaude(prompt) {
       messages: [{ role: 'user', content: prompt }],
     });
   } catch (e) {
+    if (!Anthropic) throw new AiError(503, 'Claude 라이브러리가 서버에 없습니다. update.sh 를 다시 실행하세요');
     if (e instanceof Anthropic.AuthenticationError) throw new AiError(503, 'Anthropic API 키가 올바르지 않습니다 (jcal-admin ai-key 로 다시 넣기)');
     if (e instanceof Anthropic.RateLimitError) throw new AiError(429, 'AI 사용량 한도에 걸렸습니다. 잠시 뒤 다시 시도하세요');
     if (e instanceof Anthropic.APIError) { console.error('[숏폼 AI · Claude]', e.status, e.message); throw new AiError(502, `AI 서버 오류 (${e.status ?? '연결'})`); }

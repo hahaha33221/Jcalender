@@ -105,6 +105,7 @@ export const WORK_LOG = [
     ['a8ec23f..9fef87b', '2026-10-04', '인맥 관리 연락처 정렬: 기준(이름 · 회사 · 관계 · 생일 다가오는 순 · 등록순) + 오름차순 / 내림차순, 회사 · 생일 없는 사람은 늘 뒤로, 선택은 저장(store.peopleSort), 등록한 사람 팝업 목록도 같은 정렬'],
     ['9fef87b..52ef490', '2026-10-04', '기념일 목록 정렬: 기준(다가오는 순 · 이름 · 관련 인물 · 날짜(월 · 일) · 종류 · 등록순) + 오름차순 / 내림차순, 지난 날 · 인물 없음은 늘 뒤로, 선택은 저장(store.annivSort)'],
     ['52ef490..eeff47f', '2026-10-04', '숏폼 제작 1차 (콘텐츠 관리 › 숏폼 제작, 관리자만): 게시판 RSS 자동 수집(페이지 주소면 RSS 찾기 · 본문 가져오기 · EUC-KR · 내부망 차단) → 글 고르기 → Claude 로 제목 · 스크립트 후보(글자 수 · 후보 수 · 말투 설정) → 고르기 · 고치기. 서버 1.3.0 · 005 마이그레이션 · jcal-admin ai-key · update.sh 가 직접 넣은 env 유지 · 서버 테스트 75개 · docs/shorts.md'],
-    ['eeff47f..', '2026-10-04', '숏폼 스크립트 AI 를 ChatGPT(OpenAI)로: 기본 gpt-5-mini · JSON 스키마, 키 없음 · 크레딧 부족 · 한도 · 모델 오류 안내, jcal-admin ai-key 가 OpenAI(sk-…) / Claude(sk-ant-…) 키를 알아보고 AI_PROVIDER 자동 설정, 테스트는 가짜 OpenAI 서버'],
+    ['eeff47f..cf00a20', '2026-10-04', '숏폼 스크립트 AI 를 ChatGPT(OpenAI)로: 기본 gpt-5-mini · JSON 스키마, 키 없음 · 크레딧 부족 · 한도 · 모델 오류 안내, jcal-admin ai-key 가 OpenAI(sk-…) / Claude(sk-ant-…) 키를 알아보고 AI_PROVIDER 자동 설정, 테스트는 가짜 OpenAI 서버'],
+    ['cf00a20..', '2026-10-04', '고침: update.sh(setup.sh)가 직접 넣은 설정이 없을 때 4단계에서 멈추던 문제 (서버 라이브러리 설치 · DB 변경 전에 멈춰 서버가 안 켜짐), Claude 라이브러리는 쓸 때만 불러와 없어도 서버가 켜지게'],
   ] },
 ];

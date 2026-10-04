@@ -92,7 +92,7 @@ SESSION_DAYS=90
 MAX_BODY_MB=30
 API_HOST=${API_HOST}
 EOF
-[ -n "$EXTRA_ENV" ] && printf '%s\n' "$EXTRA_ENV" >> "$ENV_FILE"
+if [ -n "$EXTRA_ENV" ]; then printf '%s\n' "$EXTRA_ENV" >> "$ENV_FILE"; fi   # (&& 로 쓰면 비었을 때 set -e 로 멈춤)
 )
 chmod 600 "$ENV_FILE"
 pg_as_postgres -c "DO \$\$BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='jcal') THEN CREATE ROLE jcal LOGIN; END IF; END\$\$" -c "ALTER ROLE jcal PASSWORD '${DB_PW}'"
