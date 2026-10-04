@@ -11,6 +11,7 @@
      둘 다 있으면 AI_PROVIDER=openai | anthropic 로 고름 (없으면 OpenAI 우선). 키가 없으면 생성 버튼만 막힘 */
 import dns from 'dns/promises';
 import net from 'net';
+import { clampVideo } from './shortsText.mjs';
 
 export const DEFAULT_SETTINGS = {
   titleMax: 30,                 // 제목 최대 글자 수
@@ -20,12 +21,13 @@ export const DEFAULT_SETTINGS = {
   extra: '',                    // 추가 지시
   fetchMinutes: 60,             // 수집 주기
   keepDays: 30,                 // 고르지 않은 글은 이 날짜가 지나면 지움
+  video: clampVideo(),          // 2차: 영상 설정 (shortsText.mjs)
 };
-const clampSettings = s => {
+export const clampSettings = s => {
   const d = { ...DEFAULT_SETTINGS, ...(s || {}) };
   const n = (v, lo, hi, def) => Math.min(hi, Math.max(lo, Math.round(Number(v)) || def));
   return { titleMax: n(d.titleMax, 10, 100, 30), scriptChars: n(d.scriptChars, 100, 1500, 350), count: n(d.count, 1, 5, 2),
-    tone: String(d.tone || '').slice(0, 200), extra: String(d.extra || '').slice(0, 1000), fetchMinutes: n(d.fetchMinutes, 10, 1440, 60), keepDays: n(d.keepDays, 3, 365, 30) };
+    tone: String(d.tone || '').slice(0, 200), extra: String(d.extra || '').slice(0, 1000), fetchMinutes: n(d.fetchMinutes, 10, 1440, 60), keepDays: n(d.keepDays, 3, 365, 30), video: clampVideo(d.video) };
 };
 
 /* ── 안전한 가져오기 ── */
@@ -161,7 +163,7 @@ async function collect(pool, src) {
     return { added: 0, error: e.message };
   }
 }
-async function settingsOf(pool, uid) {
+export async function settingsOf(pool, uid) {
   const { rows } = await pool.query('SELECT data FROM jcal.shorts_settings WHERE user_id = $1', [uid]);
   return clampSettings(rows[0]?.data);
 }
@@ -207,7 +209,7 @@ const SYSTEM = `당신은 한국어 숏폼(유튜브 쇼츠 · 인스타 릴스 
 - 마지막은 시청자에게 묻는 한 문장(댓글 유도)으로 끝냅니다.
 - 원문에 없는 사실을 지어내지 않습니다. 글이 혐오 · 개인 공격 · 성적인 내용 중심이면 그 부분은 빼고 씁니다.`;
 /** OpenAI Chat Completions + JSON 스키마(structured outputs) */
-async function askOpenAI(prompt) {
+export async function askOpenAI(prompt, { system = SYSTEM, schema = SCHEMA, name = 'shorts_scripts' } = {}) {
   let r;
   try {
     r = await fetch(`${(env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '')}/chat/completions`, {
@@ -215,8 +217,8 @@ async function askOpenAI(prompt) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` },
       body: JSON.stringify({
         model: aiModel(), max_completion_tokens: 16000,
-        messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: prompt }],
-        response_format: { type: 'json_schema', json_schema: { name: 'shorts_scripts', strict: true, schema: SCHEMA } },
+        messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
+        response_format: { type: 'json_schema', json_schema: { name, strict: true, schema } },
       }),
     });
   } catch (e) { throw new AiError(502, e.name === 'TimeoutError' ? 'AI 응답이 너무 오래 걸립니다. 다시 시도해 주세요' : 'AI 서버에 연결하지 못했습니다'); }
@@ -236,14 +238,14 @@ async function askOpenAI(prompt) {
   return ch.message?.content || '';
 }
 /** Anthropic Claude (Messages API + JSON 스키마, 거절되면 권장 모델로 자동 재시도) */
-async function askClaude(prompt) {
+export async function askClaude(prompt, { system = SYSTEM, schema = SCHEMA } = {}) {
   let res;
   try {
     res = await (await anthropic()).beta.messages.create({
       model: aiModel(), max_tokens: 16000,
       betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
-      output_config: { effort: 'medium', format: { type: 'json_schema', schema: SCHEMA } },
-      system: SYSTEM,
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema } },
+      system,
       messages: [{ role: 'user', content: prompt }],
     });
   } catch (e) {
@@ -256,6 +258,11 @@ async function askClaude(prompt) {
   if (res.stop_reason === 'refusal') throw new AiError(422, 'AI 가 이 글로는 스크립트를 만들지 않았습니다. 다른 글을 골라 주세요');
   if (res.stop_reason === 'max_tokens') throw new AiError(502, 'AI 응답이 너무 길어 잘렸습니다. 스크립트 글자 수를 줄여 주세요');
   return res.content.filter(b => b.type === 'text').map(b => b.text).join('');
+}
+/** 정해진 JSON 형식으로 AI 에게 묻기 (지금 설정된 회사로) */
+export async function askJson(prompt, opts) {
+  const text = aiProvider() === 'openai' ? await askOpenAI(prompt, opts) : await askClaude(prompt, opts);
+  try { return JSON.parse(text); } catch { throw new AiError(502, 'AI 응답을 읽지 못했습니다. 다시 시도해 주세요'); }
 }
 export async function generateScripts(item, settings) {
   const S = clampSettings(settings);
@@ -298,7 +305,8 @@ export function shortsRoutes({ pool, tx, adminUser, HttpError }) {
 
     'POST /api/shorts/settings': async (req, body) => {
       const u = await user(req);
-      const data = clampSettings({ ...(await settingsOf(pool, u.id)), ...body });
+      const cur = await settingsOf(pool, u.id);
+      const data = clampSettings({ ...cur, ...body, video: body.video ? { ...cur.video, ...body.video, sub: { ...cur.video.sub, ...(body.video.sub || {}) } } : cur.video });
       await pool.query(`INSERT INTO jcal.shorts_settings (user_id, data) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`, [u.id, data]);
       return { settings: data };
     },

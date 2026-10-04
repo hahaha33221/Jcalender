@@ -17,6 +17,9 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+# 숏폼 소재 · 영상 파일 저장 (/var/lib/jcalender, jcal 사용자만 씀)
+StateDirectory=jcalender
+StateDirectoryMode=0750
 
 [Install]
 WantedBy=multi-user.target

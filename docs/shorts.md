@@ -1,11 +1,12 @@
 # 숏폼 제작 자동화 (사업 › 콘텐츠 관리 › 숏폼 제작)
 
-기준: 2026-10-04 · 1차 완료 · 관련 파일 `server/shorts.mjs`, `src/categories/ShortsStudio.jsx`, `db/migrations/005_shorts.sql`
+기준: 2026-10-04 · 1차 · 2차 완료 · 관련 파일 `server/shorts.mjs` · `server/shortsAssets.mjs` · `server/shortsText.mjs`, `src/categories/ShortsStudio.jsx` · `ShortsAssets.jsx`, `db/migrations/005_shorts.sql` · `006_shorts_assets.sql`
 
 ## 1. 개요
 
 - 목적: Make.com · Airtable · Dropbox · JSON2Video 로 하던 숏폼 제작을 Jcalender(화면) + VPS(서버)로 옮긴다 (B 방식).
-- 1차 범위: ① 게시판 글 자동 수집 → ② 제작할 글 고르기 → ③ AI 제목 · 스크립트 후보 만들기 · 고르기 · 고치기
+- 1차: ① 게시판 글 자동 수집 → 제작할 글 고르기 → ② AI 제목 · 스크립트 후보 만들기 · 고르기 · 고치기
+- 2차: ③ 소재함(끌어다 놓기 업로드 · Pexels 무료 소재) → ④ 제작 준비(스크립트별 배경 · 음악, AI 검색어 · 자동 고르기) · 영상 설정(자막 미리보기)
 - 관리자 계정에서만 보인다 (AI 비용이 서버에 넣은 관리자 키로 나가므로).
 
 ## 2. 안건
@@ -27,6 +28,7 @@
 | 2 | platform.openai.com › API keys 에서 키 만들기 (Billing 에 잔액 필요) | 브라우저 |
 | 3 | `ssh root@31.97.71.87` 접속 후 `jcal-admin ai-key` → ChatGPT(OpenAI) API 키(sk-…) 붙여 넣기 (화면에 안 보임, 저장 뒤 서버 재시작) | VPS 터미널 |
 | 4 | 앱 › 사업 › 콘텐츠 관리 › 숏폼 제작 › 설정 에서 "AI 준비됨 · ChatGPT" 확인 | 앱 |
+| 5 | (2차) https://www.pexels.com/api/ 에서 무료 API 키 받기 → VPS 에서 `jcal-admin pexels-key` | 브라우저 · VPS |
 
 - 키는 `/etc/jcalender.env` 에만 저장된다 (update.sh 를 다시 실행해도 남음). 채팅 · GitHub 에 올리지 않는다.
 - AI: 기본은 OpenAI ChatGPT, 모델 `gpt-5-mini` (바꾸려면 env 에 `SHORTS_MODEL=모델이름` 추가 후 `systemctl restart jcal-api`). JSON 스키마(structured outputs)로 받음.
@@ -39,6 +41,9 @@
 | ① 수집함 › 게시판 관리 | 게시판 주소(또는 RSS 주소) 추가. 페이지 주소면 안의 RSS 를 찾아 씀. "본문까지"를 켜면 글 페이지에 들어가 본문을 가져옴 | 등록은 수동, 수집은 자동 (기본 60분마다) |
 | ① 수집함 › 수집한 글 | 새 글 목록 → "제작할 글로 고르기" / "건너뛰기" | 수동 |
 | ② 고른 글 · 스크립트 | "AI 스크립트 만들기" → 후보 N개 → "이 스크립트로 제작" 고르기 → 제목 · 스크립트 · 해시태그 고치기(칸에서 나가면 저장) | 생성 자동, 고르기 수동 |
+| ③ 소재함 | 영상 · 이미지 · 음악을 끌어다 놓기(여러 개, 파일당 300MB). 길이 · 크기 · 세로/가로 · 미리보기 자동. 태그(분위기 · 주제) 적기. Pexels 에서 세로 영상 · 사진 검색 → "소재함에 담기" | 업로드 수동, 정보 자동 |
+| ④ 제작 준비 | 고른 스크립트마다: AI 검색어 · 분위기 추천 → "자동 고르기"(필요한 배경 수 + 음악) → 순서 바꾸기 · 빼기 · 더 넣기, 배경음악 고르기 | 자동 + 손보기 |
+| 설정 › 영상 설정 | 배경 하나 시간 · 세로 맞추기(꽉 채우기 / 흐린 배경) · 목소리 · 빠르기 · 음악 크기 · 제목 고정 · 자막 글꼴 · 크기 · 색 · 테두리 · 한 줄 글자 수 · 줄 수 · 위치 · 상자, 오른쪽에 9:16 미리보기 | 한 번 정해 두면 끝 |
 
 ### 3-3. 바꿀 수 있는 값 (설정)
 
@@ -66,12 +71,13 @@
 
 | 순서 | 작업 |
 |---|---|
-| 2차 | 소재함: 배경 영상 · 이미지 · 음악 끌어다 놓기 업로드, Pexels 무료 소재 자동 검색, 영상 설정(배경 1개 시간 · 전환 수 · 목소리 · 자막 글꼴 · 색 · 한 줄 글자 수) |
 | 3차 | 서버에서 나레이션(TTS) + 자막 + 합성(ffmpeg, 1080×1920 자동 맞춤) → 미리보기 · 다운로드 |
 | 4차 | 유튜브 쇼츠 · 인스타 릴스 업로드, 성과 탭 연결 |
 | 추가 | RSS 없는 게시판(HTML 목록 + 정규식) 수집 |
 
 ## 6. 기타
 
-- 서버 시험: `server/test.mjs` 의 "숏폼 제작" 항목 (가짜 게시판 · 가짜 AI 서버로 실제 비용 없이 확인)
+- 서버 시험: `server/test.mjs` 의 "숏폼 제작" · "숏폼 2차" 항목 (가짜 게시판 · 가짜 AI · 가짜 Pexels 로 실제 비용 없이 확인)
+- 파일 저장: VPS `/var/lib/jcalender/shorts/<사용자>/` (사용자당 기본 5GB, `SHORTS_QUOTA_MB` 로 변경). 파일 주소는 6시간짜리 서명 주소
+- Pexels 소재는 상업적 사용 가능 · 출처 표시 권장 (소재함에 촬영자 이름 저장)
 - API: `GET /api/shorts`, `POST /api/shorts/source · item · generate · script · settings` (server/shorts.mjs 머리말). 시험은 가짜 OpenAI 서버로 함

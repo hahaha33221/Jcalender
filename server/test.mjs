@@ -5,6 +5,9 @@ import fs from 'fs';
 import { pool } from './db.mjs';
 import { hashPassword } from './auth.mjs';
 import http from 'http';
+import os from 'os';
+import path from 'path';
+import { spawnSync } from 'child_process';
 import { parseFeed, htmlToText, extractBody, findFeedLink } from './shorts.mjs';
 
 const PORT = 18787, BASE = `http://127.0.0.1:${PORT}`, ORIGIN = 'https://jcalender-test.vercel.app';
@@ -28,6 +31,13 @@ const call = async (method, path, body, token, origin = ORIGIN) => {
 };
 
 await pool.query(`INSERT INTO jcal.users (email, name, password_hash) VALUES ($1, '테스트', $2)`, [EMAIL, await hashPassword(PW)]);
+// 숏폼 2차 시험용 소재 (ffmpeg 가 있으면 진짜 영상 · 음악, 없으면 가짜 바이트)
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'jcal-test-'));
+const HAS_FF = (() => { try { return spawnSync('ffmpeg', ['-version']).status === 0; } catch { return false; } })();
+const media = (name, args, fallback) => { const f = path.join(TMP, name); if (HAS_FF) spawnSync('ffmpeg', ['-y', '-v', 'error', ...args, f]); if (!fs.existsSync(f)) fs.writeFileSync(f, fallback); return f; };
+const VID = media('v.mp4', ['-f', 'lavfi', '-i', 'testsrc=size=360x640:rate=15:duration=2', '-pix_fmt', 'yuv420p'], Buffer.alloc(2000, 1));
+const IMG = media('p.jpg', ['-f', 'lavfi', '-i', 'color=c=blue:s=400x600', '-frames:v', '1'], Buffer.alloc(500, 2));
+const MP3 = media('m.mp3', ['-f', 'lavfi', '-i', 'sine=frequency=440:duration=3'], Buffer.alloc(800, 3));
 // 숏폼 시험용: 가짜 게시판(RSS · 글 페이지) + 가짜 OpenAI API (실제 AI 호출 없음)
 const FAKE = 18788, F = `http://127.0.0.1:${FAKE}`;
 const aiCalls = [];
@@ -40,10 +50,23 @@ const fake = http.createServer((req, res) => {
   if (req.url === '/board') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end(`<html><head><link rel="alternate" type="application/rss+xml" href="/feed.xml"></head><body>게시판</body></html>`); }
   if (req.url === '/nofeed') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end('<html><body>RSS 없음</body></html>'); }
   if (req.url.startsWith('/post/')) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(`<html><body><nav>메뉴</nav><article><h1>제목</h1><p>${'본문 내용이 아주 깁니다. '.repeat(12)}</p><script>x()</script></article></body></html>`); }
+  if (req.url.startsWith('/pexels/')) {                     // 가짜 Pexels
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    const vid = { id: 111, url: 'https://www.pexels.com/video/office-111/', image: `${F}/media/p.jpg`, duration: 2, width: 360, height: 640, user: { name: '촬영자A' },
+      video_files: [{ link: `${F}/media/wide.mp4`, width: 1920, height: 1080, file_type: 'video/mp4' }, { link: `${F}/media/v.mp4`, width: 1080, height: 1920, file_type: 'video/mp4' }] };
+    const pho = { id: 222, url: 'https://www.pexels.com/photo/desk-222/', width: 400, height: 600, photographer: '촬영자B', src: { medium: `${F}/media/p.jpg`, large2x: `${F}/media/p.jpg` } };
+    if (req.url.startsWith('/pexels/videos/search')) return res.end(JSON.stringify({ total_results: 1, videos: [vid] }));
+    if (req.url.startsWith('/pexels/videos/videos/111')) return res.end(JSON.stringify(vid));
+    if (req.url.startsWith('/pexels/v1/search')) return res.end(JSON.stringify({ total_results: 1, photos: [pho] }));
+    if (req.url.startsWith('/pexels/v1/photos/222')) return res.end(JSON.stringify(pho));
+    res.writeHead(404); return res.end('{}');
+  }
+  if (req.url.startsWith('/media/')) { const f = { '/media/v.mp4': VID, '/media/p.jpg': IMG }[req.url]; if (!f) { res.writeHead(404); return res.end(); } res.writeHead(200, { 'Content-Type': req.url.endsWith('mp4') ? 'video/mp4' : 'image/jpeg' }); return res.end(fs.readFileSync(f)); }
   if (req.url === '/v1/chat/completions') {
     let b = ''; req.on('data', c => { b += c; }); req.on('end', () => {
       aiCalls.push({ url: req.url, headers: req.headers, body: JSON.parse(b) });
       res.writeHead(200, { 'Content-Type': 'application/json' });
+      if (JSON.parse(b).response_format?.json_schema?.name === 'asset_keywords') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ keywords: ['office desk', 'meeting room'], mood: '긴장' }) } }] }));
       res.end(JSON.stringify({ id: 'chatcmpl-test', object: 'chat.completion', model: 'gpt-5-mini', choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', refusal: null,
         content: JSON.stringify({ candidates: [{ title: '회사에서 생긴 반전', script: '여러분 이거 실화입니다. 어떻게 생각하세요?', hashtags: ['#회사', '썰'] }, { title: '두 번째 후보', script: '스크립트 둘', hashtags: [] }] }) } }] }));
     }); return;
@@ -52,7 +75,8 @@ const fake = http.createServer((req, res) => {
 });
 await new Promise(r => fake.listen(FAKE, '127.0.0.1', r));
 const srv = spawn(process.execPath, ['index.mjs'], { env: { ...process.env, PORT: String(PORT), ALLOWED_ORIGINS: 'https://*.vercel.app', OWNER_EMAILS: OWNER,
-  SHORTS_ALLOW_PRIVATE: '1', SHORTS_CRON: '0', OPENAI_API_KEY: 'sk-test-key', OPENAI_BASE_URL: `${F}/v1`, ANTHROPIC_API_KEY: '', AI_PROVIDER: '' }, stdio: ['ignore', 'pipe', 'inherit'] });
+  SHORTS_ALLOW_PRIVATE: '1', SHORTS_CRON: '0', OPENAI_API_KEY: 'sk-test-key', OPENAI_BASE_URL: `${F}/v1`, ANTHROPIC_API_KEY: '', AI_PROVIDER: '',
+  PEXELS_API_KEY: 'test-pexels-key', PEXELS_BASE_URL: `${F}/pexels`, SHORTS_DIR: path.join(TMP, 'store'), SHORTS_MAX_UPLOAD_MB: '1' }, stdio: ['ignore', 'pipe', 'inherit'] });
 await new Promise(r => srv.stdout.once('data', r));
 
 try {
@@ -185,6 +209,47 @@ try {
   check('설정 범위 제한 (제목 100자까지)', sh_g2.settings.titleMax === 100 && sh_g2.settings.tone === '담담하게');
   check('다른 사람 항목은 404', (await call('POST', '/api/shorts/item', { id: sh_it1.id, status: 'skipped' }, T2b)).status !== 200);
   check('게시판 삭제', (await call('POST', '/api/shorts/source', { action: 'delete', id: sh_add2.json.source.id }, sh_T0)).status === 200);
+
+  console.log(`숏폼 2차 (소재함 · Pexels · 제작 준비)${HAS_FF ? '' : ' — ffmpeg 없음: 길이 · 미리보기 확인은 건너뜀'}`);
+  const a2_up = async (file, name, type, token = sh_T0) => { const r = await fetch(`${BASE}/api/shorts/upload`, { method: 'POST', headers: { Origin: ORIGIN, Authorization: `Bearer ${token}`, 'Content-Type': type, 'X-File-Name': encodeURIComponent(name) }, body: fs.readFileSync(file) }); return { status: r.status, json: await r.json().catch(() => null) }; };
+  const a2_uv = await a2_up(VID, '사무실 영상.mp4', 'video/mp4');
+  check('영상 올리기', a2_uv.status === 200 && a2_uv.json.asset.kind === 'video' && a2_uv.json.asset.name === '사무실 영상', JSON.stringify(a2_uv.json).slice(0, 200));
+  if (HAS_FF) check('영상 크기 · 길이 · 미리보기 (세로 360×640, 2초)', a2_uv.json.asset.width === 360 && a2_uv.json.asset.height === 640 && Math.abs(a2_uv.json.asset.duration - 2) < 0.3 && !!a2_uv.json.asset.thumb, JSON.stringify(a2_uv.json.asset));
+  const a2_ui = await a2_up(IMG, 'desk.jpg', 'image/jpeg'), a2_um = await a2_up(MP3, '잔잔한 음악.mp3', 'audio/mpeg');
+  check('이미지 · 음악 올리기', a2_ui.json?.asset.kind === 'image' && a2_um.json?.asset.kind === 'music' && (!HAS_FF || Math.abs(a2_um.json.asset.duration - 3) < 0.3), JSON.stringify(a2_um.json));
+  check('지원 안 하는 파일 415', (await a2_up(IMG, 'memo.txt', 'text/plain')).status === 415);
+  const a2_big = path.join(TMP, 'a2_big.mp4'); fs.writeFileSync(a2_big, Buffer.alloc(1.5 * 1024 * 1024));
+  check('너무 큰 파일 413 (1MB 제한)', (await a2_up(a2_big, 'a2_big.mp4', 'video/mp4')).status === 413);
+  check('일반 회원은 올리기 403', (await a2_up(IMG, 'x.jpg', 'image/jpeg', T)).status === 403);
+  const a2_sg = (await call('GET', '/api/shorts', null, sh_T0)).json;
+  check('목록: 소재 3개 · 저장 공간 · Pexels 준비', a2_sg.assets.length === 3 && a2_sg.storage.used > 0 && a2_sg.pexels.ready === true && a2_sg.settings.video.clipSeconds === 4, JSON.stringify(a2_sg.storage));
+  const a2_va = a2_sg.assets.find(a => a.id === a2_uv.json.asset.id);
+  const a2_fr = await fetch(BASE + a2_va.url);
+  check('서명 주소로 영상 받기', a2_fr.status === 200 && a2_fr.headers.get('content-type') === 'video/mp4' && (await a2_fr.arrayBuffer()).byteLength === fs.statSync(VID).size);
+  const a2_rr = await fetch(BASE + a2_va.url, { headers: { Range: 'bytes=0-99' } });
+  check('이어받기 (Range 206)', a2_rr.status === 206 && (await a2_rr.arrayBuffer()).byteLength === 100 && /^bytes 0-99\//.test(a2_rr.headers.get('content-range')));
+  check('서명이 틀리면 403', (await fetch(BASE + a2_va.url.replace(/sig=[^&]+$/, 'sig=x'))).status === 403 && (await fetch(BASE + a2_va.url.replace(/k=file/, 'k=thumb'))).status === 403);
+  if (HAS_FF) check('미리보기 그림 받기', (await fetch(BASE + a2_va.thumb)).headers.get('content-type') === 'image/jpeg');
+  await call('POST', '/api/shorts/asset', { id: a2_va.id, tags: '#회사, 사무실  긴장' }, sh_T0);
+  check('태그 정리 저장', (await call('GET', '/api/shorts', null, sh_T0)).json.assets.find(a => a.id === a2_va.id).tags === '회사 사무실 긴장');
+  const a2_px = await call('POST', '/api/shorts/pexels', { query: 'office', type: 'video' }, sh_T0);
+  check('Pexels 영상 검색 (세로 · 촬영자)', a2_px.status === 200 && a2_px.json.items[0].id === '111' && a2_px.json.items[0].height === 1920 && a2_px.json.items[0].credit === '촬영자A', JSON.stringify(a2_px.json).slice(0, 200));
+  const a2_pxs = await call('POST', '/api/shorts/pexels/save', { id: '111', type: 'video', query: 'office' }, sh_T0);
+  check('Pexels 영상 담기 (세로 파일 골라 내려받기)', a2_pxs.status === 200 && a2_pxs.json.asset.source === 'pexels' && a2_pxs.json.asset.credit === '촬영자A' && a2_pxs.json.asset.tags === 'office' && (!HAS_FF || a2_pxs.json.asset.height === 640), JSON.stringify(a2_pxs.json).slice(0, 300));
+  check('같은 Pexels 소재 다시 담기 409', (await call('POST', '/api/shorts/pexels/save', { id: '111', type: 'video' }, sh_T0)).status === 409);
+  check('Pexels 사진 담기', (await call('POST', '/api/shorts/pexels/save', { id: '222', type: 'image', query: 'desk' }, sh_T0)).json?.asset?.kind === 'image');
+  const a2_chosenId = sh_s2.id;
+  const a2_kw = await call('POST', '/api/shorts/keywords', { scriptId: a2_chosenId }, sh_T0);
+  check('AI 소재 검색어 · 분위기', a2_kw.status === 200 && a2_kw.json.keywords === 'office desk, meeting room' && a2_kw.json.mood === '긴장', JSON.stringify(a2_kw.json));
+  check('배경에 음악은 못 넣음 400', (await call('POST', '/api/shorts/project', { scriptId: a2_chosenId, backgrounds: [a2_um.json.asset.id] }, sh_T0)).status === 400);
+  const a2_pj = await call('POST', '/api/shorts/project', { scriptId: a2_chosenId, backgrounds: [a2_va.id, a2_ui.json.asset.id, a2_va.id], musicId: a2_um.json.asset.id }, sh_T0);
+  const a2_pg = (await call('GET', '/api/shorts', null, sh_T0)).json.projects.find(x => x.script_id === a2_chosenId);
+  check('제작 준비 저장 (순서 · 반복 · 음악 · 검색어 유지)', a2_pj.status === 200 && a2_pg.backgrounds.join() === [a2_va.id, a2_ui.json.asset.id, a2_va.id].join() && a2_pg.music_id === a2_um.json.asset.id && a2_pg.keywords === 'office desk, meeting room', JSON.stringify(a2_pg));
+  await call('POST', '/api/shorts/settings', { video: { clipSeconds: 3.3, sub: { color: '#ff0000', lineChars: 99 } } }, sh_T0);
+  const a2_vs = (await call('GET', '/api/shorts', null, sh_T0)).json.settings.video;
+  check('영상 설정 저장 · 범위 제한', a2_vs.clipSeconds === 3.5 && a2_vs.sub.color === '#FF0000' && a2_vs.sub.lineChars === 30 && a2_vs.sub.font === 'Noto Sans KR', JSON.stringify(a2_vs));
+  check('소재 지우기 → 파일 · 배경에서도 빠짐', (await call('POST', '/api/shorts/asset', { id: a2_va.id, remove: true }, sh_T0)).status === 200
+    && (await call('GET', '/api/shorts', null, sh_T0)).json.projects.find(x => x.script_id === a2_chosenId).backgrounds.join() === a2_ui.json.asset.id && (await fetch(BASE + a2_va.url)).status === 404);
   await pool.query('DELETE FROM jcal.users WHERE email = $1', [OWNER]);
   await setS('signup_mode', 'closed');
   check('가입 막기 → 403', (await call('POST', '/api/signup', { email: `x${E2}`, password: 'pw-12345678', name: 'x', code: 'TEST-CODE' })).status === 403);
@@ -199,7 +264,7 @@ try {
   for (let i = 0; i < 11; i++) last = await call('POST', '/api/login', { email: EMAIL, password: 'nope' });
   check('10번 실패 뒤 429', last.status === 429);
 } finally {
-  srv.kill('SIGTERM'); fake.close();
+  srv.kill('SIGTERM'); fake.close(); fs.rmSync(TMP, { recursive: true, force: true });
   await pool.query('DELETE FROM jcal.users WHERE email = $1', [EMAIL]);
   await pool.end();
 }

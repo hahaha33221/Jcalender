@@ -26,8 +26,9 @@ import crypto from 'crypto';
 import { hashPassword, newToken, tokenHash, verifyPassword } from './auth.mjs';
 import { storeToSql } from '../db/convert.mjs';
 import { shortsRoutes, startShortsCron } from './shorts.mjs';
+import { assetRoutes, assetData, RAW } from './shortsAssets.mjs';
 
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
 const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐
@@ -42,7 +43,7 @@ const originOk = o => !!o && config.origins.some(p => p === o || (p.includes('*'
 function send(req, res, status, body) {
   const o = req.headers.origin;
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', Vary: 'Origin' };
-  if (originOk(o)) Object.assign(h, { 'Access-Control-Allow-Origin': o, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS', 'Access-Control-Max-Age': '600' });
+  if (originOk(o)) Object.assign(h, { 'Access-Control-Allow-Origin': o, 'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-File-Name', 'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS', 'Access-Control-Max-Age': '600' });
   res.writeHead(status, h);
   res.end(body === undefined ? '' : JSON.stringify(body));
 }
@@ -277,20 +278,28 @@ const routes = {
 };
 
 Object.assign(routes, shortsRoutes({ pool, tx, adminUser, HttpError }));
+const assets = assetRoutes({ pool, tx, adminUser, HttpError });
+Object.assign(routes, assets.json);
+const shortsBase = routes['GET /api/shorts'];
+routes['GET /api/shorts'] = async (req, body, res) => ({ ...(await shortsBase(req, body, res)), ...(await assetData(pool, (await adminUser(req)).id)) });   // + 소재함 · 제작 준비
+const rawRoutes = assets.raw;                                    // 본문을 JSON 으로 읽지 않는 경로 (파일 올리기 · 내려주기)
 
 const server = http.createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0].replace(/\/+$/, '') || '/';
   if (req.method === 'OPTIONS') return send(req, res, originOk(req.headers.origin) ? 204 : 403);
-  const fn = routes[`${req.method} ${path}`];
+  const fn = routes[`${req.method} ${path}`], rawFn = rawRoutes[`${req.method} ${path}`];
   try {
-    if (!fn) throw new HttpError(404, '없는 주소입니다');
+    if (!fn && !rawFn) throw new HttpError(404, '없는 주소입니다');
     if (req.headers.origin && !originOk(req.headers.origin)) throw new HttpError(403, `허용되지 않은 화면 주소입니다: ${req.headers.origin}`);
+    if (rawFn) { const out = await rawFn(req, res); if (out !== RAW) send(req, res, 200, out); return; }
     const body = ['POST', 'PUT'].includes(req.method) ? await readBody(req) : {};
     const out = await fn(req, body, res);
     send(req, res, res.conflict ? 409 : 200, out);
   } catch (e) {
     const status = e.status || 500;
     if (status >= 500) console.error(`[${req.method} ${path}]`, e);
+    if (res.headersSent) { res.destroy(); return; }
+    if (rawFn && !req.complete) res.setHeader('Connection', 'close');   // 올리다 막힌 경우 남은 본문을 기다리지 않음
     send(req, res, status, { error: status >= 500 ? '서버 오류입니다' : e.message });
   }
 });

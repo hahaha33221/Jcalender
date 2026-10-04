@@ -40,7 +40,8 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 step "1/7 필요한 패키지 (이미 있으면 건너뜀)"
 need=()
-for p in curl ca-certificates xz-utils openssl; do dpkg -s "$p" >/dev/null 2>&1 || need+=("$p"); done
+# ffmpeg: 숏폼 소재 미리보기 · 길이 읽기 (3차: 영상 만들기)
+for p in curl ca-certificates xz-utils openssl ffmpeg; do dpkg -s "$p" >/dev/null 2>&1 || need+=("$p"); done
 if [ ${#need[@]} -gt 0 ]; then apt-get update -q && apt-get install -y -q "${need[@]}" >/dev/null; fi
 echo "확인 완료"
 
@@ -181,6 +182,30 @@ server {
         proxy_set_header X-Forwarded-For \$remote_addr;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_read_timeout 60s;
+    }
+    # 숏폼 소재 올리기 (큰 파일, 바로 서버로 흘려보냄)
+    location = /api/shorts/upload {
+        client_max_body_size 320m;
+        proxy_request_buffering off;
+        proxy_pass http://127.0.0.1:${API_PORT};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-For \$remote_addr;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+    # 숏폼 소재 내려주기 (영상 이어보기)
+    location = /api/shorts/file {
+        proxy_pass http://127.0.0.1:${API_PORT};
+        proxy_set_header Range \$http_range;
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+    }
+    # Pexels 소재 담기 · AI 는 오래 걸릴 수 있음
+    location ~ ^/api/shorts/(pexels/save|generate|keywords)$ {
+        proxy_pass http://127.0.0.1:${API_PORT};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-For \$remote_addr;
+        proxy_read_timeout 300s;
     }
 }
 EOF

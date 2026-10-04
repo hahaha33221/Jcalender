@@ -2,7 +2,7 @@
 __API_HOST__ {
 	encode gzip
 	request_body {
-		max_size 32MB
+		max_size 320MB
 	}
 	reverse_proxy 127.0.0.1:__API_PORT__
 	log {
