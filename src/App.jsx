@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ChecklistEdit from './ChecklistEdit.jsx';
+import ChecklistOnboard from './ChecklistOnboard.jsx';
 import Members from './Members.jsx';
 import { ActionRow, Ctx, WEEK, areaVar, num, useCtx } from './shared.jsx';
 import NeedsPanel from './Needs.jsx';
@@ -425,12 +426,16 @@ function CycleSummary({ c, title, note, hot }) {
 /* ───────────────────────── 체크리스트 ───────────────────────── */
 function CheckPage({ init }) {
   const { now } = useCtx();
-  const [edit, setEdit] = useState(false);              // 체크리스트 편집 (내 항목 추가 · 고치기 · 빼기)
+  const [mode, setMode] = useState(() => (ROWS.length ? 'list' : 'onboard'));   // list 목록 · edit 편집 · onboard 추천받기 (비어 있으면 추천부터)
+  const [msg, setMsg] = useState('');
   return (
     <>
       <header className="page-h check-h"><div><h1>체크리스트</h1><p>{now.getFullYear()}년 {now.getMonth() + 1}월 {now.getDate()}일 {WEEK[now.getDay()]}요일 · 우선순위 순으로 체크하세요. 주간은 {dueRule('W')}, 월간은 {dueRule('M')}, 년간은 {dueRule('Y')}에 도래합니다.</p></div>
-        {!edit && <button className="btn" onClick={() => setEdit(true)}>체크리스트 편집</button>}</header>
-      {edit ? <ChecklistEdit onDone={() => setEdit(false)} /> : <Checklist init={init} onEdit={() => setEdit(true)} />}
+        {mode === 'list' && <div className="check-h-btns"><button className="btn" onClick={() => setMode('onboard')}>추천받기</button><button className="btn" onClick={() => setMode('edit')}>체크리스트 편집</button></div>}</header>
+      {msg && mode === 'list' && <p className="banner ok mb-msg" role="status">{msg}</p>}
+      {mode === 'onboard' ? <ChecklistOnboard onDone={n => { setMsg(`추천 항목 ${n}개로 체크리스트를 만들었습니다. 필요 없는 건 "체크리스트 편집"에서 빼세요.`); setMode('list'); }} onCancel={() => setMode('list')} />
+        : mode === 'edit' ? <ChecklistEdit onDone={() => setMode('list')} onRecommend={() => setMode('onboard')} />
+          : <Checklist init={init} onEdit={() => setMode('edit')} onRecommend={() => setMode('onboard')} />}
     </>
   );
 }
@@ -879,7 +884,7 @@ function VoiceDialog({ now, onDone, onClose }) {
 }
 
 /* 카테고리별·우선순위순 체크리스트 (길게 스크롤) */
-function Checklist({ init, onEdit }) {
+function Checklist({ init, onEdit, onRecommend }) {
   const { store, now, isDone, prioOf, runMany, busy } = useCtx();
   const [cyc, setCyc] = useState(init?.cyc ? new Set([init.cyc]) : null);   // null 이면 도래한 주기를 자동으로 사용
   const [area, setArea] = useState(init?.area ?? 'ALL');
@@ -941,7 +946,7 @@ function Checklist({ init, onEdit }) {
           </div>
         </div>
       </div>
-      {!ROWS.length && <div className="empty">체크리스트가 비어 있습니다. 나에게 맞는 할 일을 직접 만들어 보세요. <button className="btn primary sm" onClick={onEdit}>체크리스트 만들기</button></div>}
+      {!ROWS.length && <div className="empty">체크리스트가 비어 있습니다. 몇 번 클릭으로 추천받거나 직접 만들어 보세요. <button className="btn primary sm" onClick={onRecommend}>추천받아 만들기</button> <button className="btn sm" onClick={onEdit}>직접 만들기</button></div>}
       {ROWS.length > 0 && groups.length === 0 && <div className="empty">{status === 'TODO' && base.length ? '오늘 남은 항목이 없습니다. 모두 완료했습니다.' : '표시할 항목이 없습니다. 위에서 주기를 선택하세요.'}</div>}
       {groups.map(g => {
         const gd = g.rows.filter(x => isDone(x.r)).length;

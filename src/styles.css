@@ -1654,3 +1654,41 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .mb-roles button.arm { background: var(--over); color: #fff; }
 .mb-role { display: inline-block; padding: 3px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; }
 .mb-table td .btn { white-space: nowrap; }
+
+/* 체크리스트 추천받기 (온보딩) */
+.check-h-btns, .cle-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.cob { margin-bottom: 16px; }
+.cob-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cob-h h2 { margin: 0; font-size: 16px; }
+.cob-steps { display: flex; gap: 6px; list-style: none; padding: 0; margin: 14px 0 6px; flex-wrap: wrap; }
+.cob-steps li { display: flex; align-items: center; gap: 6px; padding: 4px 12px 4px 4px; border-radius: 20px; background: var(--line2); color: var(--ink3); font-size: 13px; }
+.cob-steps li b { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--card); font-size: 12px; }
+.cob-steps li.on { background: var(--ink); color: var(--card); }
+.cob-steps li.on b { color: var(--ink); }
+.cob-steps li.done { background: var(--oksoft); color: var(--ok); }
+.cob-q { font-size: 15px; font-weight: 600; margin: 14px 0 10px; }
+.cob-q .muted { font-weight: 400; font-size: 13px; margin-left: 4px; }
+.cob-area { margin-bottom: 14px; }
+.cob-area h3 { display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 0 0 8px; color: var(--ink2); }
+.cob-area h3 .dot, .cob-gh .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ac); display: inline-block; }
+.cob-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.cob-card { position: relative; text-align: left; display: flex; flex-direction: column; gap: 3px; padding: 12px 34px 12px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font: inherit; cursor: pointer; transition: border-color .15s, background .15s; }
+.cob-card:hover { border-color: var(--ac, var(--a1)); }
+.cob-card small { color: var(--ink3); font-size: 12px; line-height: 1.4; }
+.cob-card.on { border-color: var(--ac, var(--a1)); background: color-mix(in srgb, var(--ac, var(--a1)) 8%, var(--card)); }
+.cob-tick { position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; border: 1.5px solid var(--line); color: var(--ink3); }
+.cob-card.on .cob-tick { background: var(--ac, var(--a1)); border-color: var(--ac, var(--a1)); color: #fff; }
+.cob-rhythm { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); --ac: var(--a1); }
+.cob-rhythm .cob-card b { font-size: 15px; }
+.cob-n { margin-top: 4px; color: var(--ink2) !important; }
+.cob-foot { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line2); }
+.cob-recs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.cob-group { border: 1px solid var(--line); border-top: 3px solid var(--ac); border-radius: 8px; padding: 8px 10px; }
+.cob-gh { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 4px; }
+.cob-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line2); font-size: 13px; cursor: pointer; }
+.cob-item:last-child { border-bottom: 0; }
+.cob-item.off .grow { opacity: .45; text-decoration: line-through; }
+.cob-item .cyc { flex: none; }
+.cob-mode { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; font-size: 13px; }
+.cob-mode label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+@media (max-width: 700px) { .cob-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cob-recs, .cob-rhythm { grid-template-columns: minmax(0, 1fr); } }

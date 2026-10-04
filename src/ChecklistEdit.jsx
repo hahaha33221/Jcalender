@@ -8,7 +8,7 @@ import { areaVar, useCtx } from './shared.jsx';
    - 새 계정은 기본 항목 없이 빈 체크리스트로 시작하고, 원하면 "기본 항목 불러오기" */
 const uid = () => `u${Math.random().toString(36).slice(2, 10)}`;
 
-export default function ChecklistEdit({ onDone }) {
+export default function ChecklistEdit({ onDone, onRecommend }) {
   const { store, setStore } = useCtx();
   const C = store.checklist || {};
   const set = fn => setStore(s => ({ ...s, checklist: fn(s.checklist || {}) }));
@@ -55,7 +55,7 @@ export default function ChecklistEdit({ onDone }) {
       <div className="panel cle-top">
         <div className="cle-sum">
           <div><b>내 체크리스트</b> <span className="muted">· 직접 만든 항목 {nCustom}개 · 기본 항목 {nBase}개 · 이 계정에만 저장됩니다</span></div>
-          <button className="btn primary sm" onClick={onDone}>편집 끝내기</button>
+          <span className="cle-btns">{onRecommend && <button className="btn sm" onClick={onRecommend}>추천받기</button>}<button className="btn primary sm" onClick={onDone}>편집 끝내기</button></span>
         </div>
         <label className="cle-base"><input type="checkbox" checked={useBase} onChange={e => setBase(e.target.checked)} />
           <span><b>기본 항목 쓰기</b> <span className="muted">— 앱에 들어 있는 {base.length}개 항목(루틴 · 재무 · 사업 운영 등). 끄면 직접 만든 항목만 보입니다</span></span></label>
