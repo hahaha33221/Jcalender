@@ -44,6 +44,7 @@ const MP3 = media('m.mp3', ['-f', 'lavfi', '-i', 'sine=frequency=440:duration=3'
 const FAKE = 18788, F = `http://127.0.0.1:${FAKE}`;
 const aiCalls = [], ttsCalls = [];
 let ttsFail = 0;
+const soc = { gToken: [], ytMeta: null, ytBytes: 0, ytAuth: '', ytQuota: false, igMedia: null, igFetch: null, revoked: 0 };   // 가짜 Google · YouTube · Instagram
 /** 가짜 음성: 앞 0.3초 조용 + 글자당 0.08초 소리 + 뒤 0.4초 조용 (24kHz 모노 WAV) */
 const fakeWav = text => { const rate = 24000, on = Math.round(String(text).replace(/\s/g, '').length * 0.08 * rate), pre = 0.3 * rate, post = 0.4 * rate;
   const pcm = Buffer.alloc((pre + on + post) * 2); for (let i = 0; i < on; i++) pcm.writeInt16LE(Math.round(8000 * Math.sin(i / 8)), (pre + i) * 2); return wavFile(pcm, rate, 1); };
@@ -68,6 +69,31 @@ const fake = http.createServer((req, res) => {
     res.writeHead(404); return res.end('{}');
   }
   if (req.url.startsWith('/media/')) { const f = { '/media/v.mp4': VID, '/media/p.jpg': IMG }[req.url]; if (!f) { res.writeHead(404); return res.end(); } res.writeHead(200, { 'Content-Type': req.url.endsWith('mp4') ? 'video/mp4' : 'image/jpeg' }); return res.end(fs.readFileSync(f)); }
+  if (/^\/(google|youtube|upload|ig|graph)\//.test(req.url)) {
+    let b = ''; req.on('data', c => { b += c.length > 2000 ? '' : c; soc.ytBytes += req.url.startsWith('/upload/session') ? c.length : 0; }); req.on('end', async () => {
+      const u = new URL(req.url, F), q = u.searchParams, fb = new URLSearchParams(b), J = (o, st = 200, h = {}) => { res.writeHead(st, { 'Content-Type': 'application/json', ...h }); res.end(JSON.stringify(o)); };
+      if (u.pathname === '/google/token') { soc.gToken.push(Object.fromEntries(fb));
+        if (fb.get('grant_type') === 'authorization_code') return fb.get('code') === 'good' ? J({ access_token: 'g-acc-1', refresh_token: 'g-ref', expires_in: 30 }) : J({ error: 'invalid_grant' }, 400);
+        return fb.get('refresh_token') === 'g-ref' ? J({ access_token: 'g-acc-2', expires_in: 3600 }) : J({ error: 'invalid_grant' }, 400); }
+      if (u.pathname === '/google/revoke') { soc.revoked++; return J({}); }
+      if (u.pathname === '/youtube/v3/channels') return req.headers.authorization === 'Bearer g-acc-1' ? J({ items: [{ id: 'UC123', snippet: { title: '내 채널', customUrl: '@mych' } }] }) : J({ error: { message: 'auth' } }, 401);
+      if (u.pathname === '/upload/youtube/v3/videos') { soc.ytAuth = req.headers.authorization; soc.ytMeta = JSON.parse(b); soc.ytBytes = 0;
+        if (soc.ytQuota) return J({ error: { errors: [{ reason: 'quotaExceeded' }], message: 'quota' } }, 403);
+        res.writeHead(200, { Location: `${F}/upload/session/1` }); return res.end(); }
+      if (u.pathname === '/upload/session/1') return J({ id: 'yt-vid-1', status: { uploadStatus: 'uploaded' } });
+      if (u.pathname === '/youtube/v3/videos') return J({ items: q.get('id').split(',').map(id => ({ id, statistics: { viewCount: '1234', likeCount: '56', commentCount: '7' } })) });
+      if (u.pathname === '/ig/oauth/access_token') return fb.get('code') === 'good' ? J({ access_token: 'ig-short', user_id: 1784 }) : J({ error_message: 'bad code' }, 400);
+      if (u.pathname === '/graph/access_token') return J({ access_token: 'ig-long', token_type: 'bearer', expires_in: 5184000 });
+      if (u.pathname === '/graph/v23.0/me') return J({ user_id: '17841400000', username: 'my_ig', account_type: 'BUSINESS' });
+      if (u.pathname === '/graph/v23.0/17841400000/media') { soc.igMedia = Object.fromEntries(fb);
+        const v = await fetch(fb.get('video_url')).catch(() => null); soc.igFetch = v ? { status: v.status, bytes: (await v.arrayBuffer()).byteLength } : null; return J({ id: 'cont-1' }); }
+      if (u.pathname === '/graph/v23.0/cont-1') return J({ status_code: 'FINISHED' });
+      if (u.pathname === '/graph/v23.0/17841400000/media_publish') return J({ id: 'ig-media-1' });
+      if (u.pathname === '/graph/v23.0/ig-media-1') return J(q.get('fields') === 'permalink' ? { permalink: 'https://www.instagram.com/reel/abc/' } : { like_count: 10, comments_count: 2 });
+      if (u.pathname === '/graph/v23.0/ig-media-1/insights') return J({ data: [{ name: 'views', values: [{ value: 500 }] }, { name: 'reach', values: [{ value: 300 }] }, { name: 'saved', values: [{ value: 4 }] }, { name: 'shares', values: [{ value: 3 }] }] });
+      J({ error: { message: 'not found' } }, 404);
+    }); return;
+  }
   if (req.url === '/v1/audio/speech') {
     let b = ''; req.on('data', c => { b += c; }); req.on('end', () => {
       const j = JSON.parse(b); ttsCalls.push({ headers: req.headers, body: j });
@@ -89,7 +115,7 @@ const fake = http.createServer((req, res) => {
 await new Promise(r => fake.listen(FAKE, '127.0.0.1', r));
 const srv = spawn(process.execPath, ['index.mjs'], { env: { ...process.env, PORT: String(PORT), ALLOWED_ORIGINS: 'https://*.vercel.app', OWNER_EMAILS: OWNER,
   SHORTS_ALLOW_PRIVATE: '1', SHORTS_CRON: '0', OPENAI_API_KEY: 'sk-test-key', OPENAI_BASE_URL: `${F}/v1`, ANTHROPIC_API_KEY: '', AI_PROVIDER: '',
-  PEXELS_API_KEY: 'test-pexels-key', PEXELS_BASE_URL: `${F}/pexels`, SHORTS_DIR: path.join(TMP, 'store'), SHORTS_MAX_UPLOAD_MB: '1' }, stdio: ['ignore', 'pipe', 'inherit'] });
+  PEXELS_API_KEY: 'test-pexels-key', YOUTUBE_CLIENT_ID: 'test.apps.googleusercontent.com', YOUTUBE_CLIENT_SECRET: 'gsecret', INSTAGRAM_APP_ID: '123456', INSTAGRAM_APP_SECRET: 'igsecret', SOCIAL_TEST_BASE: F, PUBLIC_URL: BASE, IG_POLL_MS: '200', PEXELS_BASE_URL: `${F}/pexels`, SHORTS_DIR: path.join(TMP, 'store'), SHORTS_MAX_UPLOAD_MB: '1' }, stdio: ['ignore', 'pipe', 'inherit'] });
 await new Promise(r => srv.stdout.once('data', r));
 
 try {
@@ -320,6 +346,56 @@ try {
       check('영상 지우기 → 파일도 지움', (await call('POST', '/api/shorts/render/remove', { id: r3d.id }, sh_T0)).status === 200 && (await fetch(BASE + r3d.url)).status === 404);
     }
   } else check('ffmpeg 없으면 503', (await call('POST', '/api/shorts/render', { scriptId: r3_sid }, sh_T0)).status === 503);
+
+  console.log('숏폼 4차 (유튜브 · 인스타그램 연결 · 업로드 · 성과)');
+  {
+    const uid4 = (await pool.query('SELECT id FROM jcal.users WHERE email = $1', [OWNER])).rows[0].id;
+    const rid = (await pool.query("INSERT INTO jcal.shorts_renders (user_id, script_id, title, status, progress, size_bytes, duration) VALUES ($1, $2, '팀장님의 폭탄 발언', 'done', 100, 3000, 10) RETURNING id", [uid4, a2_chosenId])).rows[0].id;
+    fs.mkdirSync(path.join(TMP, 'store', uid4, 'renders'), { recursive: true });
+    fs.writeFileSync(path.join(TMP, 'store', uid4, 'renders', `${rid}.mp4`), Buffer.alloc(3000, 7));
+    const s4 = (await call('GET', '/api/shorts', null, sh_T0)).json.social;
+    check('업로드 준비: 키 있음 · 연결 안 됨 · 돌아오는 주소', s4?.channels.youtube.ready && !s4.channels.youtube.connected && s4.channels.instagram.ready && s4.callback.youtube === `${BASE}/api/oauth/youtube/callback`, JSON.stringify(s4).slice(0, 300));
+    check('일반 회원은 연결 403', (await call('POST', '/api/shorts/social/connect', { platform: 'youtube' }, T)).status === 403);
+    check('연결 전에는 올리기 400', (await call('POST', '/api/shorts/post', { renderId: rid, platforms: ['youtube'], title: 'x' }, sh_T0)).status === 400);
+    const cu = new URL((await call('POST', '/api/shorts/social/connect', { platform: 'youtube' }, sh_T0)).json.url), st = cu.searchParams.get('state');
+    check('유튜브 연결 주소 (오프라인 · 업로드 권한 · 돌아오는 주소)', cu.href.startsWith(`${F}/google/auth`) && cu.searchParams.get('access_type') === 'offline' && cu.searchParams.get('scope').includes('youtube.upload') && cu.searchParams.get('redirect_uri') === `${BASE}/api/oauth/youtube/callback` && !!st, cu.href);
+    check('state 가 틀리면 400', (await fetch(`${BASE}/api/oauth/youtube/callback?code=good&state=${encodeURIComponent(`${st}x`)}`)).status === 400);
+    check('다른 플랫폼의 state 는 거절', (await fetch(`${BASE}/api/oauth/instagram/callback?code=good&state=${encodeURIComponent(st)}`)).status === 400);
+    check('허용 안 함 → 안내', (await (await fetch(`${BASE}/api/oauth/youtube/callback?error=access_denied&state=${encodeURIComponent(st)}`)).text()).includes('허용을 누르지 않아'));
+    const cb = await fetch(`${BASE}/api/oauth/youtube/callback?code=good&state=${encodeURIComponent(st)}`), cbt = await cb.text();
+    check('유튜브 연결 완료 (앱에 알리고 창 닫기)', cb.status === 200 && cbt.includes('내 채널') && cbt.includes('postMessage') && cbt.includes(ORIGIN), cbt.slice(0, 300));
+    const tk = (await pool.query("SELECT access_token, refresh_token FROM jcal.shorts_channels WHERE user_id = $1 AND platform = 'youtube'", [uid4])).rows[0];
+    check('토큰은 암호화해서 저장', tk && !tk.access_token.includes('g-acc') && !tk.refresh_token.includes('g-ref') && tk.access_token.length > 20);
+    const iu = new URL((await call('POST', '/api/shorts/social/connect', { platform: 'instagram' }, sh_T0)).json.url);
+    check('인스타그램 연결 주소 (게시 · 인사이트 권한)', iu.href.startsWith(`${F}/ig/oauth/authorize`) && iu.searchParams.get('scope').includes('instagram_business_content_publish') && iu.searchParams.get('scope').includes('manage_insights'), iu.href);
+    const icb = await fetch(`${BASE}/api/oauth/instagram/callback?code=good%23_&state=${encodeURIComponent(iu.searchParams.get('state'))}`);
+    const s5 = (await call('GET', '/api/shorts/social', null, sh_T0)).json;
+    check('인스타그램 연결 완료 (@계정 · 60일 토큰)', icb.status === 200 && s5.social.channels.instagram.connected && s5.social.channels.instagram.name === '@my_ig' && new Date(s5.social.channels.instagram.expiresAt) > Date.now() + 50 * 86400000 && s5.social.channels.youtube.name === '내 채널', JSON.stringify(s5.social.channels));
+    check('유튜브 제목에 < > 는 400', (await call('POST', '/api/shorts/post', { renderId: rid, platforms: ['youtube'], title: '제목 <x>' }, sh_T0)).status === 400);
+    const p4 = await call('POST', '/api/shorts/post', { renderId: rid, platforms: ['youtube', 'instagram'], title: '팀장님의 폭탄 발언', caption: '회의 중 생긴 일 #회사 #썰', privacy: 'unlisted' }, sh_T0);
+    check('두 곳에 올리기 → 2건', p4.status === 200 && p4.json.posts.length === 2, JSON.stringify(p4.json).slice(0, 200));
+    const waitPosts = async ids => { for (let i = 0; i < 100; i++) { const ps = (await call('GET', '/api/shorts/social', null, sh_T0)).json.social.posts.filter(p => ids.includes(p.id)); if (ps.every(p => p.status === 'done' || p.status === 'failed')) return ps; await new Promise(z => setTimeout(z, 200)); } return []; };
+    const done = await waitPosts(p4.json.posts.map(p => p.id)), yt = done.find(p => p.platform === 'youtube'), ig = done.find(p => p.platform === 'instagram');
+    check('유튜브 업로드 (토큰 새로 받기 · 제목 · #Shorts · 태그 · 일부 공개 · 파일 전체)', yt?.status === 'done' && yt.url === 'https://www.youtube.com/shorts/yt-vid-1' && soc.gToken.some(t => t.grant_type === 'refresh_token') && soc.ytAuth === 'Bearer g-acc-2'
+      && soc.ytMeta.snippet.title === '팀장님의 폭탄 발언' && soc.ytMeta.snippet.description.includes('#Shorts') && soc.ytMeta.snippet.tags.join() === '회사,썰' && soc.ytMeta.status.privacyStatus === 'unlisted' && soc.ytBytes === 3000, JSON.stringify({ yt, meta: soc.ytMeta, bytes: soc.ytBytes }));
+    check('인스타그램 릴스 (영상 주소를 인스타가 직접 받음 · 캡션 · 링크)', ig?.status === 'done' && ig.url === 'https://www.instagram.com/reel/abc/' && soc.igMedia.media_type === 'REELS' && soc.igMedia.caption === '회의 중 생긴 일 #회사 #썰' && soc.igMedia.access_token === 'ig-long'
+      && soc.igFetch?.status === 200 && soc.igFetch.bytes === 3000, JSON.stringify({ ig, m: soc.igMedia, f: soc.igFetch }));
+    const s6 = await call('POST', '/api/shorts/stats', {}, sh_T0), ps6 = s6.json.social.posts;
+    check('성과 가져오기 (유튜브 조회 · 인스타 조회 · 저장 · 공유)', s6.status === 200 && ps6.find(p => p.platform === 'youtube').stats.views === 1234 && ps6.find(p => p.platform === 'youtube').stats.likes === 56
+      && ps6.find(p => p.platform === 'instagram').stats.views === 500 && ps6.find(p => p.platform === 'instagram').stats.saves === 4 && !!ps6[0].stats_at, JSON.stringify(ps6.map(p => p.stats)));
+    soc.ytQuota = true;
+    const pf = await call('POST', '/api/shorts/post', { renderId: rid, platforms: ['youtube'], title: '두 번째' }, sh_T0);
+    const fd = (await waitPosts([pf.json.posts[0].id]))[0];
+    check('유튜브 할당량 초과 → 실패 · 이유', fd?.status === 'failed' && /할당량/.test(fd.error), JSON.stringify(fd));
+    soc.ytQuota = false;
+    check('다시 시도 → 완료', (await call('POST', '/api/shorts/post/action', { id: fd.id, action: 'retry' }, sh_T0)).status === 200 && (await waitPosts([fd.id]))[0]?.status === 'done');
+    const ps = await call('POST', '/api/shorts/post', { renderId: rid, platforms: ['instagram'], caption: '예약', scheduledAt: new Date(Date.now() + 2 * 3600000).toISOString() }, sh_T0);
+    await new Promise(z => setTimeout(z, 500));
+    check('예약 → 시간 전에는 안 올림', ps.status === 200 && (await call('GET', '/api/shorts/social', null, sh_T0)).json.social.posts.find(p => p.id === ps.json.posts[0].id).status === 'scheduled');
+    check('예약 취소', (await call('POST', '/api/shorts/post/action', { id: ps.json.posts[0].id, action: 'cancel' }, sh_T0)).status === 200 && !(await call('GET', '/api/shorts/social', null, sh_T0)).json.social.posts.some(p => p.id === ps.json.posts[0].id));
+    check('다른 사람 업로드는 404', (await call('POST', '/api/shorts/post/action', { id: yt.id, action: 'remove' }, T2b)).status !== 200);
+    check('연결 끊기 (구글 허용도 취소)', (await call('POST', '/api/shorts/social/disconnect', { platform: 'youtube' }, sh_T0)).status === 200 && soc.revoked === 1 && !(await call('GET', '/api/shorts/social', null, sh_T0)).json.social.channels.youtube.connected);
+  }
 
   await pool.query('DELETE FROM jcal.users WHERE email = $1', [OWNER]);
   await setS('signup_mode', 'closed');

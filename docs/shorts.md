@@ -1,6 +1,6 @@
 # 숏폼 제작 자동화 (사업 › 콘텐츠 관리 › 숏폼 제작)
 
-기준: 2026-10-05 · 1차 · 2차 · 3차 완료 · 관련 파일 `server/shorts.mjs` · `server/shortsAssets.mjs` · `server/shortsRender.mjs` · `server/shortsText.mjs`, `src/categories/ShortsStudio.jsx` · `ShortsAssets.jsx` · `ShortsRender.jsx`, `db/migrations/005_shorts.sql` · `006_shorts_assets.sql` · `007_shorts_renders.sql`
+기준: 2026-10-05 · 1차 ~ 4차 완료 · 관련 파일 `server/shorts.mjs` · `server/shortsAssets.mjs` · `server/shortsRender.mjs` · `server/shortsSocial.mjs` · `server/shortsText.mjs`, `src/categories/ShortsStudio.jsx` · `ShortsAssets.jsx` · `ShortsRender.jsx` · `ShortsSocial.jsx` · `shortsPerf.js`, `db/migrations/005_shorts.sql` ~ `008_shorts_social.sql`
 
 ## 1. 개요
 
@@ -8,6 +8,7 @@
 - 1차: ① 게시판 글 자동 수집 → 제작할 글 고르기 → ② AI 제목 · 스크립트 후보 만들기 · 고르기 · 고치기
 - 2차: ③ 소재함(끌어다 놓기 업로드 · Pexels 무료 소재) → ④ 제작 준비(스크립트별 배경 · 음악, AI 검색어 · 자동 고르기) · 영상 설정(자막 미리보기)
 - 3차: ⑤ 영상 만들기 — 나레이션 음성(OpenAI TTS) + 낱말 강조 자막 + 배경 + 배경음악 → 1080×1920 mp4 → 미리보기 · 내려받기
+- 4차: ⑥ 업로드 — 유튜브 · 인스타그램 계정 연결 → 완성 영상을 쇼츠 · 릴스로 올리기(지금 · 예약) → 조회 · 좋아요 · 댓글 · 공유 · 저장을 자동으로 가져와 콘텐츠 관리 › 성과 탭에 채움
 - 관리자 계정에서만 보인다 (AI 비용이 서버에 넣은 관리자 키로 나가므로).
 
 ## 2. 안건
@@ -17,7 +18,9 @@
 | 1 | 처음 설정 (AI 키) |
 | 2 | 화면 사용 순서 |
 | 3 | 바꿀 수 있는 값 |
-| 4 | 보안 · 저작권 |
+| 4 | 영상이 만들어지는 방식 |
+| 5 | 보안 · 저작권 |
+| 6 | 유튜브 · 인스타그램 연결 (4차) |
 
 ## 3. 안건 별 주요 내용
 
@@ -44,6 +47,7 @@
 | ② 고른 글 · 스크립트 | "AI 스크립트 만들기" → 후보 N개 → "이 스크립트로 제작" 고르기 → 제목 · 스크립트 · 해시태그 고치기(칸에서 나가면 저장) | 생성 자동, 고르기 수동 |
 | ③ 소재함 | 영상 · 이미지 · 음악을 끌어다 놓기(여러 개, 파일당 300MB). 길이 · 크기 · 세로/가로 · 미리보기 자동. 태그(분위기 · 주제) 적기. Pexels 에서 세로 영상 · 사진 검색 → "소재함에 담기" | 업로드 수동, 정보 자동 |
 | ④ 제작 준비 | 고른 스크립트마다: AI 검색어 · 분위기 추천 → "자동 고르기"(필요한 배경 수 + 음악) → 순서 바꾸기 · 빼기 · 더 넣기, 배경음악 고르기 | 자동 + 손보기 |
+| ⑥ 업로드 | 계정 연결(한 번) → 영상 고르기 → 유튜브 · 인스타그램 체크 → 제목 · 설명/캡션 · 유튜브 공개 범위 → 지금 올리기 / 예약 → 목록에서 진행 · 링크 · 성과 확인, 실패하면 이유 + 다시 시도 | 올리기 · 성과 자동 |
 | ⑤ 영상 만들기 | 스크립트마다 "영상 만들기" → 대기열(한 번에 1개) → 진행률(목소리 → 배경 → 합치기) → 완성되면 화면에서 재생 · "내려받기"(shorts-날짜-시각.mp4) · 다시 만들기 · 취소 · 삭제 | 만들기 자동, 확인 수동 |
 | 설정 › 영상 설정 | 배경 하나 시간 · 세로 맞추기(꽉 채우기 / 흐린 배경) · 목소리 · 빠르기 · 음악 크기 · 제목 고정 · 자막 글꼴 · 크기 · 색 · 테두리 · 한 줄 글자 수 · 줄 수 · 위치 · 상자, 오른쪽에 9:16 미리보기, 목소리 "들어 보기" | 한 번 정해 두면 끝 |
 
@@ -78,21 +82,64 @@
 - 서버는 http(s) 주소만 읽고, 내부망 주소(127.0.0.1 · 10.x · 192.168.x · 169.254.x 등)는 리디렉션까지 확인해 막는다. 3MB · 15초 제한.
 - 게시판 원문은 그대로 쓰지 않는다. AI 가 다시 쓰고 개인 정보는 빼도록 지시되어 있다. 게시판 이용약관을 확인한다.
 
+### 3-6. 유튜브 · 인스타그램 연결 (4차, 처음 한 번)
+
+돌아오는 주소(리디렉션 URI)는 앱 › ⑥ 업로드 의 "키 없음" 칸에도 나온다.
+
+**유튜브 (Google Cloud)**
+
+| 순서 | 할 일 |
+|---|---|
+| 1 | console.cloud.google.com → 프로젝트 새로 만들기 (예: jcalender-shorts) |
+| 2 | API 및 서비스 › 라이브러리 › **YouTube Data API v3** → 사용 |
+| 3 | Google 인증 플랫폼(OAuth 동의 화면) › 시작하기: 앱 이름 · 지원 이메일 · 대상 **외부** · 연락처 이메일 → 만들기 |
+| 4 | 대상 › **앱 게시(프로덕션으로 푸시)**. "테스트" 상태로 두면 7일마다 다시 연결해야 한다. 연결할 때 "Google 에서 확인하지 않은 앱" 경고가 나오면 고급 → 이동 |
+| 5 | 클라이언트 › 클라이언트 만들기: 유형 **웹 애플리케이션**, 승인된 리디렉션 URI `https://jcal-31-97-71-87.sslip.io/api/oauth/youtube/callback` → 클라이언트 ID · 보안 비밀번호 복사 |
+| 6 | VPS 에서 `jcal-admin youtube-key` → ID · 비밀번호 붙여 넣기 (비밀번호는 화면에 안 보임) |
+| 7 | 앱 › 숏폼 제작 › ⑥ 업로드 › 유튜브 "연결하기" → 유튜브 채널이 있는 구글 계정으로 로그인 · 허용 |
+
+- **주의 (Google 정책)**: 심사(감사)를 받지 않은 API 프로젝트로 올린 영상은 **비공개로 잠긴다**. 공개로 올리려면 Google 의 "YouTube API Services 감사 및 할당량 확장 양식"을 신청해야 한다 (무료, 몇 주 걸릴 수 있음). 그 전에는 앱에서 내려받아 직접 올리거나, 비공개로 올려 두고 감사 뒤부터 공개로 쓴다.
+- 하루 업로드 한도: API 할당량 10,000 중 업로드 1번에 1,600 → **하루 약 6개**. 성과 가져오기는 거의 안 씀.
+- 설명 끝에 `#Shorts` 를 자동으로 붙이고, 설명의 해시태그는 태그로도 넣는다.
+
+**인스타그램 (Meta, Instagram 로그인 방식)**
+
+| 순서 | 할 일 |
+|---|---|
+| 1 | 인스타그램 앱 › 설정 › 계정 유형 및 도구 › **프로페셔널 계정**(비즈니스 · 크리에이터)으로 전환 (페이스북 페이지 없어도 됨) |
+| 2 | developers.facebook.com › 내 앱 › 앱 만들기 → 사용 사례 **"Instagram 에서 메시지 및 콘텐츠 관리"** → 만들기 |
+| 3 | 사용 사례 › Instagram API 맞춤 설정 › **Instagram 로그인으로 API 설정** → "Instagram 비즈니스 로그인 설정"의 리디렉션 URL 에 `https://jcal-31-97-71-87.sslip.io/api/oauth/instagram/callback` 넣고 저장 |
+| 4 | 같은 화면의 **Instagram 앱 ID · Instagram 앱 시크릿** 복사 (페이스북 앱 ID 와 다름) |
+| 5 | 앱 역할 › 역할 › **Instagram 테스터** 에 내 인스타 계정 추가 → instagram.com › 설정 › 웹사이트 권한 › 테스터 초대 에서 수락 (앱이 "개발" 상태일 때 내 계정만 쓰는 방법, 앱 검수 필요 없음) |
+| 6 | VPS 에서 `jcal-admin instagram-key` → 앱 ID · 시크릿 붙여 넣기 |
+| 7 | 앱 › ⑥ 업로드 › 인스타그램 "연결하기" → 로그인 · 허용 |
+
+- 인스타그램 서버가 이 VPS 주소(https)에서 영상을 직접 받아 간다. 처리에 보통 1~3분.
+- 연결은 60일짜리이고 서버가 자동으로 연장한다. 24시간에 올릴 수 있는 개수 제한이 있다 (Meta 정책).
+- 캡션 2,200자 · 해시태그 30개까지.
+
+**공통**
+- 토큰은 DB 에 암호화해서 저장. 비밀번호는 저장하지 않는다. 연결 끊기를 누르면 구글 쪽 허용도 취소한다.
+- 예약: 정한 시각에 서버가 올린다 (최대 180일 뒤까지). 서버가 꺼져 있으면 켜진 뒤 바로 올린다.
+- 성과: 올린 지 2일 안은 1시간마다, 14일 안은 6시간마다, 60일 안은 하루에 한 번 가져온다. "성과 새로고침"으로 바로 가져올 수도 있다.
+- 콘텐츠 관리 › 성과 탭: 올린 영상이 "발행" 콘텐츠로 자동으로 들어가고 조회 · 좋아요 · 댓글 · 공유 · 저장이 채워진다 (팔로워 유입 · 링크 클릭은 직접 입력). 채널 계정 탭에 같은 채널 계정이 하나 있으면 그 계정으로 묶인다.
+
 ## 4. 결론
 
-- 수집 → 고르기 → 스크립트 → 소재 → 영상 만들기 · 내려받기까지 앱 안에서 끝난다 (Make.com · JSON2Video 없이).
+- 수집 → 고르기 → 스크립트 → 소재 → 영상 만들기 → 유튜브 · 인스타그램 올리기(예약) → 성과까지 앱 안에서 끝난다 (Make.com · JSON2Video 없이).
+- 유튜브는 Google 감사를 받기 전까지 API 로 올린 영상이 비공개로 잠긴다.
 - RSS 가 없는 게시판은 아직 수집할 수 없다.
 
 ## 5. 향후 진행 사항
 
 | 순서 | 작업 |
 |---|---|
-| 4차 | 유튜브 쇼츠 · 인스타 릴스 업로드, 성과 탭 연결 |
+| 추가 | 틱톡 업로드 (TikTok 개발자 앱 심사 필요) |
 | 추가 | RSS 없는 게시판(HTML 목록 + 정규식) 수집 |
 
 ## 6. 기타
 
-- 서버 시험: `server/test.mjs` 의 "숏폼 제작" · "숏폼 2차" · "숏폼 3차" 항목 (가짜 게시판 · 가짜 AI · 가짜 음성 · 가짜 Pexels 로 실제 비용 없이 확인, 3차는 실제로 mp4 를 만들어 1080×1920 · 소리 · 길이까지 확인)
+- 서버 시험: `server/test.mjs` 의 "숏폼 제작" · "숏폼 2차" · "숏폼 3차" · "숏폼 4차" 항목 (가짜 게시판 · 가짜 AI · 가짜 음성 · 가짜 Pexels · 가짜 Google/YouTube/Instagram 으로 실제 비용 없이 확인, 3차는 실제로 mp4 를 만들어 1080×1920 · 소리 · 길이까지 확인)
 - 파일 저장: VPS `/var/lib/jcalender/shorts/<사용자>/` (완성 영상은 `renders/`, 소재와 합쳐 사용자당 기본 5GB, `SHORTS_QUOTA_MB` 로 변경). 파일 주소는 6시간짜리 서명 주소
 - Pexels 소재는 상업적 사용 가능 · 출처 표시 권장 (소재함에 촬영자 이름 저장)
-- API: `GET /api/shorts`, `POST /api/shorts/source · item · generate · script · settings` (server/shorts.mjs 머리말), 3차 `POST /api/shorts/render · render/remove · voice`, `GET /api/shorts/renders` (server/shortsRender.mjs 머리말). 시험은 가짜 OpenAI 서버로 함
+- API: `GET /api/shorts`, `POST /api/shorts/source · item · generate · script · settings` (server/shorts.mjs 머리말), 3차 `POST /api/shorts/render · render/remove · voice`, `GET /api/shorts/renders` (server/shortsRender.mjs 머리말), 4차 `POST /api/shorts/social/connect · social/disconnect · post · post/action · stats`, `GET /api/shorts/social`, `GET /api/oauth/youtube|instagram/callback` (server/shortsSocial.mjs 머리말). 시험은 가짜 OpenAI 서버로 함

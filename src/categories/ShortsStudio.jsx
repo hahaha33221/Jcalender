@@ -2,19 +2,22 @@ import React, { useEffect, useState } from 'react';
 import { useCtx } from '../shared.jsx';
 import { AssetLibrary, Prep, VideoSettings } from './ShortsAssets.jsx';
 import { Renders } from './ShortsRender.jsx';
+import { Uploads } from './ShortsSocial.jsx';
+import { mergeShortsPosts } from './shortsPerf.js';
 
 /* 사업 › 콘텐츠 관리 › 숏폼 제작: ① 수집함 → ② 글 고르기 · AI 제목 · 스크립트 (server/shorts.mjs)
-   → ③ 소재함 · ④ 제작 준비 (ShortsAssets.jsx) → ⑤ 영상 만들기 (ShortsRender.jsx)
+   → ③ 소재함 · ④ 제작 준비 (ShortsAssets.jsx) → ⑤ 영상 만들기 (ShortsRender.jsx) → ⑥ 업로드 · 성과 (ShortsSocial.jsx)
    - 게시판(RSS)은 서버가 정해진 주기마다 자동으로 읽어 수집함에 쌓는다
    - 고른 글에서 "AI 스크립트 만들기" → 후보 여러 개 → 하나를 골라 고친다 (고른 스크립트가 2차 · 3차의 영상 재료)
    - 관리자 계정에서만 보임 (AI 비용이 서버의 관리자 키로 나가므로) */
-const STEPS = [['inbox', '① 수집함'], ['scripts', '② 고른 글 · 스크립트'], ['assets', '③ 소재함'], ['prep', '④ 제작 준비'], ['render', '⑤ 영상 만들기'], ['settings', '설정']];
+const STEPS = [['inbox', '① 수집함'], ['scripts', '② 고른 글 · 스크립트'], ['assets', '③ 소재함'], ['prep', '④ 제작 준비'], ['render', '⑤ 영상 만들기'], ['upload', '⑥ 업로드'], ['settings', '설정']];
 const dt = d => (d ? new Date(d).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-');
 const secs = n => Math.round(n / 5.5);                       // 한국어 나레이션 약 5.5자/초
 
 export default function ShortsStudio() {
-  const { sync } = useCtx();
+  const { sync, setStore } = useCtx();
   const [d, setD] = useState(null);
+  const [pick, setPick] = useState(null);                     // ⑤ 에서 "업로드"를 누른 영상
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState('');                       // 진행 중인 일 (버튼 막기)
@@ -26,6 +29,9 @@ export default function ShortsStudio() {
     catch (e) { setErr(e.status === 404 ? '서버가 아직 숏폼 제작을 지원하지 않습니다. VPS 서버를 업데이트하세요 (bash server/deploy/update.sh)' : e.message); }
   };
   useEffect(() => { if (sync.connected) load(); }, [sync.connected]);
+  // 올린 영상 · 성과를 콘텐츠 관리 › 성과 탭에 넣기 (바뀐 것이 있을 때만)
+  const postsKey = d?.social ? JSON.stringify(d.social.posts.filter(p => p.status === 'done').map(p => [p.id, p.url, p.stats_at])) : '';
+  useEffect(() => { if (postsKey) setStore(s => mergeShortsPosts(s, d.social.posts, d.social.channels)); }, [postsKey]);
   const act = async (key, path, body, done) => {
     setBusy(key);
     try { const r = await sync.request(path, { method: 'POST', body }); if (done) say(typeof done === 'function' ? done(r) : done); await load(); return r; }
@@ -39,12 +45,13 @@ export default function ShortsStudio() {
 
   const srcName = id => d.sources.find(s => s.id === id)?.name || '삭제된 게시판';
   const counts = { new: d.items.filter(i => i.status === 'new').length, picked: d.items.filter(i => i.status === 'picked').length, ready: d.scripts.filter(s => s.chosen && d.items.some(i => i.id === s.item_id && i.status === 'picked')).length,
-    working: (d.renders || []).filter(r => r.status === 'queued' || r.status === 'running').length };
+    working: (d.renders || []).filter(r => r.status === 'queued' || r.status === 'running').length,
+    posting: (d.social?.posts || []).filter(p => p.status === 'scheduled' || p.status === 'uploading').length };
   return (
     <div className="sh">
       <div className="sh-steps" role="tablist" aria-label="숏폼 제작 단계">
         {STEPS.map(([k, n]) => <button key={k} role="tab" aria-selected={step === k} className={step === k ? 'on' : ''} onClick={() => setStep(k)}>{n}
-          {k === 'inbox' && counts.new > 0 && <b>{counts.new}</b>}{k === 'scripts' && counts.picked > 0 && <b>{counts.picked}</b>}{k === 'prep' && counts.ready > 0 && <b>{counts.ready}</b>}{k === 'render' && counts.working > 0 && <b>{counts.working}</b>}</button>)}
+          {k === 'inbox' && counts.new > 0 && <b>{counts.new}</b>}{k === 'scripts' && counts.picked > 0 && <b>{counts.picked}</b>}{k === 'prep' && counts.ready > 0 && <b>{counts.ready}</b>}{k === 'render' && counts.working > 0 && <b>{counts.working}</b>}{k === 'upload' && counts.posting > 0 && <b>{counts.posting}</b>}</button>)}
         <span className={`sh-ai ${d.ai.ready ? 'ok' : ''}`} title={d.ai.model}>{d.ai.ready ? `AI 준비됨 · ${d.ai.provider === 'anthropic' ? 'Claude' : 'ChatGPT'} ${d.ai.model}` : 'AI 키 없음 (설정 참고)'}</span>
       </div>
       {msg && <p className={`banner ${msg.bad ? '' : 'ok'} sh-msg`} role="status">{msg.t}<button className="linkish" onClick={() => setMsg(null)}>닫기</button></p>}
@@ -52,8 +59,9 @@ export default function ShortsStudio() {
       {step === 'scripts' && <Scripts d={d} act={act} busy={busy} srcName={srcName} goInbox={() => setStep('inbox')} />}
       {step === 'assets' && <AssetLibrary d={d} act={act} busy={busy} reload={load} />}
       {step === 'prep' && <Prep d={d} act={act} busy={busy} goScripts={() => setStep('scripts')} goAssets={() => setStep('assets')} goRender={() => setStep('render')} />}
-      {step === 'render' && (d.renders ? <Renders d={d} act={act} busy={busy} patch={patch} goPrep={() => setStep('prep')} />
+      {step === 'render' && (d.renders ? <Renders d={d} act={act} busy={busy} patch={patch} goPrep={() => setStep('prep')} goUpload={id => { setPick(id); setStep('upload'); }} />
         : <section className="panel"><p className="banner">서버가 아직 영상 만들기를 지원하지 않습니다. VPS 서버를 업데이트하세요 (bash server/deploy/update.sh)</p></section>)}
+      {step === 'upload' && <Uploads d={d} act={act} busy={busy} patch={patch} reload={load} pick={pick} goRender={() => setStep('render')} />}
       {step === 'settings' && <><Settings d={d} act={act} busy={busy} /><VideoSettings d={d} act={act} busy={busy} /></>}
     </div>
   );

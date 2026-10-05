@@ -2009,3 +2009,30 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .sr-btns { display: flex; gap: 8px; align-items: center; margin-top: auto; }
 .vs-try { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 @media (max-width: 700px) { .sr-list { grid-template-columns: minmax(0, 1fr); } .sr-act { width: 100%; margin-left: 0; } }
+
+/* 숏폼 제작 › ⑥ 업로드 */
+.su-chs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.su-ch { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.su-ch.on { border-left: 4px solid var(--ok); }
+.su-ch.warn { border-left: 4px solid #d97706; }
+.su-ch .note, .su-ch p { margin: 0; }
+.su-chh { display: flex; align-items: baseline; gap: 6px; }
+.su-acc { font-size: 14px; }
+.su-cb { word-break: break-all; }
+.su-form { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; }
+.su-left, .su-right { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.su-left label, .su-right > label, .su-row label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.su-th { width: 135px; height: 240px; object-fit: cover; border-radius: 8px; background: #111; }
+.su-plats { display: flex; gap: 14px; flex-wrap: wrap; }
+.su-plats .off { color: var(--ink3); }
+.su-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.su-sum { margin: 0 0 8px; font-size: 13px; }
+.su-posts { list-style: none; margin: 0; padding: 0; }
+.su-posts li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--line2); }
+.su-pf { white-space: nowrap; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 10px; text-align: center; color: #fff; }
+.su-pf.youtube { background: #c4302b; } .su-pf.instagram { background: #b1306b; }
+.su-pm { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.su-pm b { overflow-wrap: anywhere; }
+.su-st { font-size: 13px; }
+.su-pa { display: flex; gap: 8px; align-items: center; }
+@media (max-width: 700px) { .su-chs, .su-form { grid-template-columns: minmax(0, 1fr); } .su-th { display: none; } .su-posts li { grid-template-columns: auto minmax(0, 1fr); } .su-pa { grid-column: 2; } }

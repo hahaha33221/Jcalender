@@ -29,8 +29,9 @@ import { storeToSql } from '../db/convert.mjs';
 import { shortsRoutes, startShortsCron } from './shorts.mjs';
 import { assetRoutes, assetData, RAW } from './shortsAssets.mjs';
 import { renderRoutes, rendersOf, startRenderWorker } from './shortsRender.mjs';
+import { socialRoutes, socialOf, startSocialWorker } from './shortsSocial.mjs';
 
-const VERSION = '1.5.0';
+const VERSION = '1.6.0';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
 const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐
@@ -300,8 +301,10 @@ const assets = assetRoutes({ pool, tx, adminUser, HttpError });
 Object.assign(routes, assets.json);
 const shortsBase = routes['GET /api/shorts'];
 Object.assign(routes, renderRoutes({ pool, adminUser, HttpError }));
-routes['GET /api/shorts'] = async (req, body, res) => { const base = await shortsBase(req, body, res), uid = (await adminUser(req)).id; return { ...base, ...(await assetData(pool, uid)), ...(await rendersOf(pool, uid)) }; };   // + 소재함 · 제작 준비 · 영상
-const rawRoutes = assets.raw;                                    // 본문을 JSON 으로 읽지 않는 경로 (파일 올리기 · 내려주기)
+const social = socialRoutes({ pool, adminUser, HttpError, originOk });
+Object.assign(routes, social.json);
+routes['GET /api/shorts'] = async (req, body, res) => { const base = await shortsBase(req, body, res), uid = (await adminUser(req)).id; return { ...base, ...(await assetData(pool, uid)), ...(await rendersOf(pool, uid)), ...(await socialOf(pool, uid)) }; };   // + 소재함 · 제작 준비 · 영상 · 업로드
+const rawRoutes = { ...assets.raw, ...social.raw };                                    // 본문을 JSON 으로 읽지 않는 경로 (파일 올리기 · 내려주기)
 
 const server = http.createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0].replace(/\/+$/, '') || '/';
@@ -325,6 +328,7 @@ const server = http.createServer(async (req, res) => {
 
 if (process.env.SHORTS_CRON !== '0') startShortsCron(pool);   // 게시판 자동 수집 (5분마다 확인)
 startRenderWorker(pool).catch(e => console.error('[숏폼 영상 대기열]', e));   // 영상 만들기 (한 번에 1개)
+startSocialWorker(pool).catch(e => console.error('[숏폼 업로드 대기열]', e));   // 유튜브 · 인스타그램 올리기 · 성과 가져오기
 server.listen(config.port, config.host, () => console.log(`Jcalender API ${VERSION} — http://${config.host}:${config.port} (허용 화면: ${config.origins.join(', ')})`));
 const stop = () => server.close(() => pool.end().then(() => process.exit(0)));
 process.on('SIGTERM', stop);

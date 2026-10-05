@@ -9,6 +9,8 @@
    node admin.mjs role <이메일> member|suspended   권한 바꾸기 (일반 · 정지). 관리자는 OWNER_EMAILS 계정뿐
    node admin.mjs ai-key                        숏폼 AI 키 넣기 · 바꾸기 (ChatGPT sk-… / Claude sk-ant-…, 입력 글자는 안 보임, 저장 뒤 서버 재시작)
    node admin.mjs pexels-key                    숏폼 무료 소재(Pexels) API 키 넣기 · 바꾸기
+   node admin.mjs youtube-key                   유튜브 업로드용 Google OAuth 클라이언트 ID · 보안 비밀번호 넣기 · 바꾸기
+   node admin.mjs instagram-key                 인스타그램 업로드용 Meta 앱(Instagram 로그인) 앱 ID · 시크릿 넣기 · 바꾸기
    node admin.mjs signup                        회원가입 방식 · 초대 코드 보기
    node admin.mjs signup code                   초대 코드 방식 + 새 초대 코드 만들기 (예전 코드는 못 씀)
    node admin.mjs signup open | closed          누구나 가입 / 가입 막기
@@ -26,6 +28,9 @@ function askHidden(q) {
     rl._writeToOutput = s => { if (s.includes(q)) rl.output.write(s); };   // 입력 글자는 화면에 안 보이게
     rl.question(q, a => { rl.close(); process.stdout.write('\n'); resolve(a); });
   });
+}
+function ask(q) {                                                 // 보이는 입력 (ID 처럼 비밀이 아닌 값)
+  return new Promise(resolve => { const rl = readline.createInterface({ input: process.stdin, output: process.stdout }); rl.question(q, a => { rl.close(); resolve(a); }); });
 }
 async function askPassword() {
   const a = await askHidden('비밀번호(8자 이상): ');
@@ -91,6 +96,23 @@ try {
     fs.writeFileSync(file, `${lines.join('\n')}\n`, { mode: 0o600 }); fs.chmodSync(file, 0o600);
     try { execSync('systemctl restart jcal-api', { stdio: 'ignore' }); console.log(key ? 'Pexels 키를 저장하고 서버를 다시 시작했습니다' : 'Pexels 키를 지웠습니다'); }
     catch { console.log('저장했습니다. 서버 재시작: systemctl restart jcal-api'); }
+  } else if (cmd === 'youtube-key' || cmd === 'instagram-key') {
+    // 4차 업로드: Google Cloud OAuth 클라이언트(웹 애플리케이션) / Meta 앱의 Instagram 앱 ID · 시크릿. 빈 Enter = 지우기
+    const file = process.env.JCAL_ENV_FILE || '/etc/jcalender.env';
+    const yt = cmd === 'youtube-key';
+    const [K1, K2] = yt ? ['YOUTUBE_CLIENT_ID', 'YOUTUBE_CLIENT_SECRET'] : ['INSTAGRAM_APP_ID', 'INSTAGRAM_APP_SECRET'];
+    const host = (fs.readFileSync(file, 'utf8').match(/^API_HOST=(.+)$/m) || [])[1] || 'jcal-31-97-71-87.sslip.io';
+    console.log(`승인된 리디렉션 URI(돌아오는 주소)에 넣을 주소: https://${host}/api/oauth/${yt ? 'youtube' : 'instagram'}/callback`);
+    const id = (await ask(yt ? '클라이언트 ID (….apps.googleusercontent.com, 지우려면 그냥 Enter): ' : 'Instagram 앱 ID (숫자, 지우려면 그냥 Enter): ')).trim();
+    if (id && !(yt ? /^[\w-]+\.apps\.googleusercontent\.com$/ : /^\d{6,20}$/).test(id)) throw new Error(yt ? '클라이언트 ID 형식이 아닙니다 (….apps.googleusercontent.com 으로 끝남)' : 'Instagram 앱 ID 는 숫자입니다 (Facebook 앱 ID 가 아니라 Instagram › API 설정 화면의 Instagram 앱 ID)');
+    const secret = id ? (await askHidden(yt ? '클라이언트 보안 비밀번호 (GOCSPX-…): ' : 'Instagram 앱 시크릿: ')).trim() : '';
+    if (id && !/^[\w-]{16,100}$/.test(secret)) throw new Error('비밀번호(시크릿) 형식이 아닙니다');
+    const lines = fs.readFileSync(file, 'utf8').split('\n').filter(l => l !== '' && !l.startsWith(`${K1}=`) && !l.startsWith(`${K2}=`));
+    if (id) lines.push(`${K1}=${id}`, `${K2}=${secret}`);
+    fs.writeFileSync(file, `${lines.join('\n')}\n`, { mode: 0o600 }); fs.chmodSync(file, 0o600);
+    const what = yt ? '유튜브 연결 키' : '인스타그램 앱 키';
+    try { execSync('systemctl restart jcal-api', { stdio: 'ignore' }); console.log(id ? `${what}를 저장하고 서버를 다시 시작했습니다. 앱 › 숏폼 제작 › ⑥ 업로드 에서 "연결하기"를 누르세요` : `${what}를 지웠습니다`); }
+    catch { console.log('저장했습니다. 서버 재시작: systemctl restart jcal-api'); }
   } else if (cmd === 'signup') {
     const arg = emailRaw;                                         // code | open | closed | (없음)
     if (arg === 'code') { await setSetting('signup_code', newCode()); await setSetting('signup_mode', 'code'); }
@@ -107,7 +129,7 @@ try {
       FROM jcal.users u LEFT JOIN jcal.store_snapshots s ON s.user_id = u.id ORDER BY u.created_at`);
     console.table(rows.map(r => ({ 이메일: r.email, 이름: r.name, 권한: r.role, 로그인기기: Number(r.sessions), 동기화버전: r.version ?? '-', 마지막동기화: r.updated_at?.toISOString() ?? '-', 기기: r.device || '-', 크기KB: r.size_bytes ? Math.round(r.size_bytes / 1024) : '-' })));
   } else {
-    console.log('사용법: add-user <이메일> [이름] | set-password <이메일> | rename <이메일> <이름> | logout-all <이메일> | delete-user <이메일> | role <이메일> member|suspended | ai-key | pexels-key | signup [code|open|closed] | list');
+    console.log('사용법: add-user <이메일> [이름] | set-password <이메일> | rename <이메일> <이름> | logout-all <이메일> | delete-user <이메일> | role <이메일> member|suspended | ai-key | pexels-key | youtube-key | instagram-key | signup [code|open|closed] | list');
     process.exitCode = 1;
   }
 } catch (e) {

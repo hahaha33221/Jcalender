@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { iso } from '../data.js';
 import { areaVar, num, useCtx } from '../shared.jsx';
 import ToolView from './ToolView.jsx';
 import ShortsStudio from './ShortsStudio.jsx';
 import { TOOL_CONFIGS } from './toolConfigs.js';
+import { mergeShortsPosts } from './shortsPerf.js';
 
 /* 사업 › 콘텐츠 관리: 콘텐츠(아이디어 → 발행 보드) · 채널 계정 · 성과
    - 콘텐츠: store.tools['B|콘텐츠 관리'] (ToolView). 계정 칸을 더해 어느 계정에 올릴지 고른다
    - 채널 계정: store.content.accounts = [{ id, channel, name(@계정), url, purpose, status, login(로그인 아이디 · 이메일), goal(목표 팔로워), weekly(주 발행 목표), memo,
                                            followers: [{ date, n }] (팔로워 기록) }]  ※ 비밀번호는 저장하지 않는다
    - 성과: store.content.perf = { 콘텐츠 id: { views, likes, comments, shares, saves, follows, clicks, at(측정일) } }
-           참여율 = (좋아요 + 댓글 + 공유 + 저장) ÷ 조회수 */
+           참여율 = (좋아요 + 댓글 + 공유 + 저장) ÷ 조회수
+           숏폼 제작 › ⑥ 업로드로 올린 영상은 "발행" 콘텐츠로 자동으로 들어가고 조회 · 좋아요 · 댓글 · 공유 · 저장이 채워진다 (관리자, shortsPerf.js) */
 const KEY = 'B|콘텐츠 관리';
 const CHANNELS = ['인스타그램', '유튜브', '블로그', '틱톡', '스레드', 'X(트위터)', '페이스북', '뉴스레터', '브런치', '기타'];
 const PURPOSE = ['브랜드', '개인', '서브', '광고'];
@@ -35,7 +37,7 @@ export function useContent() {
 }
 
 export default function ContentView(props) {
-  const { store, now, isAdmin } = useCtx();
+  const { store, setStore, now, isAdmin, sync } = useCtx();
   const [S, set] = useContent();
   const today = iso(now);
   const base = TOOL_CONFIGS[KEY];
@@ -51,6 +53,11 @@ export default function ContentView(props) {
     card: ['account', 'channel', 'date'],
   };
   const setTab = tab => set(c => ({ ...c, tab }));
+  // 성과 탭을 열면 숏폼 업로드 성과를 서버에서 가져와 채움 (관리자 · 서버 1.6.0 이상)
+  useEffect(() => {
+    if (!isAdmin || !sync?.connected || S.tab !== 'perf') return;
+    sync.request('/api/shorts/social').then(r => r?.social && setStore(s => mergeShortsPosts(s, r.social.posts, r.social.channels, now))).catch(() => {});
+  }, [S.tab, isAdmin, sync?.connected]);
   const TABS = [['board', '콘텐츠'], ['accounts', '채널 계정'], ['perf', '성과'], ...(isAdmin ? [['shorts', '숏폼 제작']] : [])];   // 숏폼 제작: 관리자만
   return (
     <div className="catv tv ct" style={{ '--ac': areaVar(props.area) }}>

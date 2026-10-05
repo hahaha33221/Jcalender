@@ -9,7 +9,7 @@ const sec = n => (n == null ? '' : n >= 60 ? `${Math.floor(n / 60)}분 ${Math.ro
 const dt = d => (d ? new Date(d).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-');
 const STATUS = { queued: '기다리는 중', running: '만드는 중', done: '완성', failed: '실패' };
 
-export function Renders({ d, act, busy, patch, goPrep }) {
+export function Renders({ d, act, busy, patch, goPrep, goUpload }) {
   const { sync } = useCtx();
   const active = d.renders.some(r => r.status === 'queued' || r.status === 'running');
   useEffect(() => {                                           // 만드는 중이면 2.5초마다 진행률만 다시 읽음
@@ -49,19 +49,19 @@ export function Renders({ d, act, busy, patch, goPrep }) {
                   onClick={() => act(`r${s.id}`, '/api/shorts/render', { scriptId: s.id }, '영상 만들기를 시작했습니다')}>{busy === `r${s.id}` ? '넣는 중…' : working ? '하나 더 만들기' : list.length ? '다시 만들기' : '영상 만들기'}</button>
               </span></div>
             <small className="muted">나레이션 약 {secs}초 예상 · 실제 길이는 목소리에 맞춰집니다{!bgs.length && ' · 배경을 먼저 넣어 주세요'}</small>
-            {list.length > 0 && <div className="sr-list">{list.map(r => <RenderItem key={r.id} r={r} act={act} />)}</div>}
+            {list.length > 0 && <div className="sr-list">{list.map(r => <RenderItem key={r.id} r={r} act={act} goUpload={goUpload} />)}</div>}
           </section>
         );
       })}
       {others.length > 0 && <section className="panel">
         <div className="csum-h"><h2>다른 영상</h2><span className="muted">스크립트를 바꾸거나 지운 뒤에도 남아 있는 영상</span></div>
-        <div className="sr-list">{others.map(r => <RenderItem key={r.id} r={r} act={act} showTitle />)}</div>
+        <div className="sr-list">{others.map(r => <RenderItem key={r.id} r={r} act={act} goUpload={goUpload} showTitle />)}</div>
       </section>}
     </>
   );
 }
 
-function RenderItem({ r, act, showTitle }) {
+function RenderItem({ r, act, showTitle, goUpload }) {
   const { sync } = useCtx();
   const full = u => `${sync.conf.url}${u}`;
   const del = () => window.confirm(r.status === 'running' ? '만드는 중인 영상을 멈추고 지울까요?' : '이 영상을 지울까요?') && act('', '/api/shorts/render/remove', { id: r.id }, '영상을 지웠습니다');
@@ -82,6 +82,7 @@ function RenderItem({ r, act, showTitle }) {
         <small className="muted">요청 {dt(r.created_at)}</small>
         <span className="sr-btns">
           {r.status === 'done' && <a className="btn sm primary" href={`${full(r.url)}&dl=1`} download>내려받기</a>}
+          {r.status === 'done' && goUpload && <button className="btn sm" onClick={() => goUpload(r.id)}>업로드 ›</button>}
           <button className="tl-del" onClick={del}>{r.status === 'running' || r.status === 'queued' ? '취소' : '삭제'}</button>
         </span>
       </div>

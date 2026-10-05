@@ -212,7 +212,7 @@ server {
         proxy_read_timeout 300s;
     }
     # Pexels 소재 담기 · AI 는 오래 걸릴 수 있음
-    location ~ ^/api/shorts/(pexels/save|generate|keywords)$ {
+    location ~ ^/api/shorts/(pexels/save|generate|keywords|voice|stats)$ {
         proxy_pass http://127.0.0.1:${API_PORT};
         proxy_set_header Host \$host;
         proxy_set_header X-Forwarded-For \$remote_addr;

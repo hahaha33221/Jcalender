@@ -20,7 +20,7 @@ const env = process.env;
 export const ROOT = env.SHORTS_DIR || (env.STATE_DIRECTORY ? path.join(env.STATE_DIRECTORY.split(':')[0], 'shorts') : path.resolve('data/shorts'));
 const MAX_UPLOAD = Number(env.SHORTS_MAX_UPLOAD_MB || 300) * 1024 * 1024;
 export const QUOTA = Number(env.SHORTS_QUOTA_MB || 5000) * 1024 * 1024;
-const SECRET = env.SHORTS_SECRET || crypto.createHash('sha256').update(`jcal-shorts|${env.DATABASE_URL || 'dev'}`).digest('hex');   // 서버만 아는 값
+export const SECRET = env.SHORTS_SECRET || crypto.createHash('sha256').update(`jcal-shorts|${env.DATABASE_URL || 'dev'}`).digest('hex');   // 서버만 아는 값
 export const hasFfmpeg = (() => { try { return spawnSync('ffprobe', ['-version'], { timeout: 5000 }).status === 0; } catch { return false; } })();
 export const pexelsReady = () => !!env.PEXELS_API_KEY;
 
