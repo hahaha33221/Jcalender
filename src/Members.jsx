@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AREAS, BASE_ROWS } from './data.js';
+import { AREAS, BASE_ROWS, iso } from './data.js';
 import { useCtx } from './shared.jsx';
 
 /* 회원 관리 (관리자 계정만 — 서버 OWNER_EMAILS, 기본 koreamate2026@gmail.com)
@@ -15,7 +15,7 @@ const dt = d => (d ? new Date(d).toLocaleString('ko-KR', { year: '2-digit', mont
 const kb = n => (n == null ? '-' : n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`);
 
 export default function Members() {
-  const { sync, store, openCat } = useCtx();
+  const { sync, store, setStore, openCat } = useCtx();
   const [users, setUsers] = useState(null);
   const [screen, setScreen] = useState(null);                // 회원 화면 { on, cats }
   const [signup, setSignup] = useState(null);
@@ -57,6 +57,12 @@ export default function Members() {
     catch (e) { say(e.message, true); setBusy(false); }
   };
   const reviewed = Object.keys(store.reviewed || {});
+  // 1차 검수 표시 바꾸기 (여기서 바꾸면 카테고리 화면 · 회원 화면에도 그대로 반영, 서버에는 App 이 1~2초 뒤 자동으로 보냄)
+  const setReviewed = (keys, on) => setStore(s => {
+    const r = { ...(s.reviewed || {}) };
+    keys.forEach(k => { if (on) r[k] = r[k] || iso(new Date()); else delete r[k]; });
+    return { ...s, reviewed: r };
+  });
   const setScreenOn = async on => {
     setBusy(true);
     try { setScreen(await sync.request('/api/admin/screen', { method: 'POST', body: { on, cats: reviewed } })); say(on ? `회원 화면을 켰습니다. 회원에게는 검수 완료한 카테고리 ${reviewed.length}개만 보입니다` : '회원 화면을 껐습니다. 회원에게 모든 카테고리가 보입니다'); }
@@ -86,7 +92,7 @@ export default function Members() {
         <div className="hv-stat ex"><span className="muted">정지</span><b>{users ? `${count('suspended')}명` : '-'}</b><span className="hv-sub">{ROLE_DESC.suspended}</span></div>
       </div>
 
-      <ScreenPanel screen={screen} reviewed={reviewed} busy={busy} onToggle={setScreenOn} openCat={openCat} />
+      <ScreenPanel screen={screen} reviewed={reviewed} dates={store.reviewed || {}} busy={busy} onToggle={setScreenOn} setReviewed={setReviewed} openCat={openCat} />
 
       <section className="panel">
         <div className="csum-h"><h2>회원가입 방식</h2>{signup && <span className="muted">지금: {SIGNUP[signup.mode]}</span>}</div>
@@ -137,25 +143,48 @@ export default function Members() {
   );
 }
 
-/** 회원 화면 키: 켜면 회원에게는 관리자가 "검수 완료로 표시"한 카테고리만 보인다 (회원이 직접 만든 카테고리는 그대로) */
-function ScreenPanel({ screen, reviewed, busy, onToggle, openCat }) {
+/** 회원 화면 키: 켜면 회원에게는 관리자가 1차 검수 완료로 표시한 카테고리만 보인다 (회원이 직접 만든 카테고리는 그대로)
+    목록에서 바로 1차 검수 표시를 켜고 끌 수 있다 (카테고리 화면의 "검수 완료로 표시"와 같은 값) */
+function ScreenPanel({ screen, reviewed, dates, busy, onToggle, setReviewed, openCat }) {
+  const [view, setView] = useState('ALL');                   // ALL · on · off
   const all = [];
   BASE_ROWS().forEach(r => { const k = `${r.a}|${r.cat}`; if (!all.some(x => x.k === k)) all.push({ k, a: r.a, cat: r.cat }); });
   const on = !!screen?.on, set = new Set(reviewed);
-  const synced = screen && JSON.stringify([...screen.cats].sort()) === JSON.stringify([...reviewed].sort());
+  const done = all.filter(x => set.has(x.k)).length;
+  const shown = x => view === 'ALL' || (view === 'on') === set.has(x.k);
   return (
     <section className="panel mb-screen">
-      <div className="csum-h"><h2>회원 화면</h2><span className="muted">관리자 계정에는 늘 전부 보입니다</span></div>
+      <div className="csum-h"><h2>회원 화면 · 1차 검수</h2><span className="muted">1차 검수 {done}/{all.length}개 · 관리자 계정에는 늘 전부 보입니다</span></div>
       {screen === false ? <p className="banner">서버를 업데이트하면 쓸 수 있습니다 (bash server/deploy/update.sh)</p> : <>
         <label className={`mb-switch ${on ? 'on' : ''}`}>
           <input type="checkbox" checked={on} disabled={busy || !screen} onChange={e => onToggle(e.target.checked)} />
           <span className="mb-knob" aria-hidden="true" />
-          <span><b>회원에게는 검수 완료한 카테고리만 보이기</b><small className="muted">{on ? `켜짐 · 회원 화면에 ${reviewed.length}개 카테고리만 보입니다` : '꺼짐 · 회원에게 모든 카테고리가 보입니다'}</small></span>
+          <span><b>회원에게는 1차 검수 완료한 카테고리만 보이기</b><small className="muted">{on ? `켜짐 · 회원 화면에 ${done}개 카테고리만 보입니다` : '꺼짐 · 회원에게 모든 카테고리가 보입니다'}</small></span>
         </label>
-        <div className="mb-cats">{['P', 'W', 'B'].map(a => (
-          <div key={a}><h3>{AREAS[a].n}</h3><ul>{all.filter(x => x.a === a).map(x => (
-            <li key={x.k} className={set.has(x.k) ? 'on' : ''}><button className="linkish" onClick={() => openCat(x.a, x.cat)} title="카테고리에 들어가 검수 완료로 표시 · 취소">{x.cat}</button><span>{set.has(x.k) ? '검수 완료' : '미완료'}</span></li>))}</ul></div>))}</div>
-        <p className="note">카테고리에 들어가 오른쪽 위 "검수 완료로 표시"를 누르면 여기 목록과 회원 화면에 바로 반영됩니다{screen && !synced ? ' (반영 중…)' : ''}. 회원이 직접 만든 체크리스트 카테고리는 그 회원에게 늘 보입니다. 회원 화면은 회원이 앱을 새로 열거나 5분 안에 바뀝니다.</p>
+        <div className="mb-cbar">
+          <div className="chips" role="group" aria-label="보기">{[['ALL', `전체 ${all.length}`], ['on', `1차 검수 ${done}`], ['off', `미완료 ${all.length - done}`]].map(([k, n]) => <button key={k} aria-pressed={view === k} onClick={() => setView(k)}>{n}</button>)}</div>
+          <span className="grow-r mb-bulk">
+            <button className="btn sm" onClick={() => setReviewed(all.map(x => x.k), true)} disabled={done === all.length}>전체 1차 검수</button>
+            <button className="btn sm" onClick={() => window.confirm('모든 카테고리의 1차 검수 표시를 지울까요?') && setReviewed(all.map(x => x.k), false)} disabled={!done}>전체 해제</button>
+          </span>
+        </div>
+        <div className="mb-cats">{['P', 'W', 'B'].map(a => {
+          const items = all.filter(x => x.a === a), n = items.filter(x => set.has(x.k)).length;
+          return (
+            <div key={a}>
+              <h3><span>{AREAS[a].n} <small className="muted">{n}/{items.length}</small></span>
+                <button className="linkish" onClick={() => setReviewed(items.map(x => x.k), n < items.length)}>{n < items.length ? '모두 검수' : '모두 해제'}</button></h3>
+              <ul>{items.filter(shown).map(x => (
+                <li key={x.k} className={set.has(x.k) ? 'on' : ''}>
+                  <button className="linkish" onClick={() => openCat(x.a, x.cat)} title="카테고리 화면 열기">{x.cat}</button>
+                  <label className="mb-rv" title={set.has(x.k) ? `1차 검수 완료 (${dates[x.k]}) · 누르면 해제` : '누르면 1차 검수 완료로 표시'}>
+                    <input type="checkbox" checked={set.has(x.k)} onChange={e => setReviewed([x.k], e.target.checked)} aria-label={`${AREAS[a].n} ${x.cat} 1차 검수`} />
+                    {set.has(x.k) ? '1차 검수' : '미완료'}</label>
+                </li>))}
+                {!items.some(shown) && <li className="muted">해당 없음</li>}</ul>
+            </div>);
+        })}</div>
+        <p className="note">체크하면 1차 검수 완료, 풀면 미완료입니다. 카테고리 이름을 누르면 그 화면을 열어 확인할 수 있습니다 (카테고리 화면 오른쪽 위 "검수 완료로 표시"와 같은 값). 바꾼 내용은 1~2초 뒤 서버에 저장되고, 회원 화면은 회원이 앱을 새로 열거나 5분 안에 바뀝니다. 회원이 직접 만든 체크리스트 카테고리는 그 회원에게 늘 보입니다.</p>
       </>}
     </section>
   );

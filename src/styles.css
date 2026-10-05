@@ -1983,9 +1983,15 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .mb-switch input:focus-visible + .mb-knob { outline: 2px solid var(--ink); outline-offset: 2px; }
 .mb-switch > span:last-child { display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; }
 .mb-cats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-.mb-cats h3 { font-size: 13px; color: var(--ink2); margin: 0 0 6px; }
+.mb-cats h3 { font-size: 13px; color: var(--ink2); margin: 0 0 6px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.mb-cats h3 .linkish { font-size: 12px; font-weight: 400; }
+.mb-cbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.mb-bulk { display: flex; gap: 6px; }
+.mb-rv { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; white-space: nowrap; cursor: pointer; }
+.mb-rv input { margin: 0; }
+.mb-cats li.on .mb-rv { color: var(--ok); font-weight: 600; }
 .mb-cats ul { list-style: none; margin: 0; padding: 0; font-size: 13px; }
-.mb-cats li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line2); color: var(--ink3); }
+.mb-cats li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line2); color: var(--ink3); }
 .mb-cats li .linkish { color: var(--ink3); text-align: left; }
 .mb-cats li span { font-size: 11.5px; white-space: nowrap; }
 .mb-cats li.on .linkish { color: var(--ink); font-weight: 600; }
