@@ -156,12 +156,12 @@ function PexelsPanel({ d, act, busy }) {
 }
 
 /* ── ④ 제작 준비: 고른 스크립트마다 배경 · 음악 ── */
-export function Prep({ d, act, busy, goScripts, goAssets }) {
+export function Prep({ d, act, busy, goScripts, goAssets, goRender }) {
   const chosen = d.scripts.filter(s => s.chosen && d.items.some(i => i.id === s.item_id && i.status === 'picked'));
   if (!chosen.length) return <section className="panel"><p className="muted">제작할 스크립트가 없습니다. <button className="linkish" onClick={goScripts}>② 고른 글 · 스크립트</button>에서 "이 스크립트로 제작"을 골라 주세요.</p></section>;
-  return chosen.map(s => <PrepCard key={s.id} s={s} d={d} act={act} busy={busy} goAssets={goAssets} />);
+  return chosen.map(s => <PrepCard key={s.id} s={s} d={d} act={act} busy={busy} goAssets={goAssets} goRender={goRender} />);
 }
-function PrepCard({ s, d, act, busy, goAssets }) {
+function PrepCard({ s, d, act, busy, goAssets, goRender }) {
   const { sync } = useCtx();
   const V = d.settings.video;
   const p = d.projects.find(x => x.script_id === s.id) || { backgrounds: [], music_id: null, keywords: '', mood: '' };
@@ -177,7 +177,7 @@ function PrepCard({ s, d, act, busy, goAssets }) {
     <section className={`panel sp-card ${bgs.length >= need && p.music_id ? 'done' : ''}`}>
       <div className="csum-h"><h2>{s.title}</h2>
         <span className={`tag ${bgs.length >= need ? 'sh-ok' : ''}`}>배경 {bgs.length}/{need}</span><span className={`tag ${p.music_id ? 'sh-ok' : ''}`}>{p.music_id ? '음악 있음' : '음악 없음'}</span></div>
-      <small className="muted">나레이션 약 {secs}초 (추정 · {V.speed}배속) · 배경 하나 {V.clipSeconds}초 → 배경 {need}개 필요 · 3차에서 실제 목소리 길이로 맞춥니다</small>
+      <small className="muted">나레이션 약 {secs}초 (추정 · {V.speed}배속) · 배경 하나 {V.clipSeconds}초 → 배경 {need}개 필요 · 영상을 만들 때 실제 목소리 길이로 맞춥니다</small>
       <div className="sp-kw">
         <label>소재 검색어<input defaultValue={p.keywords} key={p.keywords} onBlur={e => e.target.value !== p.keywords && save({ keywords: e.target.value })} placeholder="예: office desk, meeting room" /></label>
         <label>분위기<select value={p.mood} onChange={e => save({ mood: e.target.value })}><option value="">-</option>{MOODS.map(m => <option key={m}>{m}</option>)}</select></label>
@@ -197,8 +197,9 @@ function PrepCard({ s, d, act, busy, goAssets }) {
         {bgs.length > 0 && <button className="btn" onClick={() => save({ backgrounds: [] })}>배경 비우기</button>}
         <label className="sp-music">배경음악<select value={p.music_id || ''} onChange={e => save({ musicId: e.target.value || null })}><option value="">없음</option>{music.map(m => <option key={m.id} value={m.id}>{m.name}{m.tags ? ` (${m.tags})` : ''}{m.duration ? ` · ${sec(m.duration)}` : ''}</option>)}</select></label>
         {!d.assets.length && <button className="linkish" onClick={goAssets}>소재함이 비어 있습니다 › 소재 올리기</button>}
+        {bgs.length > 0 && goRender && <button className="btn sm grow-r" onClick={goRender}>⑤ 영상 만들기 ›</button>}
       </div>
-      {bgs.length > 0 && bgs.length < need && <p className="note">배경이 {need - bgs.length}개 모자랍니다. 그대로 두면 3차에서 처음부터 다시 돌려 씁니다.</p>}
+      {bgs.length > 0 && bgs.length < need && <p className="note">배경이 {need - bgs.length}개 모자랍니다. 그대로 두면 영상을 만들 때 처음부터 다시 돌려 씁니다.</p>}
       {pick && <Popup wide title="배경 넣기" sub="누르는 순서대로 뒤에 붙습니다 (같은 소재를 여러 번 넣어도 됩니다)" onClose={() => setPick(false)}>
         <div className="sa-grid">{d.assets.filter(a => a.kind !== 'music').map(a => (
           <button key={a.id} className="sa-card sp-pick" onClick={() => save({ backgrounds: [...bgs, a.id] })}>
@@ -242,7 +243,7 @@ export function VideoSettings({ d, act, busy }) {
             <small className="muted">60초 영상이면 배경 약 {Math.ceil(60 / (Number(v.clipSeconds) || 4))}개가 바뀝니다 (전환 수)</small></label>
           <label>세로 화면 맞추기<select value={v.fit} onChange={e => setV({ ...v, fit: e.target.value })}><option value="cover">꽉 채우기 (넘치는 부분 자름)</option><option value="blur">전체 보이기 (빈 곳은 흐린 배경)</option></select></label>
           <h3>목소리 · 음악</h3>
-          <label>나레이션 목소리<select value={v.voice} onChange={e => setV({ ...v, voice: e.target.value })}>{VOICES.map(([k, n2]) => <option key={k} value={k}>{n2}</option>)}</select><small className="muted">ChatGPT(OpenAI) 음성 · 3차에서 들어 볼 수 있습니다</small></label>
+          <label>나레이션 목소리<select value={v.voice} onChange={e => setV({ ...v, voice: e.target.value })}>{VOICES.map(([k, n2]) => <option key={k} value={k}>{n2}</option>)}</select><VoiceTry d={d} voice={v.voice} speed={Number(v.speed) || 1} /></label>
           <label>말 빠르기<span className="sh-num"><input type="number" step="0.05" min="0.7" max="1.5" value={v.speed} onChange={e => setV({ ...v, speed: e.target.value })} />배</span></label>
           <label>배경음악 크기<span className="sh-num"><input type="range" min="0" max="60" value={v.musicVolume} onChange={e => setV({ ...v, musicVolume: Number(e.target.value) })} />{v.musicVolume}%</span><small className="muted">나레이션이 나올 때는 자동으로 더 작아집니다</small></label>
           <label className="sh-chk"><input type="checkbox" checked={v.showTitle} onChange={e => setV({ ...v, showTitle: e.target.checked })} />화면 위에 제목 고정</label>
@@ -276,9 +277,37 @@ export function VideoSettings({ d, act, busy }) {
             </div>
           </div>
           <div className="vs-nav"><button className="btn sm" onClick={() => setN(x => (x - 1 + screens.length) % screens.length)}>‹</button><small className="muted">자막 화면 {(n % screens.length) + 1}/{screens.length}</small><button className="btn sm" onClick={() => setN(x => (x + 1) % screens.length)}>›</button></div>
-          <p className="note">미리보기는 화면 비율만 맞춘 모습입니다. 강조색은 3차에서 지금 읽는 낱말에 칠해집니다.</p>
+          <p className="note">미리보기는 화면 비율만 맞춘 모습입니다. 강조색은 영상에서 지금 읽는 낱말에 칠해집니다.</p>
         </div>
       </div>
     </section>
+  );
+}
+
+/** 목소리 들어 보기 (짧은 예문, 서버가 한 번 만든 예문은 저장해 두고 다시 씀) */
+function VoiceTry({ d, voice, speed }) {
+  const { sync } = useCtx();
+  const [st, setSt] = useState('');
+  const audio = useRef(null);
+  useEffect(() => () => audio.current?.pause(), []);
+  const play = async () => {
+    audio.current?.pause();
+    setSt('…');
+    try {
+      const r = await sync.request('/api/shorts/voice', { method: 'POST', body: { voice } });
+      const a = new Audio(r.audio);
+      a.playbackRate = speed;                                  // 말 빠르기도 비슷하게 들려 줌
+      audio.current = a;
+      a.onended = () => setSt('');
+      await a.play();
+      setSt('▶');
+    } catch (e) { setSt(e.message || '재생하지 못했습니다'); }
+  };
+  if (!d.tts) return <small className="muted">ChatGPT(OpenAI) 음성 · 서버를 업데이트하면 들어 볼 수 있습니다</small>;
+  return (
+    <span className="vs-try">
+      <button type="button" className="btn sm" disabled={!d.tts.ready || st === '…'} onClick={play}>{st === '…' ? '불러오는 중…' : '들어 보기'}</button>
+      <small className={st && st.length > 1 ? 'sh-err' : 'muted'}>{st && st.length > 1 ? st : d.tts.ready ? `OpenAI ${d.tts.model}` : 'OpenAI 키가 없습니다 (jcal-admin ai-key)'}</small>
+    </span>
   );
 }

@@ -79,7 +79,7 @@
 | `jcal-admin signup` | 회원가입 방식 · 초대 코드 보기 |
 | `jcal-admin signup code` | 새 초대 코드 만들기 (예전 코드는 못 씀) |
 | `jcal-admin role <이메일> member\|suspended` | 권한 바꾸기: 일반 · 정지(로그인 불가). 앱의 "회원 관리" 메뉴에서도 바꿀 수 있음 |
-| `jcal-admin ai-key` | 숏폼 제작용 ChatGPT(OpenAI, sk-…) 또는 Claude(sk-ant-…) API 키 넣기 · 바꾸기 (화면에 안 보임, 저장 뒤 서버 재시작). docs/shorts.md 참고 |
+| `jcal-admin ai-key` | 숏폼 제작용 ChatGPT(OpenAI, sk-…) 또는 Claude(sk-ant-…) API 키 넣기 · 바꾸기 (화면에 안 보임, 저장 뒤 서버 재시작). 영상 나레이션 음성은 OpenAI 키로만 만든다. docs/shorts.md 참고 |
 | `jcal-admin pexels-key` | 숏폼 무료 소재(Pexels) API 키 넣기 · 바꾸기 (pexels.com/api 에서 무료) |
 | `jcal-admin signup open` / `closed` | 누구나 가입 / 가입 막기 |
 | `jcal-admin list` | 사용자 · 동기화 현황 |

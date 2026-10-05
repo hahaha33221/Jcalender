@@ -47,6 +47,8 @@ jobs:
         run: |
           psql "$DATABASE_URL" -q -v ON_ERROR_STOP=1 -f db/schema.sql
           for f in db/migrations/*.sql; do psql "$DATABASE_URL" -q -v ON_ERROR_STOP=1 -f "$f"; done
+      - name: 영상 도구 (ffmpeg, 숏폼 영상 만들기 시험)
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg >/dev/null
       - run: npm ci
         working-directory: server
       - run: node test.mjs

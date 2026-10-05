@@ -28,8 +28,9 @@ import { hashPassword, newToken, tokenHash, verifyPassword } from './auth.mjs';
 import { storeToSql } from '../db/convert.mjs';
 import { shortsRoutes, startShortsCron } from './shorts.mjs';
 import { assetRoutes, assetData, RAW } from './shortsAssets.mjs';
+import { renderRoutes, rendersOf, startRenderWorker } from './shortsRender.mjs';
 
-const VERSION = '1.4.1';
+const VERSION = '1.5.0';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
 const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐
@@ -298,7 +299,8 @@ Object.assign(routes, shortsRoutes({ pool, tx, adminUser, HttpError }));
 const assets = assetRoutes({ pool, tx, adminUser, HttpError });
 Object.assign(routes, assets.json);
 const shortsBase = routes['GET /api/shorts'];
-routes['GET /api/shorts'] = async (req, body, res) => ({ ...(await shortsBase(req, body, res)), ...(await assetData(pool, (await adminUser(req)).id)) });   // + 소재함 · 제작 준비
+Object.assign(routes, renderRoutes({ pool, adminUser, HttpError }));
+routes['GET /api/shorts'] = async (req, body, res) => { const base = await shortsBase(req, body, res), uid = (await adminUser(req)).id; return { ...base, ...(await assetData(pool, uid)), ...(await rendersOf(pool, uid)) }; };   // + 소재함 · 제작 준비 · 영상
 const rawRoutes = assets.raw;                                    // 본문을 JSON 으로 읽지 않는 경로 (파일 올리기 · 내려주기)
 
 const server = http.createServer(async (req, res) => {
@@ -317,11 +319,12 @@ const server = http.createServer(async (req, res) => {
     if (status >= 500) console.error(`[${req.method} ${path}]`, e);
     if (res.headersSent) { res.destroy(); return; }
     if (rawFn && !req.complete) res.setHeader('Connection', 'close');   // 올리다 막힌 경우 남은 본문을 기다리지 않음
-    send(req, res, status, { error: status >= 500 ? '서버 오류입니다' : e.message });
+    send(req, res, status, { error: e instanceof HttpError ? e.message : '서버 오류입니다' });   // 직접 만든 안내(AI 키 없음 등)는 그대로, 뜻밖의 오류만 감춤
   }
 });
 
 if (process.env.SHORTS_CRON !== '0') startShortsCron(pool);   // 게시판 자동 수집 (5분마다 확인)
+startRenderWorker(pool).catch(e => console.error('[숏폼 영상 대기열]', e));   // 영상 만들기 (한 번에 1개)
 server.listen(config.port, config.host, () => console.log(`Jcalender API ${VERSION} — http://${config.host}:${config.port} (허용 화면: ${config.origins.join(', ')})`));
 const stop = () => server.close(() => pool.end().then(() => process.exit(0)));
 process.on('SIGTERM', stop);

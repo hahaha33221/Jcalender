@@ -1991,3 +1991,21 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .mb-cats li.on .linkish { color: var(--ink); font-weight: 600; }
 .mb-cats li.on span { color: var(--ok); font-weight: 600; }
 @media (max-width: 700px) { .mb-cats { grid-template-columns: minmax(0, 1fr); } }
+
+/* 숏폼 제작 › ⑤ 영상 만들기 */
+.sr-act { display: flex; gap: 6px; align-items: center; }
+.sr-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 10px; }
+.sr-item { display: grid; grid-template-columns: 135px minmax(0, 1fr); gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
+.sr-item.s-failed { border-color: #e2a3a3; }
+.sr-video { width: 135px; height: 240px; border-radius: 8px; background: #111; object-fit: contain; }
+.sr-ph { display: flex; align-items: center; justify-content: center; color: #bbb; font-size: 13px; }
+.s-running .sr-ph { background: repeating-linear-gradient(-45deg, #1b1b1b 0 10px, #252525 10px 20px); }
+.sr-meta { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; }
+.sr-meta b { font-size: 13.5px; }
+.sr-meta small { overflow-wrap: anywhere; }
+.sr-bad { background: #fbe4e4; color: #b42318; }
+.sr-bar { width: 100%; height: 8px; border-radius: 4px; background: var(--line2); overflow: hidden; }
+.sr-bar i { display: block; height: 100%; background: var(--ok); transition: width .4s; }
+.sr-btns { display: flex; gap: 8px; align-items: center; margin-top: auto; }
+.vs-try { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 700px) { .sr-list { grid-template-columns: minmax(0, 1fr); } .sr-act { width: 100%; margin-left: 0; } }

@@ -9,6 +9,8 @@ import os from 'os';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import { parseFeed, htmlToText, extractBody, findFeedLink } from './shorts.mjs';
+import { readWav, joinVoices, buildAss, wavFile } from './shortsRender.mjs';
+import { clampVideo } from './shortsText.mjs';
 
 const PORT = 18787, BASE = `http://127.0.0.1:${PORT}`, ORIGIN = 'https://jcalender-test.vercel.app';
 const EMAIL = `test-${Date.now()}@example.com`, PW = 'test-password-1', OWNER = `owner-${Date.now()}@example.com`;
@@ -40,7 +42,11 @@ const IMG = media('p.jpg', ['-f', 'lavfi', '-i', 'color=c=blue:s=400x600', '-fra
 const MP3 = media('m.mp3', ['-f', 'lavfi', '-i', 'sine=frequency=440:duration=3'], Buffer.alloc(800, 3));
 // 숏폼 시험용: 가짜 게시판(RSS · 글 페이지) + 가짜 OpenAI API (실제 AI 호출 없음)
 const FAKE = 18788, F = `http://127.0.0.1:${FAKE}`;
-const aiCalls = [];
+const aiCalls = [], ttsCalls = [];
+let ttsFail = 0;
+/** 가짜 음성: 앞 0.3초 조용 + 글자당 0.08초 소리 + 뒤 0.4초 조용 (24kHz 모노 WAV) */
+const fakeWav = text => { const rate = 24000, on = Math.round(String(text).replace(/\s/g, '').length * 0.08 * rate), pre = 0.3 * rate, post = 0.4 * rate;
+  const pcm = Buffer.alloc((pre + on + post) * 2); for (let i = 0; i < on; i++) pcm.writeInt16LE(Math.round(8000 * Math.sin(i / 8)), (pre + i) * 2); return wavFile(pcm, rate, 1); };
 const eucKr = Buffer.from('3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d226575632d6b72223f3e3c7273733e3c6368616e6e656c3e3c6974656d3e3c7469746c653ec7d1b1dbc1a6b8f13c2f7469746c653e3c6c696e6b3e687474703a2f2f3132372e302e302e313a31383738382f706f73742f6b723c2f6c696e6b3e3c6465736372697074696f6e3ebabbb9ae3c2f6465736372697074696f6e3e3c2f6974656d3e3c2f6368616e6e656c3e3c2f7273733e', 'hex');   // EUC-KR: 한글제목 / 본문
 const fake = http.createServer((req, res) => {
   if (req.url === '/feed.xml') { res.writeHead(200, { 'Content-Type': 'application/rss+xml; charset=utf-8' }); return res.end(`<?xml version="1.0"?><rss version="2.0"><channel><title>시험 게시판</title>
@@ -62,6 +68,13 @@ const fake = http.createServer((req, res) => {
     res.writeHead(404); return res.end('{}');
   }
   if (req.url.startsWith('/media/')) { const f = { '/media/v.mp4': VID, '/media/p.jpg': IMG }[req.url]; if (!f) { res.writeHead(404); return res.end(); } res.writeHead(200, { 'Content-Type': req.url.endsWith('mp4') ? 'video/mp4' : 'image/jpeg' }); return res.end(fs.readFileSync(f)); }
+  if (req.url === '/v1/audio/speech') {
+    let b = ''; req.on('data', c => { b += c; }); req.on('end', () => {
+      const j = JSON.parse(b); ttsCalls.push({ headers: req.headers, body: j });
+      if (ttsFail) { res.writeHead(ttsFail, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: { code: 'invalid_api_key', message: 'bad key' } })); }
+      res.writeHead(200, { 'Content-Type': 'audio/wav' }); res.end(fakeWav(j.input));
+    }); return;
+  }
   if (req.url === '/v1/chat/completions') {
     let b = ''; req.on('data', c => { b += c; }); req.on('end', () => {
       aiCalls.push({ url: req.url, headers: req.headers, body: JSON.parse(b) });
@@ -228,7 +241,8 @@ try {
   check('이미지 · 음악 올리기', a2_ui.json?.asset.kind === 'image' && a2_um.json?.asset.kind === 'music' && (!HAS_FF || Math.abs(a2_um.json.asset.duration - 3) < 0.3), JSON.stringify(a2_um.json));
   check('지원 안 하는 파일 415', (await a2_up(IMG, 'memo.txt', 'text/plain')).status === 415);
   const a2_big = path.join(TMP, 'a2_big.mp4'); fs.writeFileSync(a2_big, Buffer.alloc(1.5 * 1024 * 1024));
-  check('너무 큰 파일 413 (1MB 제한)', (await a2_up(a2_big, 'a2_big.mp4', 'video/mp4')).status === 413);
+  const a2_bigR = await a2_up(a2_big, 'a2_big.mp4', 'video/mp4').catch(e => ({ status: /EPIPE|ECONNRESET/.test(String(e.cause?.code)) ? 'closed' : e.message }));   // 서버가 먼저 끊으면 보내던 쪽은 EPIPE
+  check('너무 큰 파일 413 (1MB 제한)', a2_bigR.status === 413 || a2_bigR.status === 'closed', a2_bigR.status);
   check('일반 회원은 올리기 403', (await a2_up(IMG, 'x.jpg', 'image/jpeg', T)).status === 403);
   const a2_sg = (await call('GET', '/api/shorts', null, sh_T0)).json;
   check('목록: 소재 3개 · 저장 공간 · Pexels 준비', a2_sg.assets.length === 3 && a2_sg.storage.used > 0 && a2_sg.pexels.ready === true && a2_sg.settings.video.clipSeconds === 4, JSON.stringify(a2_sg.storage));
@@ -259,6 +273,54 @@ try {
   check('영상 설정 저장 · 범위 제한', a2_vs.clipSeconds === 3.5 && a2_vs.sub.color === '#FF0000' && a2_vs.sub.lineChars === 30 && a2_vs.sub.font === 'Noto Sans KR', JSON.stringify(a2_vs));
   check('소재 지우기 → 파일 · 배경에서도 빠짐', (await call('POST', '/api/shorts/asset', { id: a2_va.id, remove: true }, sh_T0)).status === 200
     && (await call('GET', '/api/shorts', null, sh_T0)).json.projects.find(x => x.script_id === a2_chosenId).backgrounds.join() === a2_ui.json.asset.id && (await fetch(BASE + a2_va.url)).status === 404);
+
+  console.log(`숏폼 3차 (영상 만들기)${HAS_FF ? '' : ' — ffmpeg 없음: 만들기는 건너뜀'}`);
+  {
+    const w = readWav(fakeWav('가나다라마')), j3 = joinVoices([w, readWav(fakeWav('바사'))]);
+    check('음성 앞뒤 빈 소리 다듬기 · 문장 시간', Math.abs(j3.spans[0].a - 0.06) < 0.01 && Math.abs(j3.spans[0].b - 0.46) < 0.01 && Math.abs(j3.spans[1].a - (0.06 + 0.4 + 0.18 + 0.12 + 0.06)) < 0.01, JSON.stringify(j3.spans));
+    const ass = buildAss({ sentences: ['여러분 이거 {실화}입니다.', '어떻게 하시겠어요?'], spans: j3.spans, speed: 1, end: 3, title: '제목', V: clampVideo({ sub: { box: true, highlight: '#FFE600' } }) });
+    check('자막(ASS): 제목 · 낱말 강조 · 상자 · 특수문자 막기', /Style: Sub,Noto Sans CJK KR,72/.test(ass) && /Dialogue: 0,0:00:00\.00,0:00:03\.00,Title,,0,0,0,,제목/.test(ass)
+      && ass.includes('{\\c&H00E6FF&}여러분{\\r} 이거') && ass.includes('SubBox') && !ass.includes('{실화}') && ass.split('\n').filter(l => l.includes(',Sub,')).length === 5, ass.slice(-700));
+  }
+  const r3_sid = a2_chosenId;
+  await call('POST', '/api/shorts/script', { id: r3_sid, script: '여러분 이거 실화입니다. 회의 중에 팀장님이 갑자기 이런 말을 했어요. 여러분이라면 어떻게 하시겠어요?' }, sh_T0);
+  check('일반 회원은 영상 만들기 403', (await call('POST', '/api/shorts/render', { scriptId: r3_sid }, T)).status === 403);
+  const r3_v = await call('POST', '/api/shorts/voice', { voice: 'coral' }, sh_T0), r3_vn = ttsCalls.length;
+  check('목소리 들어 보기 (WAV · gpt-4o-mini-tts · 말투 지시)', r3_v.status === 200 && r3_v.json.audio.startsWith('data:audio/wav;base64,UklGR') && ttsCalls.at(-1).body.voice === 'coral'
+    && ttsCalls.at(-1).body.model === 'gpt-4o-mini-tts' && !!ttsCalls.at(-1).body.instructions && ttsCalls.at(-1).headers.authorization === 'Bearer sk-test-key', JSON.stringify(r3_v.json).slice(0, 100));
+  await call('POST', '/api/shorts/voice', { voice: 'coral' }, sh_T0);
+  check('같은 예문은 다시 만들지 않음 (비용 절약)', ttsCalls.length === r3_vn);
+  if (HAS_FF) {
+    const wait = async id => { for (let i = 0; i < 240; i++) { const r = (await call('GET', '/api/shorts/renders', null, sh_T0)).json.renders.find(x => x.id === id); if (!r || !['queued', 'running'].includes(r.status)) return r; await new Promise(z => setTimeout(z, 500)); } return null; };
+    await call('POST', '/api/shorts/project', { scriptId: r3_sid, backgrounds: [] }, sh_T0);
+    check('배경이 없으면 400', (await call('POST', '/api/shorts/render', { scriptId: r3_sid }, sh_T0)).status === 400);
+    await call('POST', '/api/shorts/project', { scriptId: r3_sid, backgrounds: [a2_pxs.json.asset.id, a2_ui.json.asset.id] }, sh_T0);
+    await call('POST', '/api/shorts/settings', { video: { clipSeconds: 2, voice: 'onyx', speed: 1.2, sub: { box: true } } }, sh_T0);
+    ttsFail = 401;
+    const r3_f = await call('POST', '/api/shorts/render', { scriptId: r3_sid }, sh_T0);
+    const r3_fd = await wait(r3_f.json?.render?.id);
+    check('음성 키 오류 → 실패 · 이유 표시', r3_f.status === 200 && r3_fd?.status === 'failed' && /API 키/.test(r3_fd.error), JSON.stringify(r3_fd));
+    ttsFail = 0;
+    const t0 = ttsCalls.length, used0 = (await call('GET', '/api/shorts', null, sh_T0)).json.storage.used;
+    const r3 = await call('POST', '/api/shorts/render', { scriptId: r3_sid }, sh_T0);
+    check('영상 만들기 → 대기열', r3.status === 200 && ['queued', 'running'].includes(r3.json.render.status), JSON.stringify(r3.json));
+    const r3d = await wait(r3.json.render.id);
+    check('영상 완성 (문장 3개 → 음성 3번 · 설정한 목소리)', r3d?.status === 'done' && r3d.progress === 100 && ttsCalls.length - t0 === 3 && ttsCalls.slice(t0).every(c => c.body.voice === 'onyx'), JSON.stringify(r3d));
+    if (r3d?.status === 'done') {
+      const dl = await fetch(`${BASE}${r3d.url}&dl=1`), file = path.join(TMP, 'out.mp4');
+      fs.writeFileSync(file, Buffer.from(await dl.arrayBuffer()));
+      check('내려받기 (영문 파일 이름)', dl.status === 200 && dl.headers.get('content-type') === 'video/mp4' && /^attachment; filename="shorts-\d{8}-\d{4}\.mp4"$/.test(dl.headers.get('content-disposition')), dl.headers.get('content-disposition'));
+      const pr = JSON.parse(spawnSync('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', file]).stdout.toString() || '{}');
+      const vs = (pr.streams || []).find(x => x.codec_type === 'video'), as = (pr.streams || []).find(x => x.codec_type === 'audio');
+      const expect = (0.06 + 0.18 + 0.12) * 3 + 0.08 * '여러분이거실화입니다.회의중에팀장님이갑자기이런말을했어요.여러분이라면어떻게하시겠어요?'.length;   // 다듬은 음성 길이 (1.0배)
+      check('1080×1920 · H.264 · 소리 · 길이(1.2배속 + 끝 여유)', vs?.width === 1080 && vs?.height === 1920 && vs?.codec_name === 'h264' && !!as && Math.abs(Number(pr.format.duration) - (expect / 1.2 + 0.8)) < 0.4 && Math.abs(r3d.duration - Number(pr.format.duration)) < 0.1, `${pr.format?.duration} vs ${expect / 1.2 + 0.8}`);
+      check('완성 영상 미리보기 그림', (await fetch(BASE + r3d.thumb)).headers.get('content-type') === 'image/jpeg');
+      check('저장 공간에 영상 크기 포함', (await call('GET', '/api/shorts', null, sh_T0)).json.storage.used >= used0 + r3d.size_bytes);
+      check('다른 사람은 영상 지우기 못 함', (await call('POST', '/api/shorts/render/remove', { id: r3d.id }, T2b)).status !== 200);
+      check('영상 지우기 → 파일도 지움', (await call('POST', '/api/shorts/render/remove', { id: r3d.id }, sh_T0)).status === 200 && (await fetch(BASE + r3d.url)).status === 404);
+    }
+  } else check('ffmpeg 없으면 503', (await call('POST', '/api/shorts/render', { scriptId: r3_sid }, sh_T0)).status === 503);
+
   await pool.query('DELETE FROM jcal.users WHERE email = $1', [OWNER]);
   await setS('signup_mode', 'closed');
   check('가입 막기 → 403', (await call('POST', '/api/signup', { email: `x${E2}`, password: 'pw-12345678', name: 'x', code: 'TEST-CODE' })).status === 403);

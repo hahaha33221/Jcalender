@@ -44,10 +44,14 @@ export const clipsNeeded = (secs, clipSeconds) => Math.max(1, Math.ceil(secs / M
 
 /** 자막 나누기: 문장 → 한 줄 lineChars 자 · 한 화면 maxLines 줄 (띄어쓰기에서 끊고, 너무 긴 낱말은 자름)
     → [[줄, 줄], [줄], …] (화면 하나 = 배열 하나) */
+export const splitSentences = text => String(text || '').replace(/\s+/g, ' ').trim().split(/(?<=[.!?。…~])\s+|(?<=[다요죠까네])\.?\s+(?=[A-Z가-힣"“'‘(])/u).filter(Boolean);
 export function splitSubs(text, lineChars = 14, maxLines = 2) {
-  const sentences = String(text || '').replace(/\s+/g, ' ').trim().split(/(?<=[.!?。…~])\s+|(?<=[다요죠까네])\.?\s+(?=[A-Z가-힣"“'‘(])/u).filter(Boolean);
+  return splitSentences(text).flatMap(sen => screensOf(sen, lineChars, maxLines));
+}
+/** 문장 하나 → 자막 화면들 (3차: 문장마다 목소리를 따로 만들어 시간을 정확히 맞춘다) */
+export function screensOf(sen, lineChars = 14, maxLines = 2) {
   const screens = [];
-  for (const sen of sentences) {
+  {
     const lines = [];
     let cur = '';
     for (const w0 of sen.split(' ')) {
@@ -61,6 +65,8 @@ export function splitSubs(text, lineChars = 14, maxLines = 2) {
   }
   return screens;
 }
+/** 글자 무게 (말하는 시간 비례): 띄어쓰기 빼고 1, 문장부호는 쉬는 시간만큼 */
+export const speakWeight = w => String(w).replace(/\s+/g, '').length + (/[,.!?…~]$/.test(w) ? 1.5 : 0);
 
 /** 소재 자동 고르기: 검색어 · 분위기와 겹치는 태그 · 이름을 먼저, 모자라면 나머지에서 (같은 소재는 되도록 안 겹치게)
     assets: [{ id, kind, name, tags, duration }] → { backgrounds: [id…], musicId } */

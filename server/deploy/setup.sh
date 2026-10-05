@@ -40,10 +40,21 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 step "1/7 필요한 패키지 (이미 있으면 건너뜀)"
 need=()
-# ffmpeg: 숏폼 소재 미리보기 · 길이 읽기 (3차: 영상 만들기)
-for p in curl ca-certificates xz-utils openssl ffmpeg; do dpkg -s "$p" >/dev/null 2>&1 || need+=("$p"); done
+# ffmpeg: 숏폼 소재 미리보기 · 길이 읽기 · 영상 만들기 / fonts-noto-cjk · fontconfig: 영상 자막 한글 글꼴 (본고딕)
+for p in curl ca-certificates xz-utils openssl ffmpeg fontconfig fonts-noto-cjk; do dpkg -s "$p" >/dev/null 2>&1 || need+=("$p"); done
 if [ ${#need[@]} -gt 0 ]; then apt-get update -q && apt-get install -y -q "${need[@]}" >/dev/null; fi
-echo "확인 완료"
+# 자막 글꼴 (영상 설정에서 고르는 무료 글꼴, Google Fonts · OFL) — 받지 못해도 설치는 계속 (그 글꼴만 본고딕으로 대신 나옴)
+FONT_DIR=/usr/local/share/fonts/jcalender
+mkdir -p "$FONT_DIR"
+font_new=0
+for f in blackhansans/BlackHanSans-Regular dohyeon/DoHyeon-Regular jua/Jua-Regular nanumgothic/NanumGothic-Regular nanumgothic/NanumGothic-Bold nanumgothic/NanumGothic-ExtraBold \
+         nanummyeongjo/NanumMyeongjo-Regular nanummyeongjo/NanumMyeongjo-Bold nanummyeongjo/NanumMyeongjo-ExtraBold nanumpenscript/NanumPenScript-Regular; do
+  dst="$FONT_DIR/${f#*/}.ttf"
+  [ -s "$dst" ] && continue
+  if curl -fsSL --max-time 60 -o "$dst.tmp" "https://github.com/google/fonts/raw/main/ofl/$f.ttf"; then mv "$dst.tmp" "$dst"; font_new=1; else rm -f "$dst.tmp"; echo "  (글꼴을 받지 못함: ${f#*/} — 다음 업데이트 때 다시 시도)"; fi
+done
+if [ "$font_new" = 1 ]; then fc-cache -f >/dev/null 2>&1 || true; fi
+echo "확인 완료 (자막 글꼴 $(ls "$FONT_DIR" | grep -c '\.ttf$')개)"
 
 step "2/7 PostgreSQL 16 (이미 있는 클러스터를 쓰고, 그 안에 jcal DB 만 따로)"
 pg_cluster_port() { pg_lsclusters -h 2>/dev/null | awk '$1==16 && $4=="online"{print $3; exit}'; }

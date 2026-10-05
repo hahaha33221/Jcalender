@@ -19,7 +19,7 @@ import { MOODS } from './shortsText.mjs';
 const env = process.env;
 export const ROOT = env.SHORTS_DIR || (env.STATE_DIRECTORY ? path.join(env.STATE_DIRECTORY.split(':')[0], 'shorts') : path.resolve('data/shorts'));
 const MAX_UPLOAD = Number(env.SHORTS_MAX_UPLOAD_MB || 300) * 1024 * 1024;
-const QUOTA = Number(env.SHORTS_QUOTA_MB || 5000) * 1024 * 1024;
+export const QUOTA = Number(env.SHORTS_QUOTA_MB || 5000) * 1024 * 1024;
 const SECRET = env.SHORTS_SECRET || crypto.createHash('sha256').update(`jcal-shorts|${env.DATABASE_URL || 'dev'}`).digest('hex');   // 서버만 아는 값
 export const hasFfmpeg = (() => { try { return spawnSync('ffprobe', ['-version'], { timeout: 5000 }).status === 0; } catch { return false; } })();
 export const pexelsReady = () => !!env.PEXELS_API_KEY;
@@ -37,13 +37,16 @@ const kindOf = (ext, mime) => {
 const mimeOf = (kind, ext) => TYPES[kind]?.[ext] || 'application/octet-stream';
 const userDir = async uid => { const d = path.join(ROOT, uid); await fsp.mkdir(d, { recursive: true }); return d; };
 const fileOf = (a, k = 'file') => path.join(ROOT, a.user_id, k === 'thumb' ? `${a.id}.thumb.jpg` : `${a.id}.${a.ext}`);
+/** 3차: 완성 영상 (k = render · rthumb) — /var/lib/jcalender/shorts/<사용자>/renders/<id>.mp4 */
+export const renderPath = (uid, id, k = 'render') => path.join(ROOT, uid, 'renders', k === 'rthumb' ? `${id}.jpg` : k === 'work' ? `${id}.work` : `${id}.mp4`);
+export const assetFile = fileOf;
 
 /** 서명된 주소 (video · img 태그가 로그인 머리글 없이 읽을 수 있게) */
 const sign = (id, k, exp) => crypto.createHmac('sha256', SECRET).update(`${id}.${k}.${exp}`).digest('base64url');
 export const fileUrl = (id, k = 'file') => { const exp = Math.floor(Date.now() / 1000) + 6 * 3600; return `/api/shorts/file?id=${id}&k=${k}&exp=${exp}&sig=${sign(id, k, exp)}`; };
 
 /** ffprobe: 길이 · 가로 · 세로 */
-function probe(file) {
+export function probe(file) {
   if (!hasFfmpeg) return Promise.resolve({});
   return new Promise(resolve => {
     const p = spawn('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', file]);
@@ -74,8 +77,9 @@ function thumb(src, dst, kind, duration) {
     p.on('error', () => { clearTimeout(t); resolve(false); });
   });
 }
-async function usage(pool, uid) {
-  const { rows } = await pool.query('SELECT COALESCE(SUM(size_bytes), 0)::bigint AS b FROM jcal.shorts_assets WHERE user_id = $1', [uid]);
+export async function usage(pool, uid) {             // 소재 + 완성 영상
+  const { rows } = await pool.query(`SELECT (SELECT COALESCE(SUM(size_bytes), 0) FROM jcal.shorts_assets WHERE user_id = $1)
+    + (SELECT COALESCE(SUM(size_bytes), 0) FROM jcal.shorts_renders WHERE user_id = $1) AS b`, [uid]);
   return Number(rows[0].b);
 }
 /** 받은 파일을 소재로 등록 (크기 · 미리보기 계산) */
@@ -166,17 +170,22 @@ export function assetRoutes({ pool, tx, adminUser, HttpError }) {
     /** 파일 · 미리보기 (서명 확인, 이어받기 Range 지원) */
     'GET /api/shorts/file': async (req, res) => {
       const q = new URL(req.url, 'http://x').searchParams;
-      const id = q.get('id'), k = q.get('k') === 'thumb' ? 'thumb' : 'file', exp = Number(q.get('exp')), sig = q.get('sig') || '';
+      const id = q.get('id'), k = ['thumb', 'render', 'rthumb'].includes(q.get('k')) ? q.get('k') : 'file', exp = Number(q.get('exp')), sig = q.get('sig') || '';
       const good = sign(id, k, exp);
       if (!uuidOk(id) || !(exp > Date.now() / 1000) || sig.length !== good.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good))) throw new HttpError(403, '주소가 만료되었습니다. 화면을 새로고침하세요');
-      const { rows } = await pool.query('SELECT * FROM jcal.shorts_assets WHERE id = $1', [id]);
-      if (!rows[0]) throw new HttpError(404, '없는 소재입니다');
-      const a = rows[0], file = fileOf(a, k);
+      const isRender = k === 'render' || k === 'rthumb';
+      const { rows } = await pool.query(isRender ? "SELECT id, user_id, created_at FROM jcal.shorts_renders WHERE id = $1 AND status = 'done'" : 'SELECT * FROM jcal.shorts_assets WHERE id = $1', [id]);
+      if (!rows[0]) throw new HttpError(404, isRender ? '없는 영상입니다' : '없는 소재입니다');
+      const a = rows[0], file = isRender ? renderPath(a.user_id, a.id, k) : fileOf(a, k);
       const st = await fsp.stat(file).catch(() => null);
       if (!st) throw new HttpError(404, '파일이 없습니다');
-      const type = k === 'thumb' ? 'image/jpeg' : a.mime;
+      const type = k === 'thumb' || k === 'rthumb' ? 'image/jpeg' : k === 'render' ? 'video/mp4' : a.mime;
       const m = String(req.headers.range || '').match(/^bytes=(\d*)-(\d*)$/);
       const head = { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' };
+      if (k === 'render' && q.get('dl') === '1') {                // 내려받기: 영문 파일 이름 (한글 이름은 내려받기 오류가 날 수 있음)
+        const t = new Date(a.created_at), p2 = n => String(n).padStart(2, '0');
+        head['Content-Disposition'] = `attachment; filename="shorts-${t.getFullYear()}${p2(t.getMonth() + 1)}${p2(t.getDate())}-${p2(t.getHours())}${p2(t.getMinutes())}.mp4"`;
+      }
       if (m && (m[1] || m[2])) {
         let start = m[1] ? Number(m[1]) : Math.max(0, st.size - Number(m[2])), end = m[1] && m[2] ? Math.min(Number(m[2]), st.size - 1) : st.size - 1;
         if (start >= st.size || start > end) { res.writeHead(416, { 'Content-Range': `bytes */${st.size}` }); res.end(); return RAW; }
@@ -197,7 +206,7 @@ export function assetRoutes({ pool, tx, adminUser, HttpError }) {
       if (body.remove) {
         await pool.query('DELETE FROM jcal.shorts_assets WHERE id = $1', [a.id]);
         await pool.query('UPDATE jcal.shorts_projects SET backgrounds = array_remove(backgrounds, $1::uuid) WHERE user_id = $2', [a.id, u.id]);
-        await Promise.all([fsp.rm(fileOf(a), { force: true }), fsp.rm(fileOf(a, 'thumb'), { force: true })]);
+        await Promise.all([fsp.rm(fileOf(a), { force: true }), fsp.rm(fileOf(a, 'thumb'), { force: true })]);   // 이미 만든 영상은 그대로 남음
         return { ok: true };
       }
       await pool.query('UPDATE jcal.shorts_assets SET name = $2, tags = $3 WHERE id = $1', [a.id, body.name !== undefined ? String(body.name).slice(0, 200) : a.name, body.tags !== undefined ? String(body.tags).replace(/[,#]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300) : a.tags]);

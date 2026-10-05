@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useCtx } from '../shared.jsx';
 import { AssetLibrary, Prep, VideoSettings } from './ShortsAssets.jsx';
+import { Renders } from './ShortsRender.jsx';
 
-/* 사업 › 콘텐츠 관리 › 숏폼 제작 (1차): ① 수집함 → ② 글 고르기 → ③ AI 제목 · 스크립트 (server/shorts.mjs)
+/* 사업 › 콘텐츠 관리 › 숏폼 제작: ① 수집함 → ② 글 고르기 · AI 제목 · 스크립트 (server/shorts.mjs)
+   → ③ 소재함 · ④ 제작 준비 (ShortsAssets.jsx) → ⑤ 영상 만들기 (ShortsRender.jsx)
    - 게시판(RSS)은 서버가 정해진 주기마다 자동으로 읽어 수집함에 쌓는다
    - 고른 글에서 "AI 스크립트 만들기" → 후보 여러 개 → 하나를 골라 고친다 (고른 스크립트가 2차 · 3차의 영상 재료)
    - 관리자 계정에서만 보임 (AI 비용이 서버의 관리자 키로 나가므로) */
-const STEPS = [['inbox', '① 수집함'], ['scripts', '② 고른 글 · 스크립트'], ['assets', '③ 소재함'], ['prep', '④ 제작 준비'], ['settings', '설정']];
+const STEPS = [['inbox', '① 수집함'], ['scripts', '② 고른 글 · 스크립트'], ['assets', '③ 소재함'], ['prep', '④ 제작 준비'], ['render', '⑤ 영상 만들기'], ['settings', '설정']];
 const dt = d => (d ? new Date(d).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-');
 const secs = n => Math.round(n / 5.5);                       // 한국어 나레이션 약 5.5자/초
 
@@ -18,6 +20,7 @@ export default function ShortsStudio() {
   const [busy, setBusy] = useState('');                       // 진행 중인 일 (버튼 막기)
   const [step, setStep] = useState('inbox');
   const say = (t, bad = false) => setMsg({ t, bad });
+  const patch = p => setD(x => (x ? { ...x, ...p } : x));   // 영상 진행률만 바꿀 때
   const load = async () => {
     try { setD(await sync.request('/api/shorts')); setErr(''); }
     catch (e) { setErr(e.status === 404 ? '서버가 아직 숏폼 제작을 지원하지 않습니다. VPS 서버를 업데이트하세요 (bash server/deploy/update.sh)' : e.message); }
@@ -35,19 +38,22 @@ export default function ShortsStudio() {
   if (!d) return <section className="panel"><p className="muted">불러오는 중…</p></section>;
 
   const srcName = id => d.sources.find(s => s.id === id)?.name || '삭제된 게시판';
-  const counts = { new: d.items.filter(i => i.status === 'new').length, picked: d.items.filter(i => i.status === 'picked').length, ready: d.scripts.filter(s => s.chosen && d.items.some(i => i.id === s.item_id && i.status === 'picked')).length };
+  const counts = { new: d.items.filter(i => i.status === 'new').length, picked: d.items.filter(i => i.status === 'picked').length, ready: d.scripts.filter(s => s.chosen && d.items.some(i => i.id === s.item_id && i.status === 'picked')).length,
+    working: (d.renders || []).filter(r => r.status === 'queued' || r.status === 'running').length };
   return (
     <div className="sh">
       <div className="sh-steps" role="tablist" aria-label="숏폼 제작 단계">
         {STEPS.map(([k, n]) => <button key={k} role="tab" aria-selected={step === k} className={step === k ? 'on' : ''} onClick={() => setStep(k)}>{n}
-          {k === 'inbox' && counts.new > 0 && <b>{counts.new}</b>}{k === 'scripts' && counts.picked > 0 && <b>{counts.picked}</b>}{k === 'prep' && counts.ready > 0 && <b>{counts.ready}</b>}</button>)}
+          {k === 'inbox' && counts.new > 0 && <b>{counts.new}</b>}{k === 'scripts' && counts.picked > 0 && <b>{counts.picked}</b>}{k === 'prep' && counts.ready > 0 && <b>{counts.ready}</b>}{k === 'render' && counts.working > 0 && <b>{counts.working}</b>}</button>)}
         <span className={`sh-ai ${d.ai.ready ? 'ok' : ''}`} title={d.ai.model}>{d.ai.ready ? `AI 준비됨 · ${d.ai.provider === 'anthropic' ? 'Claude' : 'ChatGPT'} ${d.ai.model}` : 'AI 키 없음 (설정 참고)'}</span>
       </div>
       {msg && <p className={`banner ${msg.bad ? '' : 'ok'} sh-msg`} role="status">{msg.t}<button className="linkish" onClick={() => setMsg(null)}>닫기</button></p>}
       {step === 'inbox' && <Inbox d={d} act={act} busy={busy} srcName={srcName} goScripts={() => setStep('scripts')} />}
       {step === 'scripts' && <Scripts d={d} act={act} busy={busy} srcName={srcName} goInbox={() => setStep('inbox')} />}
       {step === 'assets' && <AssetLibrary d={d} act={act} busy={busy} reload={load} />}
-      {step === 'prep' && <Prep d={d} act={act} busy={busy} goScripts={() => setStep('scripts')} goAssets={() => setStep('assets')} />}
+      {step === 'prep' && <Prep d={d} act={act} busy={busy} goScripts={() => setStep('scripts')} goAssets={() => setStep('assets')} goRender={() => setStep('render')} />}
+      {step === 'render' && (d.renders ? <Renders d={d} act={act} busy={busy} patch={patch} goPrep={() => setStep('prep')} />
+        : <section className="panel"><p className="banner">서버가 아직 영상 만들기를 지원하지 않습니다. VPS 서버를 업데이트하세요 (bash server/deploy/update.sh)</p></section>)}
       {step === 'settings' && <><Settings d={d} act={act} busy={busy} /><VideoSettings d={d} act={act} busy={busy} /></>}
     </div>
   );

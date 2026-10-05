@@ -20,6 +20,8 @@ PrivateTmp=true
 # 숏폼 소재 · 영상 파일 저장 (/var/lib/jcalender, jcal 사용자만 씀)
 StateDirectory=jcalender
 StateDirectoryMode=0750
+# 영상 만들 때 글꼴 목록 캐시 (읽기 전용 홈 대신)
+Environment=XDG_CACHE_HOME=/var/lib/jcalender/.cache
 
 [Install]
 WantedBy=multi-user.target
