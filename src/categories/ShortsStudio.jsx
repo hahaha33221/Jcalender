@@ -9,7 +9,7 @@ import { mergeShortsPosts } from './shortsPerf.js';
    → ③ 소재함 · ④ 제작 준비 (ShortsAssets.jsx) → ⑤ 영상 만들기 (ShortsRender.jsx) → ⑥ 업로드 · 성과 (ShortsSocial.jsx)
    - 게시판(RSS)은 서버가 정해진 주기마다 자동으로 읽어 수집함에 쌓는다
    - 고른 글에서 "AI 스크립트 만들기" → 후보 여러 개 → 하나를 골라 고친다 (고른 스크립트가 2차 · 3차의 영상 재료)
-   - 관리자 계정에서만 보임 (AI 비용이 서버의 관리자 키로 나가므로) */
+   - 관리자 + 회원 관리에서 "숏폼 제작"을 허용한 회원에게 보임 (자료는 사람마다 따로, AI 비용은 서버 키로 나감) */
 const STEPS = [['inbox', '① 수집함'], ['scripts', '② 고른 글 · 스크립트'], ['assets', '③ 소재함'], ['prep', '④ 제작 준비'], ['render', '⑤ 영상 만들기'], ['upload', '⑥ 업로드'], ['settings', '설정']];
 const dt = d => (d ? new Date(d).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-');
 const secs = n => Math.round(n / 5.5);                       // 한국어 나레이션 약 5.5자/초

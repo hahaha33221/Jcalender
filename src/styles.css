@@ -2042,3 +2042,5 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .su-st { font-size: 13px; }
 .su-pa { display: flex; gap: 8px; align-items: center; }
 @media (max-width: 700px) { .su-chs, .su-form { grid-template-columns: minmax(0, 1fr); } .su-th { display: none; } .su-posts li { grid-template-columns: auto minmax(0, 1fr); } .su-pa { grid-column: 2; } }
+.mb-sh { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; white-space: nowrap; cursor: pointer; color: var(--ink3); }
+.mb-sh.on { color: var(--ok); font-weight: 600; }

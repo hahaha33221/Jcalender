@@ -230,7 +230,8 @@ export default function App() {
     }, 1500);
     return () => clearTimeout(t);
   }, [reviewedKey]);
-  const ctx = { isAdmin, areasAllowed, store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go, openCat, sync };
+  const canShorts = isAdmin || (!!sync.connected && !!sync.conf.shorts);   // 숏폼 제작: 관리자 + 회원 관리에서 허용한 회원
+  const ctx = { isAdmin, canShorts, areasAllowed, store, setStore, now, todayStr, isDone, prioOf, cyclePrio, toggle, run, runMany, view, finish, busy, setPanel, go, openCat, sync };
 
   // 메뉴 접기 (이 기기에만 기억)
   const [navMini, setNavMini] = useState(() => { try { return localStorage.getItem('jcalender.navMini') === '1'; } catch { return false; } });

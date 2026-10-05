@@ -224,6 +224,10 @@ try {
   check('본문: article 우선 · 정규식', extractBody(`<article>${'긴 본문 '.repeat(20)}</article>`).startsWith('긴 본문') && extractBody('<div id="x">찾을 글</div>', '<div id="x">([\\s\\S]*?)</div>') === '찾을 글');
   check('페이지 안 RSS 링크 찾기', findFeedLink('<link rel="alternate" type="application/rss+xml" href="/rss">', 'https://b.com/board') === 'https://b.com/rss');
   check('일반 회원은 숏폼 403', (await call('GET', '/api/shorts', null, T)).status === 403);
+  check('회원 숏폼 권한 켜기 → 내 자료만 보임', (await call('POST', '/api/admin/users', { email: EMAIL, shorts: true }, TA.token)).json?.shorts === true
+    && (await call('GET', '/api/me', null, T)).json.user.shorts === true && (await call('GET', '/api/shorts', null, T)).json?.sources?.length === 0);
+  check('관리자 계정 숏폼 권한은 못 바꿈', (await call('POST', '/api/admin/users', { email: OWNER, shorts: false }, TA.token)).status === 400);
+  check('회원 숏폼 권한 끄기 → 403', (await call('POST', '/api/admin/users', { email: EMAIL, shorts: false }, TA.token)).status === 200 && (await call('GET', '/api/shorts', null, T)).status === 403);
   const sh_T0 = TA.token;
   const sh_g0 = await call('GET', '/api/shorts', null, sh_T0);
   check('처음: 설정 기본값 · AI 준비됨 (ChatGPT)', sh_g0.status === 200 && sh_g0.json.settings.scriptChars === 350 && sh_g0.json.ai.ready === true && sh_g0.json.ai.provider === 'openai' && sh_g0.json.ai.model === 'gpt-5-mini', JSON.stringify(sh_g0.json).slice(0, 200));

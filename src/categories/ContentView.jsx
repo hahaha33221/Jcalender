@@ -37,7 +37,7 @@ export function useContent() {
 }
 
 export default function ContentView(props) {
-  const { store, setStore, now, isAdmin, sync } = useCtx();
+  const { store, setStore, now, canShorts, sync } = useCtx();
   const [S, set] = useContent();
   const today = iso(now);
   const base = TOOL_CONFIGS[KEY];
@@ -55,10 +55,10 @@ export default function ContentView(props) {
   const setTab = tab => set(c => ({ ...c, tab }));
   // 성과 탭을 열면 숏폼 업로드 성과를 서버에서 가져와 채움 (관리자 · 서버 1.6.0 이상)
   useEffect(() => {
-    if (!isAdmin || !sync?.connected || S.tab !== 'perf') return;
+    if (!canShorts || !sync?.connected || S.tab !== 'perf') return;
     sync.request('/api/shorts/social').then(r => r?.social && setStore(s => mergeShortsPosts(s, r.social.posts, r.social.channels, now))).catch(() => {});
-  }, [S.tab, isAdmin, sync?.connected]);
-  const TABS = [['board', '콘텐츠'], ['accounts', '채널 계정'], ['perf', '성과'], ...(isAdmin ? [['shorts', '숏폼 제작']] : [])];   // 숏폼 제작: 관리자만
+  }, [S.tab, canShorts, sync?.connected]);
+  const TABS = [['board', '콘텐츠'], ['accounts', '채널 계정'], ['perf', '성과'], ...(canShorts ? [['shorts', '숏폼 제작']] : [])];   // 숏폼 제작: 관리자 + 허용한 회원
   return (
     <div className="catv tv ct" style={{ '--ac': areaVar(props.area) }}>
       <header className="page-h"><h1 className="area-title">{props.cat}</h1></header>
@@ -67,7 +67,7 @@ export default function ContentView(props) {
       </div>
       {S.tab === 'accounts' ? <Accounts S={S} set={set} rows={rows} today={today} />
         : S.tab === 'perf' ? <Perf S={S} set={set} rows={rows} today={today} />
-        : S.tab === 'shorts' && isAdmin ? <ShortsStudio />
+        : S.tab === 'shorts' && canShorts ? <ShortsStudio />
           : <ToolView {...props} config={config} noHeader />}
     </div>
   );

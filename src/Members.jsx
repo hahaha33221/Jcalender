@@ -51,6 +51,11 @@ export default function Members() {
     try { await sync.request('/api/admin/users', { method: 'POST', body: { email: u.email, areas: next } }); say(`${u.name || u.email}님이 볼 수 있는 영역: ${[...next].map(k => AREAS[k].n).join(' · ')}`); await load(); }
     catch (e) { say(e.message, true); setBusy(false); }
   };
+  const setShorts = async (u, on) => {
+    setBusy(true);
+    try { await sync.request('/api/admin/users', { method: 'POST', body: { email: u.email, shorts: on } }); say(on ? `${u.name || u.email}님이 숏폼 제작을 쓸 수 있습니다 (사업 영역 · 콘텐츠 관리가 보여야 함)` : `${u.name || u.email}님의 숏폼 제작을 껐습니다 (만든 자료는 그대로)`); await load(); }
+    catch (e) { say(e.message.includes('없는 주소') ? '서버를 업데이트하면 쓸 수 있습니다' : e.message, true); setBusy(false); }
+  };
   const logoutAll = async u => {
     setBusy(true);
     try { const r = await sync.request('/api/admin/users', { method: 'POST', body: { email: u.email, logout: true } }); say(`${u.name || u.email}님의 기기 ${r.loggedOut}대를 로그아웃했습니다`); await load(); }
@@ -116,7 +121,7 @@ export default function Members() {
           <input type="search" className="mb-q" value={q} onChange={e => setQ(e.target.value)} placeholder="이름 · 이메일 검색" aria-label="회원 검색" />
           <button className="btn sm grow-r" onClick={load} disabled={busy}>{busy ? '불러오는 중…' : '새로고침'}</button></div>
         {users && <div className="tablewrap"><table className="prog fv-table mb-table">
-          <thead><tr><th>회원</th><th>권한</th><th>볼 수 있는 영역</th><th>가입</th><th>마지막 로그인</th><th>로그인 기기</th><th>데이터</th><th /></tr></thead>
+          <thead><tr><th>회원</th><th>권한</th><th>볼 수 있는 영역</th><th>숏폼 제작</th><th>가입</th><th>마지막 로그인</th><th>로그인 기기</th><th>데이터</th><th /></tr></thead>
           <tbody>{list.map(u => {
             const self = u.email.toLowerCase() === me, locked = u.owner || self;
             return (
@@ -130,6 +135,8 @@ export default function Members() {
                 <td><div className="mb-areas" role="group" aria-label={`${u.email} 볼 수 있는 영역`}>{['P', 'B', 'W'].map(k => (
                   <label key={k} className={(u.areas || 'PBW').includes(k) ? 'on' : ''} style={{ '--ac': `var(${AREAS[k].v})` }} title={u.owner ? '관리자 계정은 모든 영역을 봅니다' : `${AREAS[k].n} 영역 보기`}>
                     <input type="checkbox" checked={(u.areas || 'PBW').includes(k)} disabled={busy || u.owner} onChange={e => setAreas(u, k, e.target.checked)} />{AREAS[k].n}</label>))}</div></td>
+                <td className="c"><label className={`mb-sh ${u.shorts ? 'on' : ''}`} title={u.owner ? '관리자 계정은 늘 씁니다' : '콘텐츠 관리 › 숏폼 제작 쓰기 (AI · 음성 비용은 서버 키로 나감)'}>
+                  <input type="checkbox" checked={!!u.shorts} disabled={busy || u.owner} onChange={e => setShorts(u, e.target.checked)} />{u.shorts ? '허용' : '안 함'}</label></td>
                 <td className="nw">{dt(u.createdAt).split(' ').slice(0, 3).join(' ')}</td>
                 <td className="nw">{dt(u.lastLoginAt)}</td>
                 <td className="c">{u.sessions}대</td>
@@ -137,7 +144,7 @@ export default function Members() {
                 <td>{!self && u.sessions > 0 && <button className="btn sm" disabled={busy} onClick={() => logoutAll(u)}>모든 기기 로그아웃</button>}</td>
               </tr>);
           })}</tbody></table></div>}
-        <p className="note">관리자: 이 계정 하나뿐 (회원 관리 · 진행 현황) · 일반: 자기 데이터만 · 정지: 로그인할 수 없음(데이터는 지우지 않음). 볼 수 있는 영역: 체크를 푼 영역(개인 · 사업 · 근로)은 그 회원의 메뉴 · 체크리스트 · 대시보드에서 빠집니다(데이터는 그대로). 회원 삭제 · 비밀번호 초기화는 VPS 에서 jcal-admin 으로 합니다.</p>
+        <p className="note">관리자: 이 계정 하나뿐 (회원 관리 · 진행 현황) · 일반: 자기 데이터만 · 정지: 로그인할 수 없음(데이터는 지우지 않음). 볼 수 있는 영역: 체크를 푼 영역(개인 · 사업 · 근로)은 그 회원의 메뉴 · 체크리스트 · 대시보드에서 빠집니다(데이터는 그대로). 숏폼 제작: 허용한 회원에게 사업 › 콘텐츠 관리 › 숏폼 제작 탭이 보입니다 (자료 · 저장 공간 · 연결 계정은 회원마다 따로, AI · 음성 비용은 서버 키로 나감). 사업 영역이 보이고, 회원 화면 키를 켰다면 콘텐츠 관리가 1차 검수 완료여야 합니다. 회원 삭제 · 비밀번호 초기화는 VPS 에서 jcal-admin 으로 합니다.</p>
       </section>
     </>
   );

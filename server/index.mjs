@@ -14,11 +14,12 @@
    GET  /api/admin/users                            → { users: [{ email, name, role, owner, createdAt, lastLoginAt, sessions, syncedAt, size }] }
    POST /api/admin/users  {email, role}             권한 바꾸기 (member 일반 · suspended 정지, 정지하면 그 계정의 모든 기기 로그아웃)
    POST /api/admin/users  {email, areas: 'PBW'}     볼 수 있는 영역 (P 개인 · B 사업 · W 근로, 하나 이상)
+   POST /api/admin/users  {email, shorts: true}     숏폼 제작 쓰기 (관리자 계정은 늘 가능)
    POST /api/admin/users  {email, logout: true}     그 계정의 모든 기기 로그아웃
    GET  /api/admin/screen · POST {on?, cats?}       회원 화면: 켜면 회원에게는 cats(관리자가 검수 완료한 카테고리)만 보임
    GET  /api/admin/signup                           → { mode, code }
    POST /api/admin/signup {mode, newCode}           회원가입 방식 (code · open · closed) · 새 초대 코드
-   숏폼 제작 (관리자 계정만) — server/shorts.mjs: /api/shorts, /api/shorts/source · item · generate · script · settings
+   숏폼 제작 (관리자 + 회원 관리에서 허용한 회원, 데이터는 사람마다 따로) — server/shorts.mjs: /api/shorts, /api/shorts/source · item · generate · script · settings
    동기화 단위는 "앱 데이터 전체(비밀 정보 제외)". 올릴 때마다 db/convert.mjs 규칙으로 47개 표도 함께 갱신한다. */
 import http from 'http';
 import { config } from './config.mjs';
@@ -31,7 +32,7 @@ import { assetRoutes, assetData, RAW } from './shortsAssets.mjs';
 import { renderRoutes, rendersOf, startRenderWorker } from './shortsRender.mjs';
 import { socialRoutes, socialOf, startSocialWorker } from './shortsSocial.mjs';
 
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
 const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐
@@ -42,6 +43,7 @@ async function memberScreen() {
   const { rows } = await pool.query("SELECT value FROM jcal.server_settings WHERE key = 'member_screen'");
   try { const v = JSON.parse(rows[0]?.value || '{}'); return { on: !!v.on, cats: Array.isArray(v.cats) ? v.cats.filter(c => typeof c === 'string').slice(0, 300) : [] }; } catch { return { on: false, cats: [] }; }
 }
+const shortsOf = u => isOwner(u.email) || !!u.shorts;          // 숏폼 제작 권한
 const screenFor = async u => (roleOf(u) === 'admin' ? null : memberScreen());
 const SUSPENDED = '이 계정은 사용이 정지되었습니다. 관리자에게 문의하세요';
 
@@ -90,11 +92,17 @@ async function authUser(req) {
   const m = String(req.headers.authorization || '').match(/^Bearer\s+(\S+)$/i);
   if (!m) throw new HttpError(401, '로그인이 필요합니다');
   const { rows } = await pool.query(
-    `SELECT u.id, u.email, u.name, u.role, u.areas, s.id AS sid FROM jcal.sessions s JOIN jcal.users u ON u.id = s.user_id
+    `SELECT u.id, u.email, u.name, u.role, u.areas, u.shorts, s.id AS sid FROM jcal.sessions s JOIN jcal.users u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.expires_at > now()`, [tokenHash(m[1])]);
   if (!rows[0]) throw new HttpError(401, '로그인이 만료되었습니다. 다시 로그인하세요');
-  const u = { ...rows[0], role: roleOf(rows[0]), areas: areasOf(rows[0]) };
+  const u = { ...rows[0], role: roleOf(rows[0]), areas: areasOf(rows[0]), shorts: shortsOf(rows[0]) };
   if (u.role === 'suspended') throw new HttpError(401, SUSPENDED);
+  return u;
+}
+/** 숏폼 제작: 관리자 + 관리자가 허용한 회원 (데이터 · 저장 공간은 사람마다 따로) */
+async function shortsUser(req) {
+  const u = await authUser(req);
+  if (!u.shorts) throw new HttpError(403, '숏폼 제작 권한이 없습니다. 관리자에게 요청하세요');
   return u;
 }
 async function adminUser(req) {
@@ -156,7 +164,7 @@ const routes = {
       if (!u.rows[0]) throw new HttpError(409, '이미 가입된 이메일입니다. 로그인하세요');
       const ses = await newSession(c, req, u.rows[0].id, body.device);
       addFail(key);                                                 // 같은 곳에서 15분에 10명까지만 가입
-      return { token: ses.token, user: { email: u.rows[0].email, name: u.rows[0].name, role: roleOf({ ...u.rows[0], role: 'member' }), areas: AREA_ORDER }, expiresAt: ses.expiresAt, created: true };
+      return { token: ses.token, user: { email: u.rows[0].email, name: u.rows[0].name, role: roleOf({ ...u.rows[0], role: 'member' }), areas: AREA_ORDER, shorts: isOwner(u.rows[0].email) }, expiresAt: ses.expiresAt, created: true };
     });
   },
 
@@ -178,13 +186,13 @@ const routes = {
     if (!email || !pw) throw new HttpError(400, '이메일과 비밀번호를 입력하세요');
     const key = `${clientIp(req)}|${email}`;
     checkFails(key);
-    const { rows } = await pool.query('SELECT id, email, name, role, areas, password_hash FROM jcal.users WHERE lower(email) = $1', [email]);
+    const { rows } = await pool.query('SELECT id, email, name, role, areas, shorts, password_hash FROM jcal.users WHERE lower(email) = $1', [email]);
     const u = rows[0];
     if (!u || !(await verifyPassword(pw, u.password_hash))) { addFail(key); throw new HttpError(401, '이메일 또는 비밀번호가 맞지 않습니다'); }
     fails.delete(key);
     if (roleOf(u) === 'suspended') throw new HttpError(403, SUSPENDED);
     const ses = await tx(c => newSession(c, req, u.id, body.device));
-    return { token: ses.token, user: { email: u.email, name: u.name, role: roleOf(u), areas: areasOf(u), screen: await screenFor(u) }, expiresAt: ses.expiresAt };
+    return { token: ses.token, user: { email: u.email, name: u.name, role: roleOf(u), areas: areasOf(u), shorts: shortsOf(u), screen: await screenFor(u) }, expiresAt: ses.expiresAt };
   },
 
   'POST /api/logout': async req => {
@@ -197,19 +205,19 @@ const routes = {
     const u = await authUser(req);
     const { rows } = await pool.query('SELECT version, updated_at, device, size_bytes FROM jcal.store_snapshots WHERE user_id = $1', [u.id]);
     const s = rows[0];
-    return { user: { email: u.email, name: u.name, role: u.role, areas: u.areas, screen: await screenFor(u) }, snapshot: s ? { version: Number(s.version), updatedAt: s.updated_at, device: s.device, size: s.size_bytes } : null };
+    return { user: { email: u.email, name: u.name, role: u.role, areas: u.areas, shorts: u.shorts, screen: await screenFor(u) }, snapshot: s ? { version: Number(s.version), updatedAt: s.updated_at, device: s.device, size: s.size_bytes } : null };
   },
 
   /* ── 회원 관리 (관리자) ── */
   'GET /api/admin/users': async req => {
     await adminUser(req);
     const { rows } = await pool.query(
-      `SELECT u.email, u.name, u.role, u.areas, u.created_at, u.last_login_at, u.role_updated_at,
+      `SELECT u.email, u.name, u.role, u.areas, u.shorts, u.created_at, u.last_login_at, u.role_updated_at,
               (SELECT count(*) FROM jcal.sessions s WHERE s.user_id = u.id AND s.expires_at > now())::int AS sessions,
               ss.updated_at AS synced_at, ss.size_bytes
        FROM jcal.users u LEFT JOIN jcal.store_snapshots ss ON ss.user_id = u.id
        WHERE u.password_hash <> '!not-set' ORDER BY u.created_at`);
-    return { users: rows.map(r => ({ email: r.email, name: r.name, role: roleOf(r), areas: areasOf(r), owner: isOwner(r.email), createdAt: r.created_at, lastLoginAt: r.last_login_at, roleUpdatedAt: r.role_updated_at, sessions: r.sessions, syncedAt: r.synced_at, size: r.size_bytes == null ? null : Number(r.size_bytes) })) };
+    return { users: rows.map(r => ({ email: r.email, name: r.name, role: roleOf(r), areas: areasOf(r), shorts: shortsOf(r), owner: isOwner(r.email), createdAt: r.created_at, lastLoginAt: r.last_login_at, roleUpdatedAt: r.role_updated_at, sessions: r.sessions, syncedAt: r.synced_at, size: r.size_bytes == null ? null : Number(r.size_bytes) })) };
   },
 
   'POST /api/admin/users': async (req, body) => {
@@ -221,6 +229,11 @@ const routes = {
     if (body.logout) {
       const r = await pool.query('DELETE FROM jcal.sessions WHERE user_id = $1 AND id <> $2', [t.id, me.sid]);
       return { ok: true, loggedOut: r.rowCount };
+    }
+    if (body.shorts !== undefined) {
+      if (isOwner(t.email)) throw new HttpError(400, '관리자 계정은 늘 숏폼 제작을 씁니다');
+      await pool.query('UPDATE jcal.users SET shorts = $2 WHERE id = $1', [t.id, !!body.shorts]);
+      return { ok: true, email: t.email, shorts: !!body.shorts };
     }
     if (body.areas !== undefined) {
       const areas = [...AREA_ORDER].filter(a => String(body.areas).toUpperCase().includes(a)).join('');
@@ -296,14 +309,14 @@ const routes = {
   },
 };
 
-Object.assign(routes, shortsRoutes({ pool, tx, adminUser, HttpError }));
-const assets = assetRoutes({ pool, tx, adminUser, HttpError });
+Object.assign(routes, shortsRoutes({ pool, tx, adminUser: shortsUser, HttpError }));
+const assets = assetRoutes({ pool, tx, adminUser: shortsUser, HttpError });
 Object.assign(routes, assets.json);
 const shortsBase = routes['GET /api/shorts'];
-Object.assign(routes, renderRoutes({ pool, adminUser, HttpError }));
-const social = socialRoutes({ pool, adminUser, HttpError, originOk });
+Object.assign(routes, renderRoutes({ pool, adminUser: shortsUser, HttpError }));
+const social = socialRoutes({ pool, adminUser: shortsUser, HttpError, originOk });
 Object.assign(routes, social.json);
-routes['GET /api/shorts'] = async (req, body, res) => { const base = await shortsBase(req, body, res), uid = (await adminUser(req)).id; return { ...base, ...(await assetData(pool, uid)), ...(await rendersOf(pool, uid)), ...(await socialOf(pool, uid)) }; };   // + 소재함 · 제작 준비 · 영상 · 업로드
+routes['GET /api/shorts'] = async (req, body, res) => { const base = await shortsBase(req, body, res), uid = (await shortsUser(req)).id; return { ...base, ...(await assetData(pool, uid)), ...(await rendersOf(pool, uid)), ...(await socialOf(pool, uid)) }; };   // + 소재함 · 제작 준비 · 영상 · 업로드
 const rawRoutes = { ...assets.raw, ...social.raw };                                    // 본문을 JSON 으로 읽지 않는 경로 (파일 올리기 · 내려주기)
 
 const server = http.createServer(async (req, res) => {
