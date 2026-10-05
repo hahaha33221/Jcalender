@@ -115,7 +115,7 @@ const fake = http.createServer((req, res) => {
 await new Promise(r => fake.listen(FAKE, '127.0.0.1', r));
 const srv = spawn(process.execPath, ['index.mjs'], { env: { ...process.env, PORT: String(PORT), ALLOWED_ORIGINS: 'https://*.vercel.app', OWNER_EMAILS: OWNER,
   SHORTS_ALLOW_PRIVATE: '1', SHORTS_CRON: '0', OPENAI_API_KEY: 'sk-test-key', OPENAI_BASE_URL: `${F}/v1`, ANTHROPIC_API_KEY: '', AI_PROVIDER: '',
-  PEXELS_API_KEY: 'test-pexels-key', YOUTUBE_CLIENT_ID: 'test.apps.googleusercontent.com', YOUTUBE_CLIENT_SECRET: 'gsecret', INSTAGRAM_APP_ID: '123456', INSTAGRAM_APP_SECRET: 'igsecret', SOCIAL_TEST_BASE: F, PUBLIC_URL: BASE, IG_POLL_MS: '200', PEXELS_BASE_URL: `${F}/pexels`, SHORTS_DIR: path.join(TMP, 'store'), SHORTS_MAX_UPLOAD_MB: '1' }, stdio: ['ignore', 'pipe', 'inherit'] });
+  PEXELS_API_KEY: 'test-pexels-key', YOUTUBE_CLIENT_ID: 'test.apps.googleusercontent.com', YOUTUBE_CLIENT_SECRET: 'gsecret', INSTAGRAM_APP_ID: '123456', INSTAGRAM_APP_SECRET: 'igsecret', SOCIAL_TEST_BASE: F, SHORTS_PRESETS: JSON.stringify([{ id: 'pa', name: '시험 추천 A', desc: 'd', fullText: false, urls: [`${F}/nofeed-404`, `${F}/euc.xml`] }, { id: 'pb', name: '시험 추천 B', desc: 'd', urls: [`${F}/nofeed`] }, { id: 'pc', name: '시험 추천 C', desc: 'd', urls: [`${F}/feed.xml`] }]), PUBLIC_URL: BASE, IG_POLL_MS: '200', PEXELS_BASE_URL: `${F}/pexels`, SHORTS_DIR: path.join(TMP, 'store'), SHORTS_MAX_UPLOAD_MB: '1' }, stdio: ['ignore', 'pipe', 'inherit'] });
 await new Promise(r => srv.stdout.once('data', r));
 
 try {
@@ -261,6 +261,11 @@ try {
   check('설정 범위 제한 (제목 100자까지)', sh_g2.settings.titleMax === 100 && sh_g2.settings.tone === '담담하게');
   check('다른 사람 항목은 404', (await call('POST', '/api/shorts/item', { id: sh_it1.id, status: 'skipped' }, T2b)).status !== 200);
   check('게시판 삭제', (await call('POST', '/api/shorts/source', { action: 'delete', id: sh_add2.json.source.id }, sh_T0)).status === 200);
+  const pr = await call('POST', '/api/shorts/presets', {}, sh_T0), prr = id => pr.json?.results.find(x => x.id === id);
+  check('추천 게시판 목록', (await call('GET', '/api/shorts', null, sh_T0)).json.presets.length === 3);
+  check('추천 게시판 추가 (안 되는 주소는 다음 후보 · 실패 이유 · 이미 있는 곳은 건너뜀)', pr.status === 200 && prr('pa').ok && prr('pa').added >= 0 && prr('pb').ok === false && /RSS/.test(prr('pb').error) && prr('pc').skipped
+    && (await call('GET', '/api/shorts', null, sh_T0)).json.sources.some(x => x.name === '시험 추천 A' && x.feed_url === `${F}/euc.xml`), JSON.stringify(pr.json));
+  check('추천 게시판 다시 추가 → 건너뜀', (await call('POST', '/api/shorts/presets', { ids: ['pa'] }, sh_T0)).json.results[0].skipped === true);
 
   console.log(`숏폼 2차 (소재함 · Pexels · 제작 준비)${HAS_FF ? '' : ' — ffmpeg 없음: 길이 · 미리보기 확인은 건너뜀'}`);
   const a2_up = async (file, name, type, token = sh_T0) => { const r = await fetch(`${BASE}/api/shorts/upload`, { method: 'POST', headers: { Origin: ORIGIN, Authorization: `Bearer ${token}`, 'Content-Type': type, 'X-File-Name': encodeURIComponent(name) }, body: fs.readFileSync(file) }); return { status: r.status, json: await r.json().catch(() => null) }; };

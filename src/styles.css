@@ -2060,3 +2060,10 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .sh-demo { margin-left: auto; }
 .sh-demo + .sh-ai { margin-left: 6px; }
 @media (max-width: 700px) { .sh-demo { margin-left: 0; } }
+.sh-pre { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+.sh-pre-h { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+.sh-pre ul { list-style: none; margin: 0 0 8px; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; }
+.sh-pre li { display: flex; flex-direction: column; gap: 0; font-size: 13px; }
+.sh-pre li small { padding-left: 22px; }
+.sh-pre li.on b { color: var(--ok); }
+@media (max-width: 700px) { .sh-pre ul { grid-template-columns: minmax(0, 1fr); } }

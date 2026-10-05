@@ -5,6 +5,7 @@
    POST /api/shorts/generate {itemId}                                       AI 로 제목 · 스크립트 후보 만들기
    POST /api/shorts/script  {id, chosen?, title?, script?, hashtags?, remove?}  후보 고르기 · 고치기 · 지우기
    POST /api/shorts/settings {…}                                            설정 저장
+   POST /api/shorts/presets {ids?}                                          추천 게시판 한 번에 추가 (서버가 RSS 를 확인한 것만)
    - 수집: 서버가 5분마다 확인해서 주기(기본 60분)가 지난 게시판을 읽는다. RSS 가 없는 페이지 주소는 페이지 안의 RSS 링크를 찾아 쓴다
    - 보안: http(s) 만, 내부망 주소(127.0.0.1 · 10.x · 192.168.x 등)는 읽지 않음 (리디렉션도 확인), 3MB · 15초 제한
    - AI: OpenAI ChatGPT (환경 변수 OPENAI_API_KEY, 모델 SHORTS_MODEL 기본 gpt-5-mini) 또는 Anthropic Claude (ANTHROPIC_API_KEY)
@@ -128,6 +129,27 @@ export function extractBody(html, pattern) {
   return og ? decodeEntities(og[1]) : '';
 }
 
+/* ── 추천 게시판: 썰 · 직장 · 일상 · 유머 위주. 주소가 바뀔 수 있어 후보를 여러 개 두고 서버가 되는 것을 찾아 씀 ── */
+export const PRESETS = env0().SHORTS_PRESETS ? JSON.parse(env0().SHORTS_PRESETS) : [
+  { id: 'ppomppu-free', name: '뽐뿌 자유게시판', desc: '직장 · 생활 고민, 사는 이야기', fullText: true,
+    urls: ['https://www.ppomppu.co.kr/rss.php?id=freeboard', 'https://www.ppomppu.co.kr/zboard/zboard.php?id=freeboard'] },
+  { id: 'ppomppu-humor', name: '뽐뿌 유머/감동', desc: '웃긴 일 · 감동 사연', fullText: true,
+    urls: ['https://www.ppomppu.co.kr/rss.php?id=humor', 'https://www.ppomppu.co.kr/zboard/zboard.php?id=humor'] },
+  { id: 'ruliweb-humor', name: '루리웹 유머 게시판', desc: '유머 · 썰', fullText: true,
+    urls: ['https://bbs.ruliweb.com/community/board/300143/rss', 'https://bbs.ruliweb.com/community/board/300143'] },
+  { id: 'clien-park', name: '클리앙 모두의공원', desc: '직장인 · 일상 이야기', fullText: true,
+    urls: ['https://www.clien.net/service/board/park/rss', 'https://rss.clien.net/park', 'https://www.clien.net/service/board/park'] },
+  { id: 'todayhumor-best', name: '오늘의유머 베스트', desc: '추천 많이 받은 글', fullText: true,
+    urls: ['http://www.todayhumor.co.kr/rss/humorbest.xml', 'https://www.todayhumor.co.kr/board/list.php?table=humorbest'] },
+  { id: 'reddit-tifu', name: 'Reddit r/tifu (영어)', desc: '"오늘 내가 망친 일" 실수담 · AI 가 한국어로 다시 씀', fullText: false,
+    urls: ['https://www.reddit.com/r/tifu/top/.rss?t=day', 'https://old.reddit.com/r/tifu/top/.rss?t=day'] },
+  { id: 'reddit-mc', name: 'Reddit r/MaliciousCompliance (영어)', desc: '시킨 대로 했더니 생긴 직장 반전 썰 · 한국어로 다시 씀', fullText: false,
+    urls: ['https://www.reddit.com/r/MaliciousCompliance/top/.rss?t=day', 'https://old.reddit.com/r/MaliciousCompliance/top/.rss?t=day'] },
+  { id: 'reddit-aita', name: 'Reddit r/AmItheAsshole (영어)', desc: '"제가 잘못한 건가요?" 사연 · 댓글 유도에 좋음', fullText: false,
+    urls: ['https://www.reddit.com/r/AmItheAsshole/top/.rss?t=day', 'https://old.reddit.com/r/AmItheAsshole/top/.rss?t=day'] },
+];
+function env0() { return process.env; }
+
 /* ── 수집 ── */
 export async function resolveFeed(url) {
   const r = await safeFetch(url);
@@ -207,6 +229,7 @@ const SYSTEM = `당신은 한국어 숏폼(유튜브 쇼츠 · 인스타 릴스 
 - 첫 문장은 3초 안에 궁금하게 만드는 한 줄로 시작합니다.
 - 소리 내어 읽기 좋게 짧은 문장으로 씁니다. 이모지 · 괄호 · 특수기호 · 머리말("스크립트:")은 쓰지 않습니다.
 - 마지막은 시청자에게 묻는 한 문장(댓글 유도)으로 끝냅니다.
+- 원문이 영어 등 외국어면 한국 시청자에게 자연스러운 한국어로 옮겨 씁니다 (이름 · 지명은 일반화).
 - 원문에 없는 사실을 지어내지 않습니다. 글이 혐오 · 개인 공격 · 성적인 내용 중심이면 그 부분은 빼고 씁니다.`;
 /** OpenAI Chat Completions + JSON 스키마(structured outputs) */
 export async function askOpenAI(prompt, { system = SYSTEM, schema = SCHEMA, name = 'shorts_scripts' } = {}) {
@@ -300,7 +323,7 @@ export function shortsRoutes({ pool, tx, adminUser, HttpError }) {
         pool.query(`SELECT i.id, i.source_id, i.link, i.title, i.body, i.published_at, i.status, i.fetched_at FROM jcal.shorts_items i WHERE i.user_id = $1 ORDER BY COALESCE(i.published_at, i.fetched_at) DESC LIMIT 400`, [u.id]),
         pool.query('SELECT id, item_id, title, script, hashtags, chosen, model, created_at FROM jcal.shorts_scripts WHERE user_id = $1 ORDER BY created_at, id', [u.id]),
       ]);
-      return { settings, sources: sources.rows, items: items.rows, scripts: scripts.rows, ai: { ready: aiReady(), provider: aiProvider(), model: aiModel() } };
+      return { settings, sources: sources.rows, items: items.rows, scripts: scripts.rows, presets: PRESETS.map(({ id, name, desc, urls }) => ({ id, name, desc, url: urls[0] })), ai: { ready: aiReady(), provider: aiProvider(), model: aiModel() } };
     },
 
     'POST /api/shorts/settings': async (req, body) => {
@@ -309,6 +332,25 @@ export function shortsRoutes({ pool, tx, adminUser, HttpError }) {
       const data = clampSettings({ ...cur, ...body, video: body.video ? { ...cur.video, ...body.video, sub: { ...cur.video.sub, ...(body.video.sub || {}) } } : cur.video });
       await pool.query(`INSERT INTO jcal.shorts_settings (user_id, data) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`, [u.id, data]);
       return { settings: data };
+    },
+
+    'POST /api/shorts/presets': async (req, body) => {
+      const u = await user(req);
+      const want = Array.isArray(body.ids) && body.ids.length ? PRESETS.filter(p => body.ids.includes(p.id)) : PRESETS;
+      const { rows: mine } = await pool.query('SELECT url, feed_url FROM jcal.shorts_sources WHERE user_id = $1', [u.id]);
+      const results = [];
+      for (const p of want) {
+        if (mine.some(m => p.urls.includes(m.url) || p.urls.includes(m.feed_url))) { results.push({ id: p.id, name: p.name, ok: true, skipped: true }); continue; }
+        let r = null, err = '', used = '';
+        for (const url of p.urls) { try { r = await resolveFeed(url); used = url; break; } catch (e) { err = e.message; } }
+        if (!r) { results.push({ id: p.id, name: p.name, ok: false, error: err }); continue; }
+        const { rows } = await pool.query(`INSERT INTO jcal.shorts_sources (user_id, name, url, feed_url, full_text) VALUES ($1, $2, $3, $4, $5)
+          ON CONFLICT (user_id, feed_url) DO NOTHING RETURNING *`, [u.id, p.name, used, r.feedUrl, !!p.fullText]);
+        if (!rows[0]) { results.push({ id: p.id, name: p.name, ok: true, skipped: true }); continue; }
+        const c = await collect(pool, rows[0]);
+        results.push({ id: p.id, name: p.name, ok: true, added: c.added, found: r.items.length, error: c.error || '' });
+      }
+      return { results };
     },
 
     'POST /api/shorts/source': async (req, body) => {

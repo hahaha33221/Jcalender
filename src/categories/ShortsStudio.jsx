@@ -103,6 +103,7 @@ function Inbox({ d, act, busy, srcName, goScripts }) {
               <button className="btn sm" disabled={!!busy} onClick={() => act(`f${s.id}`, '/api/shorts/source', { action: 'fetch', id: s.id }, r => (r.error ? `수집 실패: ${r.error}` : `새 글 ${r.added}개`))}>{busy === `f${s.id}` ? '수집 중…' : '지금 수집'}</button>
               <button className="tl-del" onClick={() => window.confirm(`"${s.name}" 게시판을 지울까요? (이미 모은 글은 남습니다)`) && act('', '/api/shorts/source', { action: 'delete', id: s.id }, '게시판을 지웠습니다')}>삭제</button>
             </li>))}</ul>}
+          {d.presets && <Presets d={d} act={act} busy={busy} />}
           <form className="sh-add" onSubmit={add}>
             <input value={f.url} onChange={e => setF({ ...f, url: e.target.value })} placeholder="게시판 주소 또는 RSS 주소 (https://…)" aria-label="게시판 주소" required />
             <input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="이름 (선택)" aria-label="게시판 이름" />
@@ -136,6 +137,27 @@ function Inbox({ d, act, busy, srcName, goScripts }) {
         {d.items.some(i => i.status === 'picked') && <p className="note">고른 글 {d.items.filter(i => i.status === 'picked').length}개 · <button className="linkish" onClick={goScripts}>스크립트 만들러 가기 ›</button></p>}
       </section>
     </>
+  );
+}
+
+/** 추천 게시판: 골라서 한 번에 추가 (서버가 RSS 를 확인한 것만 추가, 안 되는 곳은 이유 표시) */
+function Presets({ d, act, busy }) {
+  const has = p => d.sources.some(s => s.url === p.url || s.name === p.name);
+  const [pick, setPick] = useState(() => d.presets.filter(p => !has(p)).map(p => p.id));
+  const left = d.presets.filter(p => !has(p));
+  const run = () => act('presets', '/api/shorts/presets', { ids: pick }, r => {
+    const ok = r.results.filter(x => x.ok && !x.skipped), bad = r.results.filter(x => !x.ok);
+    return `추천 게시판 ${ok.length}곳 추가 · 새 글 ${ok.reduce((s, x) => s + (x.added || 0), 0)}개${bad.length ? ` · 안 된 곳: ${bad.map(x => `${x.name}(${x.error})`).join(', ')}` : ''}`;
+  });
+  return (
+    <div className="sh-pre">
+      <div className="sh-pre-h"><b>추천 게시판</b><small className="muted">썰 · 직장 · 일상 · 유머 위주로 골라 둔 곳 · 영어 게시판은 AI 가 한국어로 다시 씁니다</small></div>
+      <ul>{d.presets.map(p => (
+        <li key={p.id} className={has(p) ? 'on' : ''}>
+          <label className="sh-chk"><input type="checkbox" disabled={has(p)} checked={has(p) || pick.includes(p.id)} onChange={e => setPick(x => (e.target.checked ? [...x, p.id] : x.filter(i => i !== p.id)))} />
+            <b>{p.name}</b></label><small className="muted">{has(p) ? '추가됨' : p.desc}</small></li>))}</ul>
+      {left.length > 0 && <button className="btn primary sm" disabled={!pick.length || !!busy} onClick={run}>{busy === 'presets' ? '게시판 확인하며 추가하는 중… (1~2분)' : `고른 게시판 추가 (${pick.filter(i => left.some(p => p.id === i)).length}곳)`}</button>}
+    </div>
   );
 }
 
