@@ -121,7 +121,7 @@ export default function Members() {
           <input type="search" className="mb-q" value={q} onChange={e => setQ(e.target.value)} placeholder="이름 · 이메일 검색" aria-label="회원 검색" />
           <button className="btn sm grow-r" onClick={load} disabled={busy}>{busy ? '불러오는 중…' : '새로고침'}</button></div>
         {users && <div className="tablewrap"><table className="prog fv-table mb-table">
-          <thead><tr><th>회원</th><th>권한</th><th>볼 수 있는 영역</th><th>숏폼 제작</th><th>가입</th><th>마지막 로그인</th><th>로그인 기기</th><th>데이터</th><th /></tr></thead>
+          <thead><tr><th>회원</th><th>권한</th><th>볼 수 있는 영역 · 숏폼 제작</th><th>가입</th><th>마지막 로그인</th><th>로그인 기기</th><th>데이터</th><th /></tr></thead>
           <tbody>{list.map(u => {
             const self = u.email.toLowerCase() === me, locked = u.owner || self;
             return (
@@ -134,13 +134,13 @@ export default function Members() {
                       onClick={() => u.role !== k && setRole(u, k)} title={ROLE_DESC[k]}>{arm === `${u.email}|${k}` ? `정말 ${n}?` : n}</button>))}</div>}</td>
                 <td><div className="mb-areas" role="group" aria-label={`${u.email} 볼 수 있는 영역`}>{['P', 'B', 'W'].map(k => (
                   <label key={k} className={(u.areas || 'PBW').includes(k) ? 'on' : ''} style={{ '--ac': `var(${AREAS[k].v})` }} title={u.owner ? '관리자 계정은 모든 영역을 봅니다' : `${AREAS[k].n} 영역 보기`}>
-                    <input type="checkbox" checked={(u.areas || 'PBW').includes(k)} disabled={busy || u.owner} onChange={e => setAreas(u, k, e.target.checked)} />{AREAS[k].n}</label>))}</div></td>
-                <td className="c"><label className={`mb-sh ${u.shorts ? 'on' : ''}`} title={u.owner ? '관리자 계정은 늘 씁니다' : '콘텐츠 관리 › 숏폼 제작 쓰기 (AI · 음성 비용은 서버 키로 나감)'}>
-                  <input type="checkbox" checked={!!u.shorts} disabled={busy || u.owner} onChange={e => setShorts(u, e.target.checked)} />{u.shorts ? '허용' : '안 함'}</label></td>
-                <td className="nw">{dt(u.createdAt).split(' ').slice(0, 3).join(' ')}</td>
-                <td className="nw">{dt(u.lastLoginAt)}</td>
-                <td className="c">{u.sessions}대</td>
-                <td className="nw"><small>{u.syncedAt ? `${kb(u.size)} · ${dt(u.syncedAt)}` : '아직 없음'}</small></td>
+                    <input type="checkbox" checked={(u.areas || 'PBW').includes(k)} disabled={busy || u.owner} onChange={e => setAreas(u, k, e.target.checked)} />{AREAS[k].n}</label>))}
+                  <label className={`mb-sh ${u.shorts || u.owner ? 'on' : ''}`} style={{ '--ac': 'var(--ok)' }} title={u.owner ? '관리자 계정은 늘 씁니다' : '사업 › 콘텐츠 관리 › 숏폼 제작 탭 쓰기 (AI · 음성 비용은 서버 키로 나감)'}>
+                    <input type="checkbox" checked={!!(u.shorts || u.owner)} disabled={busy || u.owner} onChange={e => setShorts(u, e.target.checked)} />숏폼 제작</label></div></td>
+                <td className="nw" data-l="가입">{dt(u.createdAt).split(' ').slice(0, 3).join(' ')}</td>
+                <td className="nw" data-l="마지막 로그인">{dt(u.lastLoginAt)}</td>
+                <td className="c" data-l="로그인 기기">{u.sessions}대</td>
+                <td className="nw" data-l="데이터"><small>{u.syncedAt ? `${kb(u.size)} · ${dt(u.syncedAt)}` : '아직 없음'}</small></td>
                 <td>{!self && u.sessions > 0 && <button className="btn sm" disabled={busy} onClick={() => logoutAll(u)}>모든 기기 로그아웃</button>}</td>
               </tr>);
           })}</tbody></table></div>}

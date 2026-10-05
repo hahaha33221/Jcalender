@@ -1718,7 +1718,7 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .dash-start > div { flex: 1; min-width: 220px; }
 .dash-start h2 { margin: 0 0 4px; font-size: 16px; }
 .dash-start p { margin: 0; font-size: 13px; }
-.mb-areas { display: flex; gap: 4px; flex-wrap: nowrap; }
+.mb-areas { display: flex; gap: 4px; flex-wrap: wrap; min-width: 220px; max-width: 260px; }
 .mb-areas label { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 14px; font-size: 12px; color: var(--ink3); cursor: pointer; white-space: nowrap; }
 .mb-areas label.on { border-color: var(--ac); color: var(--ink); background: color-mix(in srgb, var(--ac) 10%, var(--card)); }
 .mb-areas input { margin: 0; accent-color: var(--ac); }
@@ -2043,4 +2043,17 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .su-pa { display: flex; gap: 8px; align-items: center; }
 @media (max-width: 700px) { .su-chs, .su-form { grid-template-columns: minmax(0, 1fr); } .su-th { display: none; } .su-posts li { grid-template-columns: auto minmax(0, 1fr); } .su-pa { grid-column: 2; } }
 .mb-sh { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; white-space: nowrap; cursor: pointer; color: var(--ink3); }
+.mb-areas .mb-sh { border-style: dashed; }
+.mb-areas .mb-sh.on { border-style: solid; }
 .mb-sh.on { color: var(--ok); font-weight: 600; }
+/* 회원 목록: 좁은 화면에서는 표 대신 카드 (옆으로 밀지 않아도 영역 · 숏폼 제작 체크가 보이게) */
+@media (max-width: 900px) {
+  .mb-table, .mb-table tbody, .mb-table tr, .mb-table td { display: block; width: 100%; }
+  .mb-table thead { display: none; }
+  .mb-table tr { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .mb-table td { border: 0 !important; padding: 4px 0 !important; text-align: left !important; white-space: normal; }
+  .mb-table td[data-l] { display: flex; gap: 8px; font-size: 13px; }
+  .mb-table td[data-l]::before { content: attr(data-l); color: var(--ink3); min-width: 84px; }
+  .mb-table td:empty { display: none; }
+  .mb-areas { max-width: none; min-width: 0; }
+}
