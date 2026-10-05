@@ -351,6 +351,15 @@ try {
     }
   } else check('ffmpeg 없으면 503', (await call('POST', '/api/shorts/render', { scriptId: r3_sid }, sh_T0)).status === 503);
 
+  if (HAS_FF) {
+    const dm = await call('POST', '/api/shorts/demo', {}, sh_T0), dm2 = await call('POST', '/api/shorts/demo', {}, sh_T0);
+    const dg = (await call('GET', '/api/shorts', null, sh_T0)).json, dp = dg.projects.find(x => x.script_id === dm2.json?.scriptId);
+    check('예시로 채우기 (글 · 스크립트 2개 중 하나 고름 · 배경 3 · 음악 · 제작 준비, 다시 눌러도 소재는 그대로)', dm.status === 200 && dm2.status === 200
+      && dg.assets.filter(x => x.source === 'demo').length === 4 && dg.scripts.filter(x => x.item_id === dm2.json.itemId).length === 2 && dg.scripts.find(x => x.id === dm2.json.scriptId)?.chosen
+      && dp?.backgrounds.length === 3 && !!dp.music_id && dg.assets.find(x => x.id === dp.music_id)?.duration >= 39, JSON.stringify({ dm: dm.json, n: dg.assets.length }));
+    check('일반 회원은 예시 403', (await call('POST', '/api/shorts/demo', {}, T)).status === 403);
+  }
+
   console.log('숏폼 4차 (유튜브 · 인스타그램 연결 · 업로드 · 성과)');
   {
     const uid4 = (await pool.query('SELECT id FROM jcal.users WHERE email = $1', [OWNER])).rows[0].id;

@@ -52,6 +52,10 @@ export default function ShortsStudio() {
       <div className="sh-steps" role="tablist" aria-label="숏폼 제작 단계">
         {STEPS.map(([k, n]) => <button key={k} role="tab" aria-selected={step === k} className={step === k ? 'on' : ''} onClick={() => setStep(k)}>{n}
           {k === 'inbox' && counts.new > 0 && <b>{counts.new}</b>}{k === 'scripts' && counts.picked > 0 && <b>{counts.picked}</b>}{k === 'prep' && counts.ready > 0 && <b>{counts.ready}</b>}{k === 'render' && counts.working > 0 && <b>{counts.working}</b>}{k === 'upload' && counts.posting > 0 && <b>{counts.posting}</b>}</button>)}
+        <button className="btn sm sh-demo" disabled={!!busy} title="예시 글 · 스크립트 · 배경 3장 · 음악을 채워 바로 영상 만들기를 해 볼 수 있게 합니다 (AI 비용 없음)"
+          onClick={async () => { if (!window.confirm('예시 한 벌(글 · 스크립트 · 배경 3장 · 배경음악 · 제작 준비)을 채울까요?\n다른 자료는 그대로 두고, 예시만 새로 고칩니다.')) return;
+            const r = await act('demo', '/api/shorts/demo', {}, '예시를 채웠습니다. ⑤ 영상 만들기에서 "영상 만들기"를 누르면 실제 영상이 만들어집니다 (나레이션 음성 비용만 듦)');
+            if (r) setStep('render'); }}>{busy === 'demo' ? '채우는 중…' : '예시로 채우기'}</button>
         <span className={`sh-ai ${d.ai.ready ? 'ok' : ''}`} title={d.ai.model}>{d.ai.ready ? `AI 준비됨 · ${d.ai.provider === 'anthropic' ? 'Claude' : 'ChatGPT'} ${d.ai.model}` : 'AI 키 없음 (설정 참고)'}</span>
       </div>
       {msg && <p className={`banner ${msg.bad ? '' : 'ok'} sh-msg`} role="status">{msg.t}<button className="linkish" onClick={() => setMsg(null)}>닫기</button></p>}

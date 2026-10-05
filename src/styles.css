@@ -2057,3 +2057,6 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
   .mb-table td:empty { display: none; }
   .mb-areas { max-width: none; min-width: 0; }
 }
+.sh-demo { margin-left: auto; }
+.sh-demo + .sh-ai { margin-left: 6px; }
+@media (max-width: 700px) { .sh-demo { margin-left: 0; } }

@@ -31,8 +31,9 @@ import { shortsRoutes, startShortsCron } from './shorts.mjs';
 import { assetRoutes, assetData, RAW } from './shortsAssets.mjs';
 import { renderRoutes, rendersOf, startRenderWorker } from './shortsRender.mjs';
 import { socialRoutes, socialOf, startSocialWorker } from './shortsSocial.mjs';
+import { demoRoutes } from './shortsDemo.mjs';
 
-const VERSION = '1.7.0';
+const VERSION = '1.8.0';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
 const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐
@@ -314,6 +315,7 @@ const assets = assetRoutes({ pool, tx, adminUser: shortsUser, HttpError });
 Object.assign(routes, assets.json);
 const shortsBase = routes['GET /api/shorts'];
 Object.assign(routes, renderRoutes({ pool, adminUser: shortsUser, HttpError }));
+Object.assign(routes, demoRoutes({ pool, tx, adminUser: shortsUser, HttpError }));   // 예시 채우기
 const social = socialRoutes({ pool, adminUser: shortsUser, HttpError, originOk });
 Object.assign(routes, social.json);
 routes['GET /api/shorts'] = async (req, body, res) => { const base = await shortsBase(req, body, res), uid = (await shortsUser(req)).id; return { ...base, ...(await assetData(pool, uid)), ...(await rendersOf(pool, uid)), ...(await socialOf(pool, uid)) }; };   // + 소재함 · 제작 준비 · 영상 · 업로드

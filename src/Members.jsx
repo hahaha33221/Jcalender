@@ -24,6 +24,7 @@ export default function Members() {
   const [q, setQ] = useState('');
   const [arm, setArm] = useState(null);                     // 정지 · 관리자 지정 확인
   const [showCode, setShowCode] = useState(false);
+  const [ver, setVer] = useState('');                         // 서버 버전 (숏폼 제작 권한은 1.7.0 부터)
   const say = (text, err = false) => setMsg({ text, err });
 
   const load = async () => {
@@ -32,6 +33,7 @@ export default function Members() {
       const [u, s] = await Promise.all([sync.request('/api/admin/users'), sync.request('/api/admin/signup')]);
       setUsers(u.users); setSignup(s);
       sync.request('/api/admin/screen').then(setScreen).catch(() => setScreen(false));   // 서버 1.4.1 이상
+      sync.request('/api/health').then(h => setVer(h.version || '')).catch(() => {});
     } catch (e) {
       say(e.status === 404 ? '서버가 아직 회원 관리를 지원하지 않습니다. VPS 서버를 업데이트하세요 (bash server/deploy/update.sh)' : e.message, true);
     } finally { setBusy(false); }
@@ -51,8 +53,11 @@ export default function Members() {
     try { await sync.request('/api/admin/users', { method: 'POST', body: { email: u.email, areas: next } }); say(`${u.name || u.email}님이 볼 수 있는 영역: ${[...next].map(k => AREAS[k].n).join(' · ')}`); await load(); }
     catch (e) { say(e.message, true); setBusy(false); }
   };
+  const vnum = v => String(v).split('.').map(Number).reduce((s, x) => s * 1000 + (x || 0), 0);
+  const shortsOk = !!users && users.some(u => u.shorts !== undefined) && (!ver || vnum(ver) >= vnum('1.7.0'));
   const setShorts = async (u, on) => {
     setBusy(true);
+    if (!shortsOk) { say(`서버가 ${ver || '옛'} 버전이라 숏폼 제작 권한을 저장할 수 없습니다. 맥에서 cd ~/Jcalender && git pull && bash server/deploy/update.sh 를 실행해 주세요 (1.7.0 이상)`, true); return; }
     try { await sync.request('/api/admin/users', { method: 'POST', body: { email: u.email, shorts: on } }); say(on ? `${u.name || u.email}님이 숏폼 제작을 쓸 수 있습니다 (사업 영역 · 콘텐츠 관리가 보여야 함)` : `${u.name || u.email}님의 숏폼 제작을 껐습니다 (만든 자료는 그대로)`); await load(); }
     catch (e) { say(e.message.includes('없는 주소') ? '서버를 업데이트하면 쓸 수 있습니다' : e.message, true); setBusy(false); }
   };
@@ -117,9 +122,10 @@ export default function Members() {
       </section>
 
       <section className="panel">
-        <div className="csum-h"><h2>회원 목록</h2><span className="muted">{users ? `${list.length}명` : ''}</span>
+        <div className="csum-h"><h2>회원 목록</h2><span className="muted">{users ? `${list.length}명` : ''}{ver ? ` · 서버 ${ver}` : ''}</span>
           <input type="search" className="mb-q" value={q} onChange={e => setQ(e.target.value)} placeholder="이름 · 이메일 검색" aria-label="회원 검색" />
           <button className="btn sm grow-r" onClick={load} disabled={busy}>{busy ? '불러오는 중…' : '새로고침'}</button></div>
+        {users && !shortsOk && <p className="banner">지금 서버 {ver || '(버전 확인 중)'} — 회원별 숏폼 제작 권한은 서버 1.7.0 부터 됩니다. 맥 터미널에서 <code>cd ~/Jcalender && git pull && bash server/deploy/update.sh</code> 를 실행한 뒤 새로고침하세요.</p>}
         {users && <div className="tablewrap"><table className="prog fv-table mb-table">
           <thead><tr><th>회원</th><th>권한</th><th>볼 수 있는 영역 · 숏폼 제작</th><th>가입</th><th>마지막 로그인</th><th>로그인 기기</th><th>데이터</th><th /></tr></thead>
           <tbody>{list.map(u => {
