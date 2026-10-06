@@ -104,10 +104,10 @@ export default function GoalOnboard({ area, mode, onClose }) {
   const steps = choice === 'routine' ? ['start', 'routine', 'rdone'] : mode === 'month' ? ['start', 'review', 'period', 'ask', 'todos', 'done'] : ['start', 'period', 'ask', 'todos', 'done'];
   // 루틴: 체크리스트에 내 항목으로 들어가고, 목표에 연결하면 그 목표 아래 작업(진행률 = 이 루틴 체크)으로도 들어감
   // 루틴: { key, action, freq: D 매일 | WD 평일(월~금 중) | WE 주말(토 · 일 중) | W 매주(요일 여러 개) | M 매월(날짜), wds: [요일], mday, time, end, goal, newGoal }
-  const blankR = (o = {}) => ({ key: uid(), action: '', freq: 'D', wds: [], mday: now.getDate(), time: '', end: '', goal: '', newGoal: '', ...o });
+  const blankR = (o = {}) => ({ key: uid(), action: '', freq: 'D', wds: [], mday: now.getDate(), time: '', end: '', cat: '', goal: '', newGoal: '', ...o });
   const goalOpts = existing.filter(g => !g.ex);
   /** 루틴 카테고리는 자동: 목표에 연결하면 그 목표의 카테고리(진행률에 잡히게), 아니면 영역 공통(목표 관리) */
-  const autoCat = r => goalOpts.find(x => x.key === r.goal)?.cat || '목표 관리';   // 새 목표('__new')는 영역 공통에 만듦
+  const autoCat = r => r.cat || goalOpts.find(x => x.key === r.goal)?.cat || '목표 관리';   // 루틴(체크리스트)은 고른 카테고리에
   const goalName = r => (r.goal === '__new' ? r.newGoal.trim() : goalOpts.find(g => g.key === r.goal)?.name || '');
   const [routines, setRoutines] = useState([]);
   const [wiz, setWiz] = useState(null);                       // 루틴 추가 팝업 { r, si, edit }
@@ -140,16 +140,15 @@ export default function GoalOnboard({ area, mode, onClose }) {
       const cl = s.checklist || {};
       const cur = s.goals?.v === 2 ? s.goals : seedGoals(now);
       const bs = { ...cur.boards };
-      // 루틴 입력에서 새로 적은 목표: 이름이 같으면 하나로, 영역 공통(목표 관리) 보드에 기간 동안의 목표로 만듦
-      const made = {};
+      // 루틴 입력에서 새로 적은 목표: 고른 카테고리의 목표 보드에 자동으로 만듦 (목표 보드가 없는 카테고리는 영역 공통), 같은 카테고리 · 같은 이름은 하나로
+      const made = {}, mk = r => `${target(autoCat(r))}|${r.newGoal.trim()}`;
       rList.filter(r => r.goal === '__new' && r.newGoal.trim()).forEach(r => {
-        const name = r.newGoal.trim();
-        if (made[name]) return;
-        const id = uid(), k = boardKey(area, '목표 관리'), b = bs[k] || { ...EMPTY };
-        bs[k] = { ...b, items: [...b.items, { id, parent: null, name, start: period.start, end: period.end, progress: 0 }] };
-        made[name] = { key: id, cat: '목표 관리', name, end: period.end };
+        if (made[mk(r)]) return;
+        const gc = target(autoCat(r)), id = uid(), k = boardKey(area, gc), b = bs[k] || { ...EMPTY };
+        bs[k] = { ...b, items: [...b.items, { id, parent: null, name: r.newGoal.trim(), start: period.start, end: period.end, progress: 0 }] };
+        made[mk(r)] = { key: id, cat: gc, name: r.newGoal.trim(), end: period.end };
       });
-      const rows = rList.map(r => { const g = r.goal === '__new' ? made[r.newGoal.trim()] : goalOpts.find(x => x.key === r.goal); const cat = autoCat(r);
+      const rows = rList.map(r => { const g = r.goal === '__new' ? made[mk(r)] : goalOpts.find(x => x.key === r.goal); const cat = g && g.cat !== '목표 관리' ? g.cat : autoCat(r);   // 목표와 같은 카테고리여야 진행률에 잡힘
         return { row: { id: uid(), a: area, ...rowCyc(r), cat, item: cat, action: r.action.trim(), detail: `루틴 · ${cycTxt(r)}${r.time ? ` ${timeTxt(r)}` : ''} (목표 온보딩)`, ...(r.time ? { time: r.time } : {}) }, r, g }; });
       // 대시보드 캘린더: 기간 동안 반복 일정 (평일 · 주말은 그날만, 매주는 고른 요일, 매월은 시작일의 날짜)
       const evs = toCal ? rows.map(({ row, r }) => { const pc = rowCyc(r); return { id: uid(), date: firstDate(r), time: r.time || '', end: r.time && r.end && toMin(r.end) > toMin(r.time) ? r.end : '', title: row.action, area, memo: '루틴 (목표 온보딩)',
@@ -235,12 +234,12 @@ export default function GoalOnboard({ area, mode, onClose }) {
           <p className="cob-q">루틴<span className="muted">"+ 루틴 추가"를 누르면 무엇을 · 얼마나 자주 · 어느 요일 · 몇 시 · 목표 연결 순서로 정합니다</span></p>
           {routines.length > 0 ? <ul className="go-rlist">{routines.map(r => (
             <li key={r.key}>
-              <span className="go-rmain"><b>{r.action}</b><small className="muted">{cycTxt(r)} · {timeTxt(r)}{goalName(r) ? ` · ${r.goal === '__new' ? '새 ' : ''}목표: ${goalName(r)}` : ''}</small></span>
+              <span className="go-rmain"><b>{r.action}</b><small className="muted">{cycTxt(r)} · {timeTxt(r)}{r.cat ? ` · ${catLabel(r.cat)}` : ""}{goalName(r) ? ` · ${r.goal === '__new' ? '새 ' : ''}목표: ${goalName(r)}` : ''}</small></span>
               <button className="btn sm" onClick={() => setWiz({ r: { ...r }, si: 0, edit: true })}>수정</button>
               <button className="tl-del" onClick={() => setRoutines(v => v.filter(x => x.key !== r.key))}>삭제</button>
             </li>))}</ul> : <p className="muted go-rnone">아직 루틴이 없습니다.</p>}
           <button className="btn primary go-radd" onClick={() => setWiz({ r: blankR(), si: 0 })}>+ 루틴 추가</button>
-          {wiz && <RoutineWizard wiz={wiz} setWiz={setWiz} byDay={byDay} goalOpts={goalOpts} routines={routines} cycTxt={cycTxt} timeTxt={timeTxt} toMin={toMin}
+          {wiz && <RoutineWizard wiz={wiz} setWiz={setWiz} byDay={byDay} goalOpts={goalOpts} areaCats={areaCats} target={target} goalOk={goalOk} routines={routines} cycTxt={cycTxt} timeTxt={timeTxt} toMin={toMin}
             onDone={r => { setRoutines(v => (v.some(x => x.key === r.key) ? v.map(x => (x.key === r.key ? r : x)) : [...v, r])); setWiz(null); }} />}
         </>}
 
@@ -356,16 +355,19 @@ export default function GoalOnboard({ area, mode, onClose }) {
 }
 
 /** 루틴 추가 팝업 (온보딩 안의 작은 팝업): 무엇을 → 얼마나 자주 → 어느 요일 · 며칠 → 몇 시 → 목표 연결 → 확인 */
-function RoutineWizard({ wiz, setWiz, byDay, goalOpts, routines, cycTxt, timeTxt, toMin, onDone }) {
+function RoutineWizard({ wiz, setWiz, byDay, goalOpts, areaCats, target, goalOk, routines, cycTxt, timeTxt, toMin, onDone }) {
   const { r, si } = wiz;
   const set = p => setWiz(w => ({ ...w, r: { ...w.r, ...p } }));
-  const steps = ['what', 'freq', ...(r.freq === 'D' ? [] : ['when']), 'time', 'goal', 'ok'];
+  const steps = ['what', 'freq', ...(r.freq === 'D' ? [] : ['when']), 'time', 'cat', 'goal', 'ok'];
+  const catGoals = r.cat ? goalOpts.filter(g => g.cat === target(r.cat)) : [];   // 고른 카테고리(목표 보드)의 목표만
+  /** 카테고리를 고르면: 그 카테고리에 목표가 없으면 '새 목표'(이름 = 루틴 이름 기반)를 기본으로 */
+  const pickCat = c => { const gs = goalOpts.filter(g => g.cat === target(c)); set({ cat: c, goal: gs.some(g => g.key === r.goal) ? r.goal : gs.length ? '' : '__new', newGoal: r.newGoal || `${r.action.trim()} 꾸준히 하기` }); };
   const SHOW = { W: [1, 2, 3, 4, 5, 6, 0], WD: [1, 2, 3, 4, 5], WE: [6, 0] };   // 주기마다 고를 수 있는 요일
   const step = steps[Math.min(si, steps.length - 1)];
   const go = n => setWiz(w => ({ ...w, si: n }));
-  const NAMES = { what: '무엇을', freq: '얼마나 자주', when: r.freq === 'M' ? '며칠에' : r.freq === 'WE' ? '주말 중 언제' : r.freq === 'WD' ? '평일 중 언제' : '어느 요일', time: '몇 시', goal: '목표 연결', ok: '확인' };
+  const NAMES = { what: '무엇을', freq: '얼마나 자주', when: r.freq === 'M' ? '며칠에' : r.freq === 'WE' ? '주말 중 언제' : r.freq === 'WD' ? '평일 중 언제' : '어느 요일', time: '몇 시', cat: '카테고리', goal: '목표 연결', ok: '확인' };
     const toggleWd = w => set({ wds: r.wds.includes(w) ? r.wds.filter(x => x !== w) : [...r.wds, w] });
-  const ok = step === 'what' ? !!r.action.trim() : step === 'when' ? (!byDay(r) || r.wds.length > 0) : step === 'time' ? (!r.end || !r.time || toMin(r.end) > toMin(r.time)) : step === 'goal' ? (r.goal !== '__new' || !!r.newGoal.trim()) : true;
+  const ok = step === 'what' ? !!r.action.trim() : step === 'when' ? (!byDay(r) || r.wds.length > 0) : step === 'time' ? (!r.end || !r.time || toMin(r.end) > toMin(r.time)) : step === 'cat' ? !!r.cat : step === 'goal' ? (r.goal !== '__new' || !!r.newGoal.trim()) : true;
   const Opt = ({ on, onClick, t, sub }) => <button type="button" className={`cob-card ${on ? 'on' : ''}`} aria-pressed={on} onClick={onClick}><b>{t}</b>{sub && <small>{sub}</small>}<span className="cob-tick" aria-hidden="true">{on ? '✓' : ''}</span></button>;
   const newNames = [...new Set(routines.filter(x => x.goal === '__new' && x.newGoal.trim()).map(x => x.newGoal.trim()))];
   return (
@@ -411,13 +413,20 @@ function RoutineWizard({ wiz, setWiz, byDay, goalOpts, routines, cycTxt, timeTxt
           <div className="chips rw-quick"><small className="muted">빠르게</small>{['06:30', '07:00', '12:30', '19:00', '21:00', '22:00'].map(t => <button key={t} onClick={() => set({ time: t, end: '' })}>{t}</button>)}</div>
           {r.end && r.time && toMin(r.end) <= toMin(r.time) && <p className="sh-err">끝 시간이 시작보다 늦어야 합니다</p>}
         </>}
+        {step === 'cat' && <>
+          <p className="cob-q">어느 카테고리의 루틴인가요?<span className="muted">상세 내용의 카테고리 · 체크리스트가 이 카테고리에 들어가고, 다음에서 이 카테고리의 목표와 연결합니다</span></p>
+          <div className="cob-cards rw-cats">{areaCats.map(c => (
+            <Opt key={c} on={r.cat === c} t={c === '목표 관리' ? '영역 공통' : c} sub={`목표 ${goalOpts.filter(g => g.cat === target(c)).length}개${goalOk(c) ? '' : ' · 목표는 영역 공통에 저장'}`} onClick={() => pickCat(c)} />))}</div>
+        </>}
         {step === 'goal' && <>
-          <p className="cob-q">목표에 연결할까요?<span className="muted">연결하면 이 루틴을 체크할수록 그 목표 진행률이 올라가요</span></p>
+          <p className="cob-q">{r.cat === '목표 관리' ? '영역 공통' : r.cat}의 어느 목표에 연결할까요?<span className="muted">연결하면 이 루틴을 체크할수록 그 목표 진행률이 올라가요 · 새 목표는 이 카테고리에 자동으로 만들어져요</span></p>
           <div className="rw-goals">
             <label className={`rw-g ${!r.goal ? 'on' : ''}`}><input type="radio" checked={!r.goal} onChange={() => set({ goal: '' })} />연결 안 함</label>
-            {goalOpts.map(g => <label key={g.key} className={`rw-g ${r.goal === g.key ? 'on' : ''}`}><input type="radio" checked={r.goal === g.key} onChange={() => set({ goal: g.key })} />{g.name}</label>)}
-            <label className={`rw-g ${r.goal === '__new' ? 'on' : ''}`}><input type="radio" checked={r.goal === '__new'} onChange={() => set({ goal: '__new' })} />+ 새 목표 만들기</label>
-            {r.goal === '__new' && <><input className="rw-name" value={r.newGoal} onChange={e => set({ newGoal: e.target.value })} placeholder="새 목표 이름 (예: 10월 체력 만들기)" autoFocus list="rw-newg" />
+            {[...new Set(routines.filter(x => x.key !== r.key && x.goal === '__new' && x.newGoal.trim() && target(x.cat) === target(r.cat)).map(x => x.newGoal.trim()))].map(n => (
+              <label key={`new-${n}`} className={`rw-g ${r.goal === '__new' && r.newGoal.trim() === n ? 'on' : ''}`}><input type="radio" checked={r.goal === '__new' && r.newGoal.trim() === n} onChange={() => set({ goal: '__new', newGoal: n })} />{n} <small className="muted">(이번에 만드는 새 목표)</small></label>))}
+            {catGoals.map(g => <label key={g.key} className={`rw-g ${r.goal === g.key ? 'on' : ''}`}><input type="radio" checked={r.goal === g.key} onChange={() => set({ goal: g.key })} />{g.name}</label>)}
+            <label className={`rw-g ${r.goal === '__new' ? 'on' : ''}`}><input type="radio" checked={r.goal === '__new' && !routines.some(x => x.key !== r.key && x.goal === '__new' && x.newGoal.trim() === r.newGoal.trim() && target(x.cat) === target(r.cat))} onChange={() => set({ goal: '__new', newGoal: `${r.action.trim()} 꾸준히 하기` })} />+ 새 목표 만들기 <small className="muted">({target(r.cat) === '목표 관리' ? '영역 공통' : target(r.cat)}에 생성)</small></label>
+            {r.goal === '__new' && !routines.some(x => x.key !== r.key && x.goal === '__new' && x.newGoal.trim() === r.newGoal.trim() && target(x.cat) === target(r.cat)) && <><input className="rw-name" value={r.newGoal} onChange={e => set({ newGoal: e.target.value })} placeholder="새 목표 이름 (예: 10월 체력 만들기)" autoFocus list="rw-newg" />
               <datalist id="rw-newg">{newNames.map(n => <option key={n} value={n} />)}</datalist></>}
           </div>
         </>}
@@ -425,7 +434,8 @@ function RoutineWizard({ wiz, setWiz, byDay, goalOpts, routines, cycTxt, timeTxt
           <p className="cob-q">이렇게 추가할까요?</p>
           <ul className="go-sum">
             <li><b>{r.action}</b></li><li>{cycTxt(r)}</li><li>{timeTxt(r)}</li>
-            <li>{r.goal ? `목표: ${r.goal === '__new' ? `(새) ${r.newGoal.trim()}` : goalOpts.find(g => g.key === r.goal)?.name}` : '목표 연결 안 함'}</li>
+            <li>카테고리: {r.cat === '목표 관리' ? '영역 공통' : r.cat}</li>
+            <li>{r.goal ? `목표: ${r.goal === '__new' ? `(새 · ${target(r.cat) === '목표 관리' ? '영역 공통' : target(r.cat)}에 생성) ${r.newGoal.trim()}` : goalOpts.find(g => g.key === r.goal)?.name}` : '목표 연결 안 함'}</li>
           </ul>
         </>}
       </div>
