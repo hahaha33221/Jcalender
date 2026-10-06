@@ -15,7 +15,7 @@ export function repeatText(e) {
   const r = e.repeat;
   if (!r?.freq) return '';
   const d = toD(e.date);
-  const base = r.freq === 'D' ? (r.days === 'wd' ? '평일(월~금)' : r.days === 'we' ? '주말(토 · 일)' : daySet(r.days) ? `매주 ${dayLabel(r.days)}` : '매일') : r.freq === 'W' ? `매주 ${'일월화수목금토'[d.getDay()]}요일` : `매월 ${d.getDate()}일`;
+  const base = r.freq === 'D' ? (r.days === 'wd' ? '평일(월~금)' : r.days === 'we' ? '주말(토 · 일)' : daySet(r.days) ? `특정 요일 ${dayLabel(r.days)}` : '매일') : r.freq === 'W' ? `매주 ${'일월화수목금토'[d.getDay()]}요일` : `매월 ${d.getDate()}일`;
   return `${base}${r.until ? ` · ${Number(r.until.slice(5, 7))}/${Number(r.until.slice(8, 10))}까지` : ''}`;
 }
 

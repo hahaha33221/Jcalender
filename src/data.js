@@ -335,7 +335,7 @@ export const dayOk = (r, d) => { const s = daySet(r.days); return !s || s.includ
 /** 주기 이름 (평일 · 주말 포함) */
 export const cycleName = r => (r.c === 'D' && dayLabel(r.days) ? dayLabel(r.days) : CYCLES[r.c]);
 /** 주기 고르기 칸: 'D' · 'D:wd'(평일) · 'D:we'(주말) · 'W' … */
-export const CYC_OPTS = (r = null) => [['D', CYCLES.D], ['D:wd', '평일 (월~금)'], ['D:we', '주말 (토 · 일)'], ...(r && r.c === 'D' && daySet(r.days) && !DAYS[r.days] ? [[`D:${r.days}`, `요일: ${dayLabel(r.days)}`]] : []), ...Object.entries(CYCLES).filter(([k]) => k !== 'D')];
+export const CYC_OPTS = (r = null) => [['D', CYCLES.D], ['D:wd', '평일 (월~금)'], ['D:we', '주말 (토 · 일)'], ...(r && r.c === 'D' && daySet(r.days) && !DAYS[r.days] ? [[`D:${r.days}`, `특정 요일: ${dayLabel(r.days)}`]] : []), ...Object.entries(CYCLES).filter(([k]) => k !== 'D')];
 export const cycOf = r => (r.c === 'D' && daySet(r.days) ? `D:${r.days}` : r.c);
 export const parseCyc = v => { const [c, days] = String(v).split(':'); return { c, days: daySet(days) ? days : undefined }; };
 export function isDue(c, d) {

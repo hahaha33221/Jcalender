@@ -95,7 +95,7 @@ export default function GoalOnboard({ area, mode, onClose }) {
   const [choice, setChoice] = useState(null);                // 'todo' | 'routine'
   const steps = choice === 'routine' ? ['start', 'routine', 'rdone'] : mode === 'month' ? ['start', 'review', 'period', 'ask', 'todos', 'done'] : ['start', 'period', 'ask', 'todos', 'done'];
   // 루틴: 체크리스트에 내 항목으로 들어가고, 목표에 연결하면 그 목표 아래 작업(진행률 = 이 루틴 체크)으로도 들어감
-  // 루틴: { key, action, freq: D 매일 | W 매주(요일 여러 개) | M 매월(날짜), wds: [요일], mday, time, end, goal, newGoal }
+  // 루틴: { key, action, freq: D 매일 | WD 평일(월~금 중) | WE 주말(토 · 일 중) | W 매주(요일 여러 개) | M 매월(날짜), wds: [요일], mday, time, end, goal, newGoal }
   const blankR = (o = {}) => ({ key: uid(), action: '', freq: 'D', wds: [], mday: now.getDate(), time: '', end: '', goal: '', newGoal: '', ...o });
   const goalOpts = existing.filter(g => !g.ex);
   /** 루틴 카테고리는 자동: 목표에 연결하면 그 목표의 카테고리(진행률에 잡히게), 아니면 영역 공통(목표 관리) */
@@ -107,14 +107,21 @@ export default function GoalOnboard({ area, mode, onClose }) {
   const toMin = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + m; };
   const timeTxt = r => (r.time ? `${r.time}${r.end && toMin(r.end) > toMin(r.time) ? `~${r.end}` : ''}` : '시간 없음');
   /** 체크리스트 · 캘린더에 쓸 주기: 매주(요일들)는 '그 요일에만 하는 매일 항목' */
-  const rowCyc = r => (r.freq === 'W' ? { c: 'D', days: daysOf(r.wds) } : { c: r.freq });
-  const cycTxt = r => (r.freq === 'W' ? (daysOf(r.wds) ? `매주 ${dayLabel(daysOf(r.wds))}` : '매일') : r.freq === 'M' ? `매월 ${r.mday}일` : '매일');
+  const byDay = r => r.freq === 'W' || r.freq === 'WD' || r.freq === 'WE';   // 요일을 고르는 주기
+  const rowCyc = r => (byDay(r) ? { c: 'D', days: daysOf(r.wds) } : { c: r.freq });
+  const cycTxt = r => {
+    if (!byDay(r)) return r.freq === 'M' ? `매월 ${r.mday}일` : '매일';
+    const d = daysOf(r.wds);
+    if (!d) return '매일';
+    if (d === 'wd' || d === 'we') return dayLabel(d);                       // 평일 · 주말 전체
+    return `${r.freq === 'WD' ? '평일 중 ' : r.freq === 'WE' ? '주말 중 ' : '특정 요일 '}${dayLabel(d)}`;
+  };
   /** 반복 일정의 첫 날: 기간 시작일부터 처음으로 맞는 날 */
   const firstDate = r => {
     const d = toDate(period.start);
     for (let i = 0; i < 62; i++, d.setDate(d.getDate() + 1)) {
       if (r.freq === 'D') return iso(d);
-      if (r.freq === 'W' && (!r.wds.length || r.wds.includes(d.getDay()))) return iso(d);
+      if (byDay(r) && (!r.wds.length || r.wds.includes(d.getDay()))) return iso(d);
       if (r.freq === 'M' && d.getDate() === r.mday) return iso(d);
     }
     return period.end;
@@ -225,7 +232,7 @@ export default function GoalOnboard({ area, mode, onClose }) {
               <button className="tl-del" onClick={() => setRoutines(v => v.filter(x => x.key !== r.key))}>삭제</button>
             </li>))}</ul> : <p className="muted go-rnone">아직 루틴이 없습니다.</p>}
           <button className="btn primary go-radd" onClick={() => setWiz({ r: blankR(), si: 0 })}>+ 루틴 추가</button>
-          {wiz && <RoutineWizard wiz={wiz} setWiz={setWiz} goalOpts={goalOpts} routines={routines} cycTxt={cycTxt} timeTxt={timeTxt} toMin={toMin}
+          {wiz && <RoutineWizard wiz={wiz} setWiz={setWiz} byDay={byDay} goalOpts={goalOpts} routines={routines} cycTxt={cycTxt} timeTxt={timeTxt} toMin={toMin}
             onDone={r => { setRoutines(v => (v.some(x => x.key === r.key) ? v.map(x => (x.key === r.key ? r : x)) : [...v, r])); setWiz(null); }} />}
         </>}
 
@@ -338,16 +345,16 @@ export default function GoalOnboard({ area, mode, onClose }) {
 }
 
 /** 루틴 추가 팝업 (온보딩 안의 작은 팝업): 무엇을 → 얼마나 자주 → 어느 요일 · 며칠 → 몇 시 → 목표 연결 → 확인 */
-function RoutineWizard({ wiz, setWiz, goalOpts, routines, cycTxt, timeTxt, toMin, onDone }) {
+function RoutineWizard({ wiz, setWiz, byDay, goalOpts, routines, cycTxt, timeTxt, toMin, onDone }) {
   const { r, si } = wiz;
   const set = p => setWiz(w => ({ ...w, r: { ...w.r, ...p } }));
   const steps = ['what', 'freq', ...(r.freq === 'D' ? [] : ['when']), 'time', 'goal', 'ok'];
+  const SHOW = { W: [1, 2, 3, 4, 5, 6, 0], WD: [1, 2, 3, 4, 5], WE: [6, 0] };   // 주기마다 고를 수 있는 요일
   const step = steps[Math.min(si, steps.length - 1)];
   const go = n => setWiz(w => ({ ...w, si: n }));
-  const NAMES = { what: '무엇을', freq: '얼마나 자주', when: r.freq === 'M' ? '며칠에' : '어느 요일', time: '몇 시', goal: '목표 연결', ok: '확인' };
-  const MON_FIRST = [1, 2, 3, 4, 5, 6, 0];
-  const toggleWd = w => set({ wds: r.wds.includes(w) ? r.wds.filter(x => x !== w) : [...r.wds, w] });
-  const ok = step === 'what' ? !!r.action.trim() : step === 'when' ? (r.freq !== 'W' || r.wds.length > 0) : step === 'time' ? (!r.end || !r.time || toMin(r.end) > toMin(r.time)) : step === 'goal' ? (r.goal !== '__new' || !!r.newGoal.trim()) : true;
+  const NAMES = { what: '무엇을', freq: '얼마나 자주', when: r.freq === 'M' ? '며칠에' : r.freq === 'WE' ? '주말 중 언제' : r.freq === 'WD' ? '평일 중 언제' : '어느 요일', time: '몇 시', goal: '목표 연결', ok: '확인' };
+    const toggleWd = w => set({ wds: r.wds.includes(w) ? r.wds.filter(x => x !== w) : [...r.wds, w] });
+  const ok = step === 'what' ? !!r.action.trim() : step === 'when' ? (!byDay(r) || r.wds.length > 0) : step === 'time' ? (!r.end || !r.time || toMin(r.end) > toMin(r.time)) : step === 'goal' ? (r.goal !== '__new' || !!r.newGoal.trim()) : true;
   const Opt = ({ on, onClick, t, sub }) => <button type="button" className={`cob-card ${on ? 'on' : ''}`} aria-pressed={on} onClick={onClick}><b>{t}</b>{sub && <small>{sub}</small>}<span className="cob-tick" aria-hidden="true">{on ? '✓' : ''}</span></button>;
   const newNames = [...new Set(routines.filter(x => x.goal === '__new' && x.newGoal.trim()).map(x => x.newGoal.trim()))];
   return (
@@ -360,19 +367,23 @@ function RoutineWizard({ wiz, setWiz, goalOpts, routines, cycTxt, timeTxt, toMin
         </>}
         {step === 'freq' && <>
           <p className="cob-q">얼마나 자주 하나요?</p>
-          <div className="cob-cards go-3">
-            <Opt on={r.freq === 'D'} t="매일" sub="날마다" onClick={() => set({ freq: 'D' })} />
-            <Opt on={r.freq === 'W'} t="매주" sub="요일을 골라요 (예: 화 · 목)" onClick={() => set({ freq: 'W' })} />
-            <Opt on={r.freq === 'M'} t="매월" sub="날짜를 골라요 (예: 매월 25일)" onClick={() => set({ freq: 'M' })} />
+          <div className="cob-cards rw-freq">
+            <Opt on={r.freq === 'D'} t="매일" sub="날마다 (월~일)" onClick={() => set({ freq: 'D', wds: [] })} />
+            <Opt on={r.freq === 'WD'} t="평일" sub="월~금 · 다음에서 평일 중 요일만 고를 수도 있어요" onClick={() => set({ freq: 'WD', wds: r.freq === 'WD' ? r.wds : [1, 2, 3, 4, 5] })} />
+            <Opt on={r.freq === 'WE'} t="주말" sub="토 · 일 · 다음에서 하루만 고를 수도 있어요" onClick={() => set({ freq: 'WE', wds: r.freq === 'WE' ? r.wds : [6, 0] })} />
+            <Opt on={r.freq === 'W'} t="특정 요일" sub="월~일 중 골라요 (예: 화 · 목)" onClick={() => set({ freq: 'W', wds: r.freq === 'W' ? r.wds : [] })} />
+            <Opt on={r.freq === 'M'} t="매월" sub="날짜를 골라요 (예: 매월 25일)" onClick={() => set({ freq: 'M', wds: [] })} />
           </div>
         </>}
-        {step === 'when' && r.freq === 'W' && <>
-          <p className="cob-q">어느 요일에 하나요?<span className="muted">여러 개 고를 수 있어요</span></p>
-          <div className="rw-days" role="group" aria-label="요일">{MON_FIRST.map(w => (
+        {step === 'when' && byDay(r) && <>
+          <p className="cob-q">{r.freq === 'WD' ? '평일 중 어느 요일에 하나요?' : r.freq === 'WE' ? '주말 중 어느 날에 하나요?' : '어느 요일에 하나요? (특정 요일)'}<span className="muted">여러 개 고를 수 있어요</span></p>
+          <div className="rw-days" role="group" aria-label="요일">{SHOW[r.freq].map(w => (
             <button key={w} type="button" className={`rw-day ${r.wds.includes(w) ? 'on' : ''} ${w === 0 ? 'sun' : w === 6 ? 'sat' : ''}`} aria-pressed={r.wds.includes(w)} onClick={() => toggleWd(w)}>{WEEK_KO[w]}</button>))}</div>
           <div className="chips rw-quick"><small className="muted">빠르게</small>
-            <button onClick={() => set({ wds: [1, 2, 3, 4, 5] })}>평일</button><button onClick={() => set({ wds: [0, 6] })}>주말</button>
-            <button onClick={() => set({ wds: [2, 4] })}>화 · 목</button><button onClick={() => set({ wds: [1, 3, 5] })}>월 · 수 · 금</button><button onClick={() => set({ wds: [] })}>지우기</button></div>
+            {r.freq === 'WE' ? <><button onClick={() => set({ wds: [6, 0] })}>토 · 일</button><button onClick={() => set({ wds: [6] })}>토요일만</button><button onClick={() => set({ wds: [0] })}>일요일만</button></>
+              : <><button onClick={() => set({ wds: [1, 2, 3, 4, 5] })}>월~금 전부</button><button onClick={() => set({ wds: [2, 4] })}>화 · 목</button><button onClick={() => set({ wds: [1, 3, 5] })}>월 · 수 · 금</button>
+                {r.freq === 'W' && <button onClick={() => set({ wds: [0, 6] })}>토 · 일</button>}</>}
+            <button onClick={() => set({ wds: [] })}>지우기</button></div>
           <p className="go-pinfo">{r.wds.length ? cycTxt(r) : '요일을 하나 이상 골라 주세요'}</p>
         </>}
         {step === 'when' && r.freq === 'M' && <>

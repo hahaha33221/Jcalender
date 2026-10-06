@@ -2172,3 +2172,4 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .rw-g.on { border-color: var(--ac, var(--a1)); background: color-mix(in srgb, var(--ac, var(--a1)) 6%, var(--card)); }
 .rw-g input { margin: 0; accent-color: var(--ac, var(--a1)); }
 @media (max-width: 700px) { .rw-mdays { grid-template-columns: repeat(7, minmax(0, 1fr)); } .rw-mdays .rw-day { width: auto; } .rw-day { width: 40px; height: 40px; } }
+.rw-freq { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
