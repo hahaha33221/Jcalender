@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AREAS, CATS, iso } from '../data.js';
 import { Popup, useCtx } from '../shared.jsx';
 import { GOAL_TOPICS, HOURS, LEVELS, recommend } from './goalRecs.js';
@@ -29,7 +29,7 @@ export function goalOnboardNeed(store, area, today) {
 const goalCats = area => ['목표 관리', ...new Set(CATS.filter(r => r.a === area && r.cat !== '목표 관리').map(r => r.cat))].filter(c => hasGoals(area, c));
 
 export default function GoalOnboard({ area, mode, onClose }) {
-  const { store, setStore, now } = useCtx();
+  const { store, setStore, now, sync } = useCtx();
   const today = iso(now), year = now.getFullYear(), mEnd = monthEnd(today), last = prevMonth(today);
   const goals0 = store.goals?.v === 2 ? store.goals : seedGoals(now);
   const cats = goalCats(area);
@@ -73,13 +73,30 @@ export default function GoalOnboard({ area, mode, onClose }) {
   const [own, setOwn] = useState([]);                       // 직접 넣은 목표 [{ key, cat, name }]
   const chosen = [...recs.filter(g => pick[g.key] !== false).map(g => ({ ...g, name: (names[g.key] ?? g.name).trim() })), ...own.filter(g => g.name.trim()).map(g => ({ ...g, name: g.name.trim(), miles: [], tasks: [] }))].filter(g => g.name);
   const at = f => addDays(period.start, Math.round(f * (days - 1)));
+  const [note, setNote] = useState(saved.note || '');         // AI 에게 더 알려 줄 것
+  // ③ 상세 To do: 목표마다 { src: rule | ai, milestones: [{ key, name, date, on }], todos: [{ key, name, start, end, how, on }] }
+  const [plan, setPlan] = useState({});
+  useEffect(() => { setPlan({}); }, [period.start, period.end]);   // 기간이 바뀌면 다시 계산
+  const [ai, setAi] = useState({ busy: false, msg: '', bad: false });
+  const ruleOf = g => ({ src: 'rule', milestones: g.miles.map(([n, f]) => ({ key: uid(), name: n, date: at(f), on: true })), todos: g.tasks.map(([n, f0, f1]) => ({ key: uid(), name: n, start: at(f0), end: at(f1), how: '', on: true })) });
+  const planOf = g => plan[g.key] || ruleOf(g);
+  const setPart = (g, kind, key, patch) => setPlan(v => { const cur = v[g.key] || planOf(g); return { ...v, [g.key]: { ...cur, [kind]: cur[kind].map(x => (x.key === key ? { ...x, ...patch } : x)) } }; });
+  const addPart = (g, kind) => setPlan(v => { const cur = v[g.key] || planOf(g); const x = kind === 'todos' ? { key: uid(), name: '', start: period.start, end: period.end, how: '', on: true } : { key: uid(), name: '', date: period.end, on: true }; return { ...v, [g.key]: { ...cur, [kind]: [...cur[kind], x] } }; });
+  const askAi = async () => {
+    setAi({ busy: true, msg: '', bad: false });
+    try {
+      const r = await sync.request('/api/goals/todos', { method: 'POST', body: { area, start: period.start, end: period.end, level, hours, note, goals: chosen.map(g => ({ name: g.name, cat: catLabel(g.cat) })) } });
+      setPlan(Object.fromEntries(chosen.map((g, i) => { const x = r.goals[i] || { milestones: [], todos: [] }; return [g.key, { src: 'ai', milestones: x.milestones.map(m => ({ ...m, key: uid(), on: true })), todos: x.todos.map(t => ({ ...t, key: uid(), on: true })) }]; })));
+      setAi({ busy: false, msg: `AI(${r.model})가 상세 To do 를 만들었어요${r.left != null ? ` · 오늘 ${r.left}번 더 받을 수 있음` : ''}`, bad: false });
+    } catch (e) { setAi({ busy: false, msg: e.status === 404 ? '서버를 업데이트하면 AI 추천을 쓸 수 있습니다 (기본 추천은 그대로 사용)' : e.message, bad: true }); }
+  };
 
-  const steps = mode === 'month' ? ['review', 'period', 'ask', 'recs', 'done'] : ['period', 'ask', 'recs', 'done'];
+  const steps = mode === 'month' ? ['review', 'period', 'ask', 'todos', 'done'] : ['period', 'ask', 'todos', 'done'];
   const [si, setSi] = useState(0);
   const step = steps[si];
-  const NAMES = { review: '지난달 돌아보기', period: '기간 설정', ask: '온보딩', recs: '목표 추천', done: '확인 · 저장' };
-  const canNext = step === 'period' ? period.end >= period.start : step === 'ask' ? topics.length > 0 : step === 'recs' ? chosen.length > 0 : true;
-  const nextLabel = step === 'ask' && !topics.length ? '이루고 싶은 것을 하나 이상 골라 주세요' : step === 'recs' && !chosen.length ? '목표를 하나 이상 골라 주세요' : step === 'ask' ? '추천 받기' : '다음';
+  const NAMES = { review: '지난달 돌아보기', period: '기간 설정', ask: '온보딩 · 목표', todos: '상세 To do 추천', done: '확인 · 저장' };
+  const canNext = step === 'period' ? period.end >= period.start : step === 'ask' ? chosen.length > 0 : true;
+  const nextLabel = step === 'ask' && !topics.length && !own.some(g => g.name.trim()) ? '이루고 싶은 것을 하나 이상 골라 주세요' : step === 'ask' && !chosen.length ? '목표를 하나 이상 남겨 주세요' : step === 'ask' ? '상세 To do 추천 받기' : '다음';
 
   const markOnly = kind => setStore(s => {
     const ob = s.goalOnboard?.[area] || {};
@@ -106,24 +123,24 @@ export default function GoalOnboard({ area, mode, onClose }) {
         else if (r.act === 'del') bs[k] = delItem(b, r.id);
         else if (r.act === 'move') bs[k] = { ...b, items: b.items.map(i => (i.id === r.id ? { ...i, end: mEnd } : i)) };
       });
-      chosen.forEach(g => {                                   // 고른 추천 → 목표 · 작업 · 마일스톤
-        const b = B(g.cat), id = uid();
+      chosen.forEach(g => {                                   // 목표 → 상세 To do(직접 체크하는 작업) · 마일스톤
+        const b = B(g.cat), id = uid(), pl = planOf(g);
         const items = [{ id, parent: null, name: g.name, start: period.start, end: period.end, progress: 0 },
-          ...g.tasks.map(([n, f0, f1]) => ({ id: uid(), parent: id, name: n, start: at(f0), end: at(f1), progress: 0 }))];
-        const miles = g.miles.map(([n, f]) => ({ id: uid(), name: n, date: at(f), link: id, done: false }));
+          ...pl.todos.filter(t => t.on && t.name.trim()).map(t => ({ id: uid(), parent: id, name: t.name.trim(), start: t.start, end: t.end, progress: 0, todo: true, done: false, ...(t.how ? { note: t.how } : {}) }))];
+        const miles = pl.milestones.filter(m => m.on && m.name.trim()).map(m => ({ id: uid(), name: m.name.trim(), date: m.date, link: id, done: false }));
         bs[boardKey(area, g.cat)] = { ...b, items: [...b.items, ...items], miles: [...b.miles, ...miles] };
       });
       const ob = s.goalOnboard?.[area] || {};
-      return { ...s, goals: { ...cur, boards: bs }, goalOnboard: { ...(s.goalOnboard || {}), [area]: { ...ob, setupAt: ob.setupAt || today, months: { ...(ob.months || {}), [ym(today)]: 'done' }, answers: { topics, level, hours, period: period.kind } } } };
+      return { ...s, goals: { ...cur, boards: bs }, goalOnboard: { ...(s.goalOnboard || {}), [area]: { ...ob, setupAt: ob.setupAt || today, months: { ...(ob.months || {}), [ym(today)]: 'done' }, answers: { topics, level, hours, period: period.kind, note } } } };
     });
     onClose(true);
   };
 
   const Card = ({ on, onClick, title: t, sub, children }) => (
     <button type="button" className={`cob-card ${on ? 'on' : ''}`} aria-pressed={on} onClick={onClick}><b>{t}</b>{sub && <small>{sub}</small>}{children}<span className="cob-tick" aria-hidden="true">{on ? '✓' : ''}</span></button>);
-  const title = mode === 'month' ? `${Number(today.slice(5, 7))}월 목표 점검 · ${AREAS[area].n}` : `목표 추천받기 · ${AREAS[area].n}`;
+  const title = mode === 'month' ? `${Number(today.slice(5, 7))}월 목표 점검 · ${AREAS[area].n}` : `상세 To do 추천받기 · ${AREAS[area].n}`;
   return (
-    <Popup wide title={title} sub="기간을 정하고 몇 가지를 고르면, 마지막에 그 기간에 맞는 목표 · 마일스톤 · 할 일을 추천해 드립니다" onClose={() => onClose(false)}>
+    <Popup wide title={title} sub="기간을 정하고 몇 가지를 고르면, 마지막에 목표별 상세 To do 와 마일스톤을 추천해 드립니다 (AI 로도 받을 수 있음)" onClose={() => onClose(false)}>
       <ol className="go-steps">{steps.map((k, i) => <li key={k} className={i === si ? 'on' : i < si ? 'past' : ''}><span>{i + 1}</span>{NAMES[k]}</li>)}</ol>
       <div className="go-body" style={{ '--ac': `var(${AREAS[area].v})` }}>
 
@@ -156,10 +173,7 @@ export default function GoalOnboard({ area, mode, onClose }) {
           <div className="cob-cards go-3">{LEVELS.map(([n, d], i) => <Card key={n} on={level === i} title={n} sub={d} onClick={() => setLevel(i)} />)}</div>
           <p className="cob-q">일주일에 쓸 수 있는 시간은요?</p>
           <div className="cob-cards go-3">{HOURS.map(([n, d], i) => <Card key={n} on={hours === i} title={n} sub={d} onClick={() => setHours(i)} />)}</div>
-        </>}
-
-        {step === 'recs' && <>
-          <p className="go-lead"><b>{md(period.start)} ~ {md(period.end)}</b> ({days}일) · {LEVELS[level][0]} · {HOURS[hours][0]} 기준으로 추천했어요. 이름은 바로 고칠 수 있고, 필요 없는 건 체크를 푸세요.</p>
+          {(topics.length > 0 || own.length > 0) && <p className="cob-q">이 기간의 목표<span className="muted">고른 주제로 만든 목표예요. 이름을 내 말로 고치고, 필요 없는 건 체크를 푸세요</span></p>}
           <div className="go-recs">{recs.map(g => {
             const on = pick[g.key] !== false;
             return (
@@ -168,10 +182,6 @@ export default function GoalOnboard({ area, mode, onClose }) {
                   <small className="tag">{g.topicName} · {catLabel(g.cat)}</small></label>
                 <input className="go-rname" value={names[g.key] ?? g.name} onChange={e => setNames(v => ({ ...v, [g.key]: e.target.value }))} disabled={!on} aria-label="목표 이름" />
                 <small className="muted">{g.why}</small>
-                <div className="go-rdet">
-                  <span><b>마일스톤</b>{g.miles.map(([n, f]) => <em key={n}>{n} <small>{md(at(f))}</small></em>)}</span>
-                  <span><b>할 일</b>{g.tasks.map(([n, f0, f1]) => <em key={n}>{n} <small>{md(at(f0))}~{md(at(f1))}</small></em>)}</span>
-                </div>
               </div>);
           })}</div>
           {own.map(g => (
@@ -183,16 +193,45 @@ export default function GoalOnboard({ area, mode, onClose }) {
           <button className="btn sm" onClick={() => setOwn(v => [...v, { key: uid(), cat: cats[0], name: '' }])}>+ 직접 목표 넣기</button>
           {existing.length > 0 && <details className="go-exd"><summary>이미 있는 올해 목표 {existing.length}개</summary>
             <ul className="go-ex">{existing.map(g => <li key={g.key} className={clearEx && g.ex ? 'off' : ''}><small className="tag">{catLabel(g.cat)}</small><b>{g.name}</b><small className="muted">~ {md(g.end)}</small></li>)}</ul></details>}
-          {hasEx && <label className="sh-chk go-clear"><input type="checkbox" checked={clearEx} onChange={e => setClearEx(e.target.checked)} />"(예시)" 목표는 지우고 추천 목표로 시작하기</label>}
+          {hasEx && <label className="sh-chk go-clear"><input type="checkbox" checked={clearEx} onChange={e => setClearEx(e.target.checked)} />"(예시)" 목표는 지우고 새 목표로 시작하기</label>}
+          <p className="cob-q">AI 에게 더 알려 줄 것<span className="muted">선택 · 예: 평일 저녁만 가능, 무릎이 안 좋음, 예산 월 10만원</span></p>
+          <textarea rows={2} value={note} onChange={e => setNote(e.target.value)} placeholder="상세 To do 를 만들 때 참고합니다" aria-label="AI 에게 더 알려 줄 것" />
+        </>}
+
+        {step === 'todos' && <>
+          <div className="go-aibar">
+            <p className="go-lead"><b>{md(period.start)} ~ {md(period.end)}</b> ({days}일) · {LEVELS[level][0]} · {HOURS[hours][0]}{Object.values(plan).some(x => x.src === 'ai') ? ' · AI 추천' : ' · 기본 추천'}</p>
+            <button className="btn primary" disabled={ai.busy || !sync?.connected} onClick={askAi} title={sync?.connected ? '서버의 AI 로 목표별 상세 To do 와 마일스톤을 받습니다' : '로그인해야 AI 추천을 쓸 수 있습니다'}>
+              {ai.busy ? 'AI 가 To do 를 만드는 중… (10~40초)' : Object.values(plan).some(x => x.src === 'ai') ? 'AI 로 다시 받기' : 'AI 로 상세 To do 받기'}</button>
+          </div>
+          {!sync?.connected && <p className="note">로그인 없이 쓰는 중이라 기본 추천만 보입니다. 로그인하면 AI 로 받을 수 있습니다.</p>}
+          {ai.msg && <p className={ai.bad ? 'banner' : 'banner ok'}>{ai.msg}</p>}
+          {chosen.map(g => { const pl = planOf(g); return (
+            <div key={g.key} className="go-plan">
+              <div className="go-ph"><b>{g.name}</b><small className="tag">{catLabel(g.cat)}</small><small className="muted">{pl.src === 'ai' ? 'AI 추천' : '기본 추천'} · To do {pl.todos.filter(t => t.on).length} · 마일스톤 {pl.milestones.filter(m => m.on).length}</small></div>
+              <ul className="go-todos">{pl.todos.map(t => (
+                <li key={t.key} className={t.on ? '' : 'off'}>
+                  <input type="checkbox" checked={t.on} onChange={e => setPart(g, 'todos', t.key, { on: e.target.checked })} aria-label="이 To do 넣기" />
+                  <span className="go-tn"><input value={t.name} onChange={e => setPart(g, 'todos', t.key, { name: e.target.value })} placeholder="할 일" aria-label="To do" />{t.how && <small className="muted">{t.how}</small>}</span>
+                  <span className="go-td"><input type="date" value={t.start} min={period.start} max={period.end} onChange={e => setPart(g, 'todos', t.key, { start: e.target.value || t.start })} aria-label="시작" />~<input type="date" value={t.end} min={t.start} max={period.end} onChange={e => setPart(g, 'todos', t.key, { end: e.target.value || t.end })} aria-label="끝" /></span>
+                </li>))}
+                {!pl.todos.length && <li className="muted">{pl.src === 'ai' ? 'AI 가 To do 를 만들지 못했어요. 직접 넣어 주세요' : '"AI 로 상세 To do 받기"를 누르거나 직접 넣어 주세요'}</li>}</ul>
+              <button className="btn sm" onClick={() => addPart(g, 'todos')}>+ To do</button>
+              <div className="go-ms"><b>마일스톤</b>{pl.milestones.map(m => (
+                <label key={m.key} className={`go-m ${m.on ? '' : 'off'}`}><input type="checkbox" checked={m.on} onChange={e => setPart(g, 'milestones', m.key, { on: e.target.checked })} />
+                  <input value={m.name} onChange={e => setPart(g, 'milestones', m.key, { name: e.target.value })} aria-label="마일스톤" placeholder="마일스톤" />
+                  <input type="date" value={m.date} min={period.start} max={period.end} onChange={e => setPart(g, 'milestones', m.key, { date: e.target.value || m.date })} aria-label="날짜" /></label>))}
+                <button className="linkish" onClick={() => addPart(g, 'milestones')}>+ 마일스톤</button></div>
+            </div>); })}
         </>}
 
         {step === 'done' && <>
-          <p className="go-lead">이대로 저장할까요? 저장한 뒤에도 목표 관리 표에서 언제든 고칠 수 있습니다.</p>
+          <p className="go-lead">이대로 저장할까요? To do 는 목표 관리 표에 "직접 체크 (To do)" 작업으로 들어가 끝나면 체크할 수 있습니다.</p>
           <ul className="go-sum">
             <li>기간: {period.start} ~ {period.end} ({days}일)</li>
             {clearEx && <li>예시 목표 지우기</li>}
             {review.length > 0 && <li>지난달 못 끝낸 것: 미루기 {review.filter(r => r.act === 'move').length} · 그대로 {review.filter(r => r.act === 'keep').length} · 지우기 {review.filter(r => r.act === 'del').length}</li>}
-            {chosen.map(g => <li key={g.key}><b>{g.name}</b> <small className="muted">{catLabel(g.cat)} · 마일스톤 {g.miles.length} · 할 일 {g.tasks.length}</small></li>)}
+            {chosen.map(g => { const pl = planOf(g); return <li key={g.key}><b>{g.name}</b> <small className="muted">{catLabel(g.cat)} · To do {pl.todos.filter(t => t.on && t.name.trim()).length} · 마일스톤 {pl.milestones.filter(m => m.on && m.name.trim()).length} · {pl.src === 'ai' ? 'AI 추천' : '기본 추천'}</small></li>; })}
           </ul>
         </>}
       </div>
@@ -216,9 +255,9 @@ export function GoalOnboardCard() {
   if (!month.length && !setup.length) return null;
   return (
     <section className="panel dash-start go-card" aria-label="목표 온보딩">
-      <div><h2>{month.length ? `${now.getMonth() + 1}월 목표 점검을 해 볼까요?` : '목표를 추천받아 볼까요?'}</h2>
-        <p className="muted">{month.length ? '지난달을 돌아보고 이번 달 목표를 추천받습니다 (2~3분)' : '기간을 정하고 몇 가지만 고르면 목표 · 마일스톤 · 할 일을 추천해 드려요'}</p></div>
-      <span className="go-card-b">{[...month, ...setup].map(x => <button key={x.a} className="btn primary" onClick={() => openCat(x.a, '목표 관리')}>{AREAS[x.a].n} {x.need === 'month' ? '점검' : '목표 추천받기'}</button>)}</span>
+      <div><h2>{month.length ? `${now.getMonth() + 1}월 목표 점검을 해 볼까요?` : '목표와 상세 To do 를 추천받아 볼까요?'}</h2>
+        <p className="muted">{month.length ? '지난달을 돌아보고 이번 달 목표를 추천받습니다 (2~3분)' : '기간을 정하고 몇 가지만 고르면 상세 To do 를 추천해 드려요 (AI 가능)'}</p></div>
+      <span className="go-card-b">{[...month, ...setup].map(x => <button key={x.a} className="btn primary" onClick={() => openCat(x.a, '목표 관리')}>{AREAS[x.a].n} {x.need === 'month' ? '점검' : 'To do 추천받기'}</button>)}</span>
     </section>
   );
 }

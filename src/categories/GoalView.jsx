@@ -125,9 +125,12 @@ export function GoalBoard({ area, cat, title = '목표 관리', year: yearProp, 
                       <td className="c-mid"><input type="date" value={it.start} onChange={e => setDate(it, 'start', e.target.value)} aria-label={`${code} 시작일`} /></td>
                       <td className="c-mid"><input type="date" value={it.end} onChange={e => setDate(it, 'end', e.target.value)} aria-label={`${code} 종료일`} /></td>
                       <td className="c-link c-mid">{hasKids ? <span className="muted">하위 작업 평균</span> : (
-                        <select value={it.link || ''} onChange={e => update(x => updItem(x, it.id, { link: e.target.value || undefined }))} aria-label={`${code} 진행률 기준 체크 항목`}>
-                          <option value="">{cat === '목표 관리' ? '영역 전체' : '카테고리 전체'}</option>
-                          {acts.map(r => <option key={r.id} value={r.id}>{CYCLES[r.c].slice(0, 2)} · {r.action.replace(' (제안)', '')}</option>)}</select>)}</td>
+                        <span className="g-link">
+                          {it.todo && <label className="g-todo" title="To do: 끝나면 체크"><input type="checkbox" checked={!!it.done} onChange={e => update(x => updItem(x, it.id, { done: e.target.checked }))} aria-label={`${code} 완료`} />완료</label>}
+                          <select value={it.todo ? '__todo' : it.link || ''} onChange={e => update(x => updItem(x, it.id, e.target.value === '__todo' ? { todo: true, link: undefined } : { todo: false, done: false, link: e.target.value || undefined }))} aria-label={`${code} 진행률 기준 체크 항목`}>
+                            <option value="__todo">직접 체크 (To do)</option>
+                            <option value="">{cat === '목표 관리' ? '영역 전체' : '카테고리 전체'}</option>
+                            {acts.map(r => <option key={r.id} value={r.id}>{CYCLES[r.c].slice(0, 2)} · {r.action.replace(' (제안)', '')}</option>)}</select></span>)}</td>
                       <td className="c-prog c-mid"><b>{p}%</b></td>
                       <td className="c-mid"><span className={`st ${st.k}`}>{st.t}</span></td>
                       <td className="c-act">
@@ -322,7 +325,7 @@ export default function GoalView({ area, cat, group }) {
 
       <div className="bar"><YearPicker year={year} setYear={setYear} />
         <div className="chips grow-r" role="group" aria-label="보기"><button aria-pressed={tasks} onClick={() => setTasks(!tasks)}>작업까지 보기</button></div>
-        <button className="btn primary sm" onClick={() => setOnb(need === 'month' ? 'month' : 'setup')}>{need === 'month' ? `${now.getMonth() + 1}월 목표 점검` : '목표 추천받기'}</button>
+        <button className="btn primary sm" onClick={() => setOnb(need === 'month' ? 'month' : 'setup')}>{need === 'month' ? `${now.getMonth() + 1}월 목표 점검` : '상세 To do 추천받기'}</button>
         <GoalExcel onDone={y => setYear(y)} /></div>
       {onbMsg && <p className="banner ok" role="status">{onbMsg}<button className="linkish" onClick={() => setOnbMsg('')}>닫기</button></p>}
       {onb && <GoalOnboard area={area} mode={onb} onClose={saved => { setOnb(null); if (saved) { setYear(now.getFullYear()); setOnbMsg('저장했습니다. 아래 목표 · 마일스톤 표에 들어갔습니다. 다음 달 1일에 다시 점검 창이 열립니다.'); } }} />}

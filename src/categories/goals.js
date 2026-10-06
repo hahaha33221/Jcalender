@@ -177,6 +177,7 @@ export function progressOf(items, id, leaf = it => Number(it.progress) || 0) {
 export function checkProgress(rows, done, periodKeysBetween) {
   const cache = new Map();
   return it => {
+    if (it.todo) return it.done ? 100 : 0;                     // 직접 체크하는 To do
     const ck = `${it.start}|${it.end}|${it.link || ''}`;
     if (cache.has(ck)) return cache.get(ck);
     const use = (it.link ? rows.filter(r => r.id === it.link) : rows).filter(r => r.c !== 'S');

@@ -32,8 +32,9 @@ import { assetRoutes, assetData, RAW } from './shortsAssets.mjs';
 import { renderRoutes, rendersOf, startRenderWorker } from './shortsRender.mjs';
 import { socialRoutes, socialOf, startSocialWorker } from './shortsSocial.mjs';
 import { demoRoutes } from './shortsDemo.mjs';
+import { goalAiRoutes } from './goalAi.mjs';
 
-const VERSION = '1.9.0';
+const VERSION = '1.10.0';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
 const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐
@@ -315,6 +316,7 @@ const assets = assetRoutes({ pool, tx, adminUser: shortsUser, HttpError });
 Object.assign(routes, assets.json);
 const shortsBase = routes['GET /api/shorts'];
 Object.assign(routes, renderRoutes({ pool, adminUser: shortsUser, HttpError }));
+Object.assign(routes, goalAiRoutes({ authUser, HttpError }));   // 목표 관리 › 상세 To do 추천 (AI)
 Object.assign(routes, demoRoutes({ pool, tx, adminUser: shortsUser, HttpError }));   // 예시 채우기
 const social = socialRoutes({ pool, adminUser: shortsUser, HttpError, originOk });
 Object.assign(routes, social.json);

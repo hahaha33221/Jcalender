@@ -105,6 +105,8 @@ const fake = http.createServer((req, res) => {
     let b = ''; req.on('data', c => { b += c; }); req.on('end', () => {
       aiCalls.push({ url: req.url, headers: req.headers, body: JSON.parse(b) });
       res.writeHead(200, { 'Content-Type': 'application/json' });
+      if (JSON.parse(b).response_format?.json_schema?.name === 'goal_todos') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ goals: [{ index: 0,
+        milestones: [{ name: '5km 완주', date: '2026-11-15' }, { name: '범위 밖', date: '2030-01-01' }], todos: [{ name: '러닝화 사기', start: '2026-10-08', end: '2026-10-10', how: '매장에서 신어 보기' }, { name: '주 3회 3km', start: '2026-10-01', end: '2026-12-31', how: '' }] }] }) } }] }));
       if (JSON.parse(b).response_format?.json_schema?.name === 'asset_keywords') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ keywords: ['office desk', 'meeting room'], mood: '긴장' }) } }] }));
       res.end(JSON.stringify({ id: 'chatcmpl-test', object: 'chat.completion', model: 'gpt-5-mini', choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', refusal: null,
         content: JSON.stringify({ candidates: [{ title: '회사에서 생긴 반전', script: '여러분 이거 실화입니다. 어떻게 생각하세요?', hashtags: ['#회사', '썰'] }, { title: '두 번째 후보', script: '스크립트 둘', hashtags: [] }] }) } }] }));
@@ -363,6 +365,16 @@ try {
       && dg.assets.filter(x => x.source === 'demo').length === 4 && dg.scripts.filter(x => x.item_id === dm2.json.itemId).length === 2 && dg.scripts.find(x => x.id === dm2.json.scriptId)?.chosen
       && dp?.backgrounds.length === 3 && !!dp.music_id && dg.assets.find(x => x.id === dp.music_id)?.duration >= 39, JSON.stringify({ dm: dm.json, n: dg.assets.length }));
     check('일반 회원은 예시 403', (await call('POST', '/api/shorts/demo', {}, T)).status === 403);
+  }
+
+  console.log('목표 관리 › 상세 To do 추천 (AI)');
+  {
+    const gt = await call('POST', '/api/goals/todos', { area: 'P', start: '2026-10-06', end: '2026-12-05', level: 0, hours: 1, note: '평일 저녁만', goals: [{ name: '5km 달리기', cat: '건강 관리' }] }, T);
+    const req = aiCalls.at(-1)?.body;
+    check('회원도 AI To do 받기 (기간 안으로 날짜 맞춤 · 정렬)', gt.status === 200 && gt.json.goals[0].todos.length === 2 && gt.json.goals[0].todos[0].start === '2026-10-06' && gt.json.goals[0].todos[1].start === '2026-10-08'
+      && gt.json.goals[0].todos[0].end === '2026-12-05' && gt.json.goals[0].milestones.at(-1).date === '2026-12-05' && gt.json.goals[0].todos[1].how === '매장에서 신어 보기', JSON.stringify(gt.json));
+    check('AI 에게 기간 · 수준 · 메모 전달', req?.response_format.json_schema.name === 'goal_todos' && req.messages[1].content.includes('2026-10-06 ~ 2026-12-05') && req.messages[1].content.includes('평일 저녁만') && req.messages[1].content.includes('처음 시작함'));
+    check('목표 없으면 400 · 로그인 안 하면 401', (await call('POST', '/api/goals/todos', { start: '2026-10-06', end: '2026-12-05', goals: [] }, T)).status === 400 && (await call('POST', '/api/goals/todos', { start: '2026-10-06', end: '2026-12-05', goals: [{ name: 'x' }] })).status === 401);
   }
 
   console.log('숏폼 4차 (유튜브 · 인스타그램 연결 · 업로드 · 성과)');
