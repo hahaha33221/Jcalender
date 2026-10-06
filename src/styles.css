@@ -2098,3 +2098,20 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .go-body > .btn, .go-goal > .btn { align-self: flex-start; }
 .go-body label.go-clear, .go-body label.go-end { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; text-align: left; justify-content: flex-start; }
 .go-body label.go-clear input { width: auto; margin: 0; }
+.go-body .cob-q { margin: 6px 0 2px; }
+.go-periods { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.go-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.go-pinfo { margin: 0; font-size: 13px; }
+.go-recs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.go-rec { border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; opacity: .6; }
+.go-rec.on { border-color: var(--ac); opacity: 1; background: color-mix(in srgb, var(--ac) 5%, var(--card)); }
+.go-body label.go-rh { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.go-rh input { width: 16px; height: 16px; margin: 0; accent-color: var(--ac); }
+.go-rname { font-weight: 700; font-size: 14.5px; }
+.go-rdet { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.go-rdet span { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.go-rdet b { color: var(--ink2); font-size: 12px; min-width: 52px; }
+.go-rdet em { font-style: normal; background: var(--line2); border-radius: 10px; padding: 1px 8px; }
+.go-rdet em small { color: var(--ink3); }
+.go-exd summary { cursor: pointer; font-size: 13px; color: var(--ink2); }
+@media (max-width: 700px) { .go-3 { grid-template-columns: minmax(0, 1fr); } .go-recs { grid-template-columns: minmax(0, 1fr); } }
