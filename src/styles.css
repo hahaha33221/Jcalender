@@ -2176,3 +2176,4 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .go-body label.rw-g { justify-content: flex-start; text-align: left; font-size: 14px; }
 .go-body .rw-g input[type=radio] { width: 16px; height: 16px; min-width: 16px; flex: 0 0 16px; padding: 0; margin: 0; }
 .go-body .go-todos input[type=checkbox], .go-body .go-m input[type=checkbox], .go-body .go-rh input[type=checkbox], .go-body label.go-clear input { width: 16px; height: 16px; flex: 0 0 16px; padding: 0; }
+.go-ctopics { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

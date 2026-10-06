@@ -86,6 +86,20 @@ export const GOAL_TOPICS = [
     name: `업무 노하우 문서 ${r(c.months * [2, 4, 6][c.hours])}개 정리하기`, why: '인수인계 · 내 성과 정리에 모두 쓰여요', miles: checks(c, '문서'), tasks: [['정리할 주제 목록', 0, 0.1], ['주 1개 정리', 0.1, 1]] }] },
 ];
 
+/** 템플릿이 없는 카테고리의 기본 틀 (AI 추천을 권함) */
+const generic = (cat, c) => [{
+  name: `${cat === '목표 관리' ? '영역' : cat} ${c.months <= 1 ? '이번 달' : `${c.months}개월`} 목표 (이름을 내 말로 고쳐 주세요)`, why: '이 카테고리는 기본 틀만 있어요. 목표 이름을 고친 뒤 "AI 로 상세 To do 받기"를 추천해요',
+  miles: checks(c, '목표'), tasks: [['지금 상태 점검 · 목표 숫자 정하기', 0, 0.1], ['주간 실행', 0.1, 1], ['중간 점검 · 계획 조정', 0.45, 0.55]] }];
+/** 카테고리(상세 내용)를 골라서 추천: sel = [{ cat, topics: [주제 id] }], target(cat) = 목표를 저장할 카테고리 */
+export const topicsOfCat = (area, cat) => GOAL_TOPICS.filter(t => t.a === area && t.cat === cat);
+export function recommendByCats(area, sel, ctx, target) {
+  return sel.flatMap(({ cat, topics }) => {
+    const ts = topicsOfCat(area, cat).filter(t => topics.includes(t.id));
+    const list = ts.length ? ts.flatMap(t => t.make(ctx).map((g, i) => ({ ...g, key: `${cat}|${t.id}-${i}`, topicName: t.name })))
+      : generic(cat, ctx).map((g, i) => ({ ...g, key: `${cat}|g-${i}`, topicName: '기본 틀', generic: true }));
+    return list.map(g => ({ ...g, srcCat: cat, cat: target(cat) }));
+  });
+}
 /** 고른 주제들로 추천 목록 */
 export function recommend(area, topics, ctx, okCat) {
   return GOAL_TOPICS.filter(t => t.a === area && topics.includes(t.id)).flatMap(t => t.make(ctx).map((g, i) => ({ ...g, key: `${t.id}-${i}`, topic: t.id, topicName: t.name, cat: okCat(t.cat) ? t.cat : '목표 관리' })));
