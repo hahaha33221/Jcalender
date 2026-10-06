@@ -779,7 +779,7 @@ function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
   }, []);
   const save = scope => {
     if (!f.title.trim() || !f.date) return;
-    const repeat = f.freq ? { freq: f.freq, until: f.until && f.until >= f.date ? f.until : '', skip: init.repeat?.skip || [] } : null;
+    const repeat = f.freq ? { freq: f.freq, until: f.until && f.until >= f.date ? f.until : '', skip: init.repeat?.skip || [], ...(f.freq === 'D' && init.repeat?.days ? { days: init.repeat.days } : {}) } : null;   // 평일 · 주말 루틴은 그대로
     onSave({ id: init.id, sid: init.sid, occ: init.occ, scope, fromNote: init.fromNote, date: f.date, time: f.time, end: f.time && f.end && toMin(f.end) > toMin(f.time) ? f.end : '', title: f.title.trim(), area: f.area, memo: f.memo.trim(), repeat, projectId: f.projectId, tagIds: f.tagIds, remind: f.remind });
   };
   const submit = e => { e.preventDefault(); save(series ? 'all' : undefined); };

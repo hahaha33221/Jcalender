@@ -33,6 +33,9 @@ const ROUTINE_SUGG = {
   B: [['영업일 마감 매출 기록', 'D:wd', '매출/매입'], ['주말 다음 주 일정 · 발주 준비', 'D:we', '사업 할일/일정'], ['고객 문의 답변', 'D', '고객 관리'], ['콘텐츠 1개 올리기', 'D', '콘텐츠 관리'], ['주간 매출 점검', 'W', '매출/매입'], ['재고 확인', 'W', '재고/상품'], ['주간 회고', 'W', '리뷰/회고'], ['월 정산 · 세금 자료 정리', 'M', '세금/정산']],
   W: [['출근 후 메일 · 메신저 정리', 'D:wd', '업무 할일/프로젝트'], ['오늘 할 일 3개 정하기', 'D:wd', '업무 할일/프로젝트'], ['퇴근 전 내일 할 일 적기', 'D:wd', '업무 할일/프로젝트'], ['주간 업무 보고 정리', 'W', '업무 문서'], ['업무 자료 정리', 'W', '업무 문서'], ['월간 성과 정리', 'M', '목표 관리']],
 };
+/** 추천 루틴의 기본 시간 */
+const SUGG_TIME = { '평일 아침 30분 일찍 일어나기': '06:30', '아침 스트레칭 10분': '07:00', '30분 걷기': '19:30', '책 20쪽 읽기': '22:00', '영어 공부 20분': '21:00', '주간 회고 쓰기': '21:00',
+  '출근 후 메일 · 메신저 정리': '09:00', '오늘 할 일 3개 정하기': '09:10', '퇴근 전 내일 할 일 적기': '17:50', '영업일 마감 매출 기록': '18:00' };
 const goalCats = area => ['목표 관리', ...new Set(CATS.filter(r => r.a === area && r.cat !== '목표 관리').map(r => r.cat))].filter(c => hasGoals(area, c));
 
 export default function GoalOnboard({ area, mode, onClose }) {
@@ -104,7 +107,15 @@ export default function GoalOnboard({ area, mode, onClose }) {
   // 루틴: 체크리스트에 내 항목으로 들어가고, 목표에 연결하면 그 목표 아래 작업(진행률 = 이 루틴 체크)으로도 들어감
   const RCYC = [['D', '매일'], ['D:wd', '평일'], ['D:we', '주말'], ['W', '매주'], ['M', '매월']];
   const routineSugg = (ROUTINE_SUGG[area] || []).map(([n, c, cat]) => [n, c, cats.includes(cat) ? cat : cats[0]]);
-  const [routines, setRoutines] = useState([{ key: uid(), action: '', c: 'D', cat: cats.find(c => c !== '목표 관리') || cats[0], goal: '' }]);
+  const WD = '일월화수목금토';
+  const blankR = (o = {}) => ({ key: uid(), action: '', c: 'D', wd: now.getDay(), time: '', end: '', cat: cats.find(c => c !== '목표 관리') || cats[0], goal: '', ...o });
+  const [routines, setRoutines] = useState([blankR()]);
+  const [toCal, setToCal] = useState(true);                  // 기간 동안 대시보드 캘린더에 반복 일정으로
+  const toMin = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + m; };
+  const timeTxt = r => (r.time ? `${r.time}${r.end && toMin(r.end) > toMin(r.time) ? `~${r.end}` : ''}` : '시간 없음');
+  const cycTxt = r => (r.c === 'W' ? `매주 ${WD[r.wd]}요일` : r.c === 'M' ? `매월 ${Number(period.start.slice(8))}일` : RCYC.find(x => x[0] === r.c)[1]);
+  /** 반복 일정의 첫 날: 매주는 기간 시작일부터 고른 요일 */
+  const firstDate = r => { if (r.c !== 'W') return period.start; const d = toDate(period.start); d.setDate(d.getDate() + ((r.wd - d.getDay() + 7) % 7)); return iso(d); };
   const rList = routines.filter(r => r.action.trim());
   const setR = (key, patch) => setRoutines(v => v.map(x => (x.key === key ? { ...x, ...patch } : x)));
   const goalOpts = existing.filter(g => !g.ex);
@@ -114,16 +125,19 @@ export default function GoalOnboard({ area, mode, onClose }) {
       const cur = s.goals?.v === 2 ? s.goals : seedGoals(now);
       const bs = { ...cur.boards };
       const rows = rList.map(r => { const g = goalOpts.find(x => x.key === r.goal); const cat = g && g.cat !== '목표 관리' ? g.cat : r.cat;   // 목표와 같은 카테고리여야 진행률에 잡힘
-        return { row: { id: uid(), a: area, ...parseCyc(r.c), cat, item: cat, action: r.action.trim(), detail: '루틴 (목표 온보딩)' }, r, g }; });
+        return { row: { id: uid(), a: area, ...parseCyc(r.c), cat, item: cat, action: r.action.trim(), detail: `루틴 · ${cycTxt(r)}${r.time ? ` ${timeTxt(r)}` : ''} (목표 온보딩)`, ...(r.time ? { time: r.time } : {}) }, r, g }; });
+      // 대시보드 캘린더: 기간 동안 반복 일정 (평일 · 주말은 그날만, 매주는 고른 요일, 매월은 시작일의 날짜)
+      const evs = toCal ? rows.map(({ row, r }) => { const pc = parseCyc(r.c); return { id: uid(), date: firstDate(r), time: r.time || '', end: r.time && r.end && toMin(r.end) > toMin(r.time) ? r.end : '', title: row.action, area, memo: '루틴 (목표 온보딩)',
+        repeat: { freq: pc.c, until: period.end, skip: [], ...(pc.days ? { days: pc.days } : {}) }, routineId: row.id }; }).filter(e => e.date <= period.end) : [];
       rows.filter(x => x.g).forEach(({ row, r, g }) => {
         const k = boardKey(area, g.cat), b = bs[k] || { ...EMPTY };
         bs[k] = { ...b, items: [...b.items, { id: uid(), parent: g.key, name: `${row.action} (${RCYC.find(x => x[0] === r.c)[1]})`, start: today, end: g.end, progress: 0, link: row.id }] };
       });
       const ob = s.goalOnboard?.[area] || {};
-      return { ...s, checklist: { ...cl, custom: [...(cl.custom || []), ...rows.map(x => x.row)] }, goals: { ...cur, boards: bs },
+      return { ...s, checklist: { ...cl, custom: [...(cl.custom || []), ...rows.map(x => x.row)] }, goals: { ...cur, boards: bs }, events: [...(s.events || []), ...evs],
         goalOnboard: { ...(s.goalOnboard || {}), [area]: { ...ob, setupAt: ob.setupAt || today, months: { ...(ob.months || {}), [ym(today)]: 'done' } } } };
     });
-    onClose(true, `루틴 ${rList.length}개를 체크리스트에 넣었습니다${rList.some(r => r.goal) ? ' · 목표에 연결한 루틴은 체크할수록 목표 진행률이 올라갑니다' : ''}`);
+    onClose(true, `루틴 ${rList.length}개를 체크리스트에 넣었습니다${toCal ? ` · ${md(period.start)}~${md(period.end)} 대시보드 캘린더에 반복 일정으로 넣었습니다` : ''}${rList.some(r => r.goal) ? ' · 목표에 연결한 루틴은 체크할수록 목표 진행률이 올라갑니다' : ''}`);
   };
   const [si, setSi] = useState(0);
   const step = steps[si];
@@ -186,25 +200,33 @@ export default function GoalOnboard({ area, mode, onClose }) {
         </>}
 
         {step === 'routine' && <>
-          <p className="cob-q">반복할 루틴을 적어 주세요<span className="muted">아래 추천을 눌러도 됩니다 · 체크리스트에 "내 항목"으로 들어갑니다</span></p>
+          <p className="cob-q">언제까지 할까요?<span className="muted">이 기간 동안 대시보드 캘린더에 반복 일정으로 들어갑니다</span></p>
+          <div className="chips go-rper" role="group" aria-label="루틴 기간">{PERIODS.map(([k, n, e]) => (
+            <button key={k} aria-pressed={period.kind === k} onClick={() => setPeriod(p => ({ kind: k, start: k === 'custom' ? p.start : today, end: k === 'custom' ? p.end : e }))}>{n}</button>))}
+            {period.kind === 'custom' && <span className="go-td"><input type="date" value={period.start} onChange={e => setPeriod(p => ({ ...p, start: e.target.value || today }))} aria-label="시작" />~<input type="date" value={period.end} min={period.start} onChange={e => setPeriod(p => ({ ...p, end: e.target.value || p.end }))} aria-label="끝" /></span>}
+            <small className="muted">{md(period.start)} ~ {md(period.end)} · {days}일</small></div>
+          <label className="sh-chk go-clear"><input type="checkbox" checked={toCal} onChange={e => setToCal(e.target.checked)} />대시보드 캘린더에도 넣기</label>
+          <p className="cob-q">반복할 루틴을 적어 주세요<span className="muted">시간을 넣으면 캘린더에 그 시간으로 들어갑니다 · 아래 추천을 눌러도 됩니다</span></p>
           {routines.map(r => (
             <div key={r.key} className="go-row go-rt">
               <input value={r.action} onChange={e => setR(r.key, { action: e.target.value })} placeholder="예: 아침 스트레칭 10분" aria-label="루틴" />
               <select value={r.c} onChange={e => setR(r.key, { c: e.target.value })} aria-label="주기">{RCYC.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
+              {r.c === 'W' && <select value={r.wd} onChange={e => setR(r.key, { wd: Number(e.target.value) })} aria-label="요일" className="go-wd">{[...WD].map((w, i) => <option key={w} value={i}>{w}요일</option>)}</select>}
+              <span className="go-tm"><input type="time" value={r.time} onChange={e => setR(r.key, { time: e.target.value })} aria-label="시작 시간" />~<input type="time" value={r.end} onChange={e => setR(r.key, { end: e.target.value })} aria-label="끝 시간" disabled={!r.time} /></span>
               <select value={r.cat} onChange={e => setR(r.key, { cat: e.target.value })} aria-label="카테고리" disabled={!!r.goal && goalOpts.find(g => g.key === r.goal)?.cat !== '목표 관리'}>{cats.map(c => <option key={c} value={c}>{catLabel(c)}</option>)}</select>
               <select value={r.goal} onChange={e => setR(r.key, { goal: e.target.value })} aria-label="연결할 목표"><option value="">목표 연결 안 함</option>{goalOpts.map(g => <option key={g.key} value={g.key}>목표: {g.name}</option>)}</select>
               <button className="tl-del" onClick={() => setRoutines(v => v.filter(x => x.key !== r.key))} aria-label="빼기">×</button>
             </div>))}
-          <button className="btn sm" onClick={() => setRoutines(v => [...v, { key: uid(), action: '', c: 'D', cat: v.at(-1)?.cat || cats[0], goal: '' }])}>+ 루틴 더하기</button>
+          <button className="btn sm" onClick={() => setRoutines(v => [...v, blankR({ cat: v.at(-1)?.cat || cats[0] })])}>+ 루틴 더하기</button>
           <div className="go-sugg"><small className="muted">추천</small>{routineSugg.map(([n, c, cat]) => (
-            <button key={n} className="chip-btn" onClick={() => setRoutines(v => { const empty = v.find(x => !x.action.trim()); const r = { key: empty?.key || uid(), action: n, c, cat, goal: '' }; return empty ? v.map(x => (x.key === empty.key ? r : x)) : [...v, r]; })}>
+            <button key={n} className="chip-btn" onClick={() => setRoutines(v => { const empty = v.find(x => !x.action.trim()); const r = { ...blankR({ action: n, c, cat, time: SUGG_TIME[n] || '' }), key: empty?.key || uid() }; return empty ? v.map(x => (x.key === empty.key ? r : x)) : [...v, r]; })}>
               <small>{RCYC.find(x => x[0] === c)[1]}</small> {n}</button>))}</div>
           {!goalOpts.length && <p className="note">아직 목표가 없어 목표 연결은 건너뜁니다. 나중에 "목표별 To do 추천받기"로 목표를 만들면 연결할 수 있어요.</p>}
         </>}
 
         {step === 'rdone' && <>
-          <p className="go-lead">이 루틴들을 체크리스트에 넣을까요? 체크리스트 › 편집에서 언제든 고치거나 뺄 수 있습니다.</p>
-          <ul className="go-sum">{rList.map(r => <li key={r.key}><b>{r.action}</b> <small className="muted">{RCYC.find(x => x[0] === r.c)[1]} · {catLabel(r.cat)}{r.goal ? ` · 목표 "${goalOpts.find(g => g.key === r.goal)?.name}" 에 연결` : ''}</small></li>)}</ul>
+          <p className="go-lead">이 루틴들을 체크리스트에 넣을까요?{toCal ? <> <b>{md(period.start)} ~ {md(period.end)}</b> 동안 대시보드 캘린더에도 반복 일정으로 들어갑니다.</> : ''} 체크리스트 › 편집 · 캘린더에서 언제든 고치거나 뺄 수 있습니다.</p>
+          <ul className="go-sum">{rList.map(r => <li key={r.key}><b>{r.action}</b> <small className="muted">{cycTxt(r)} · {timeTxt(r)} · {catLabel(r.cat)}{r.goal ? ` · 목표 "${goalOpts.find(g => g.key === r.goal)?.name}" 에 연결` : ''}</small></li>)}</ul>
         </>}
 
         {step === 'review' && <>

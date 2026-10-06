@@ -1,5 +1,5 @@
 /* 반복 일정 (매일 · 매주 · 매월)
-   일정 = { id, date(첫 날), time, title, area, memo, repeat?: { freq: 'D'|'W'|'M', until: 'YYYY-MM-DD' | '', skip: ['YYYY-MM-DD'] } }
+   일정 = { id, date(첫 날), time, title, area, memo, repeat?: { freq: 'D'|'W'|'M', until: 'YYYY-MM-DD' | '', skip: ['YYYY-MM-DD'], days?: 'wd'(평일만) | 'we'(주말만) } }
    - 반복 일정은 한 건만 저장하고, 화면에 그릴 때 기간 안의 날짜로 펼친다 (expandEvents)
    - 펼친 한 회차 = { ...일정, id: '원래id@날짜', sid: 원래 id, date: 그 날짜 }
    - 매월은 첫 날의 "일"을 따른다 (31일 반복이면 30일까지인 달은 건너뜀)
@@ -15,7 +15,7 @@ export function repeatText(e) {
   const r = e.repeat;
   if (!r?.freq) return '';
   const d = toD(e.date);
-  const base = r.freq === 'D' ? '매일' : r.freq === 'W' ? `매주 ${'일월화수목금토'[d.getDay()]}요일` : `매월 ${d.getDate()}일`;
+  const base = r.freq === 'D' ? (r.days === 'wd' ? '평일(월~금)' : r.days === 'we' ? '주말(토 · 일)' : '매일') : r.freq === 'W' ? `매주 ${'일월화수목금토'[d.getDay()]}요일` : `매월 ${d.getDate()}일`;
   return `${base}${r.until ? ` · ${Number(r.until.slice(5, 7))}/${Number(r.until.slice(8, 10))}까지` : ''}`;
 }
 
@@ -31,7 +31,8 @@ export function occurrences(e, from, to) {
     const step = r.freq === 'D' ? 1 : 7;
     let k = e.date;
     if (k < from) { const gap = Math.round((toD(from) - toD(k)) / 864e5); k = addDays(k, Math.ceil(gap / step) * step); }
-    for (; k <= end; k = addDays(k, step)) if (!skip.has(k)) out.push(k);
+    const dayOk = k2 => { if (r.freq !== 'D' || !r.days) return true; const w = toD(k2).getDay(), we = w === 0 || w === 6; return r.days === 'we' ? we : !we; };   // 평일 · 주말만
+    for (; k <= end; k = addDays(k, step)) if (!skip.has(k) && dayOk(k)) out.push(k);
   } else {
     const day = toD(e.date).getDate(), s0 = toD(e.date > from ? e.date : from);
     for (let i = 0; i < 400; i++) {

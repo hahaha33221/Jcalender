@@ -2143,3 +2143,8 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 /* 온보딩 팝업: 내용이 줄어들어 아래 버튼과 겹치지 않게 (내용은 그대로 스크롤, 버튼은 아래에 고정) */
 .go-steps, .go-body { flex-shrink: 0; }
 .go-foot { flex-shrink: 0; position: sticky; bottom: -18px; z-index: 3; background: var(--card); margin: 4px -20px -18px; padding: 12px 20px 14px; box-shadow: 0 -6px 12px -10px rgba(0, 0, 0, .25); }
+.go-rper { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.go-tm { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--ink3); }
+.go-tm input { width: 108px; }
+.go-rt .go-wd { flex: 0 1 90px; }
+@media (max-width: 700px) { .go-rt input:not([type]) { flex-basis: 100%; } }
