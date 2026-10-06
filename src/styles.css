@@ -2148,3 +2148,4 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .go-tm input { width: 108px; }
 .go-rt .go-wd { flex: 0 1 90px; }
 @media (max-width: 700px) { .go-rt input:not([type]) { flex-basis: 100%; } }
+.go-rt .go-newg { flex: 1 1 220px; border-color: var(--ac); }
