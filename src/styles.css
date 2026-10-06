@@ -2173,3 +2173,6 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .rw-g input { margin: 0; accent-color: var(--ac, var(--a1)); }
 @media (max-width: 700px) { .rw-mdays { grid-template-columns: repeat(7, minmax(0, 1fr)); } .rw-mdays .rw-day { width: auto; } .rw-day { width: 40px; height: 40px; } }
 .rw-freq { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.go-body label.rw-g { justify-content: flex-start; text-align: left; font-size: 14px; }
+.go-body .rw-g input[type=radio] { width: 16px; height: 16px; min-width: 16px; flex: 0 0 16px; padding: 0; margin: 0; }
+.go-body .go-todos input[type=checkbox], .go-body .go-m input[type=checkbox], .go-body .go-rh input[type=checkbox], .go-body label.go-clear input { width: 16px; height: 16px; flex: 0 0 16px; padding: 0; }
