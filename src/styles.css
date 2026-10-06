@@ -1762,13 +1762,13 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 @media (max-width: 700px) { .rv-fgrid { grid-template-columns: minmax(0, 1fr); } }
 
 /* 공통 팝업 */
-.modal.pop { width: min(560px, 100%); max-height: calc(100vh - 32px); padding: 0; gap: 0; overflow: hidden; }
+.modal.pop { width: min(560px, 100%); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); padding: 0; gap: 0; overflow: hidden; }
 .modal.pop.wide { width: min(980px, 100%); }
-.pop-h { display: flex; align-items: flex-start; gap: 10px; padding: 16px 20px 12px; border-bottom: 1px solid var(--line2); }
+.pop-h { flex-shrink: 0; display: flex; align-items: flex-start; gap: 10px; padding: 16px 20px 12px; border-bottom: 1px solid var(--line2); }
 .pop-h > div { flex: 1; min-width: 0; }
 .pop-h h2 { font-size: 17px; }
 .pop-h p { margin: 2px 0 0; font-size: 12.5px; }
-.pop-b { padding: 14px 20px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.pop-b { padding: 14px 20px 18px; overflow-y: auto; min-height: 0; flex: 1 1 auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 12px; }
 .pop-b h3 { font-size: 13px; margin: 0 0 8px; color: var(--ink2); }
 .rv-stat-go { color: var(--ac, var(--ink3)); }
 /* 등록한 사람: 관계 카테고리 */
@@ -1817,7 +1817,7 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .an-form .an-chk { flex-direction: row; align-items: center; gap: 6px; }
 @media (max-width: 700px) {
   .modal-bg { padding: 0; align-items: flex-end; }
-  .modal.pop, .modal.pop.wide { width: 100%; max-height: 92vh; border-radius: 14px 14px 0 0; }
+  .modal.pop, .modal.pop.wide { width: 100%; max-height: 92vh; max-height: 92dvh; border-radius: 14px 14px 0 0; }
   .pg { grid-template-columns: minmax(0, 1fr); min-height: 0; }
   .pg-side { border-right: 0; border-bottom: 1px solid var(--line2); padding: 0 0 10px; }
   .pg-list { flex-direction: row; flex-wrap: wrap; }

@@ -3,15 +3,19 @@ import { AREAS, CYCLES, PRIO, cycleName, dayLabel } from './data.js';
 
 /* 여러 화면(App, 카테고리 전용 화면)이 함께 쓰는 공통 요소 */
 export const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
+let lockN = 0;                                                  // 열린 팝업 수 (뒤 화면 스크롤 잠금)
 /** 팝업 창: 바깥을 누르거나 Esc 로 닫힘. wide 면 넓게 */
 export function Popup({ title, sub, onClose, wide, children, actions }) {
   const ref = useRef(null);
   useEffect(() => {
     const esc = e => { const all = document.querySelectorAll('.modal-bg'); if (e.key === 'Escape' && all[all.length - 1] === ref.current) onClose(); };   // 맨 위 창만 닫기
     window.addEventListener('keydown', esc);
-    const prev = document.body.style.overflow; document.body.style.overflow = 'hidden';   // 뒤 화면은 스크롤되지 않게
-    return () => { window.removeEventListener('keydown', esc); document.body.style.overflow = prev; };
+    return () => window.removeEventListener('keydown', esc);
   }, [onClose]);
+  useEffect(() => {                                            // 뒤 화면은 스크롤되지 않게 — 팝업이 몇 겹이든 마지막 팝업이 닫히면 풀림
+    lockN += 1; document.body.style.overflow = 'hidden';
+    return () => { lockN = Math.max(0, lockN - 1); if (!lockN) document.body.style.overflow = ''; };
+  }, []);
   return (
     <div className="modal-bg" ref={ref} onClick={onClose}>
       <div className={`modal pop ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()}>
