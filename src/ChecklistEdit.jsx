@@ -88,7 +88,7 @@ export default function ChecklistEdit({ onDone, onRecommend }) {
               <div key={r.id} className={`cle-row ${r.custom ? 'mine' : ''}`}>
                 <input className="cle-act" value={r.action} onChange={e => patch(r, { action: e.target.value })} aria-label="할 일" />
                 <input className="cle-item" value={r.item} onChange={e => patch(r, { item: e.target.value })} aria-label="묶음" title="묶음" />
-                <select className="cle-cyc" value={cycOf(r)} onChange={e => patch(r, parseCyc(e.target.value))} aria-label="주기">{CYC_OPTS().map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
+                <select className="cle-cyc" value={cycOf(r)} onChange={e => patch(r, parseCyc(e.target.value))} aria-label="주기">{CYC_OPTS(r).map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
                 <input className="cle-det" value={r.detail} onChange={e => patch(r, { detail: e.target.value })} aria-label="설명" placeholder="설명" />
                 <span className="cle-tag">{r.custom ? <span className="tag mine">내 항목</span> : edits[r.id] ? <button type="button" className="linkish" onClick={() => revert(r)} title="기본 내용으로 되돌리기">원래대로</button> : <span className="tag">기본</span>}</span>
                 <button type="button" className={`tl-del cle-del ${arm === r.id ? 'arm' : ''}`} onClick={() => remove(r)}>{arm === r.id ? (r.custom ? '정말 삭제?' : '정말 빼기?') : r.custom ? '삭제' : '빼기'}</button>

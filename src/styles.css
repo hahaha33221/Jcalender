@@ -2149,3 +2149,26 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .go-rt .go-wd { flex: 0 1 90px; }
 @media (max-width: 700px) { .go-rt input:not([type]) { flex-basis: 100%; } }
 .go-rt .go-newg { flex: 1 1 220px; border-color: var(--ac); }
+/* 루틴 입력: 목록 + 루틴 추가 팝업 */
+.go-rlist { list-style: none; margin: 0; padding: 0; }
+.go-rlist li { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; }
+.go-rmain { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.go-rnone { margin: 0; }
+.go-body > .go-radd { align-self: flex-start; }
+.rw-body { min-height: 200px; }
+.rw-name { width: 100%; font-size: 15px; padding: 10px 12px; }
+.rw-days { display: flex; gap: 8px; flex-wrap: wrap; }
+.rw-day { width: 46px; height: 46px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--card); font-size: 15px; font-weight: 700; cursor: pointer; color: var(--ink); }
+.rw-day.sun { color: #d33; } .rw-day.sat { color: #2563eb; }
+.rw-day.on { background: var(--ac, var(--a1)); border-color: var(--ac, var(--a1)); color: #fff; }
+.rw-mdays { display: grid; grid-template-columns: repeat(7, 42px); gap: 6px; }
+.rw-mdays .rw-day { width: 42px; height: 38px; border-radius: 8px; font-size: 13px; }
+.rw-quick { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.rw-time { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.go-body .rw-time label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.rw-time input { width: 140px; font-size: 15px; }
+.rw-goals { display: flex; flex-direction: column; gap: 6px; }
+.go-body label.rw-g { display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.rw-g.on { border-color: var(--ac, var(--a1)); background: color-mix(in srgb, var(--ac, var(--a1)) 6%, var(--card)); }
+.rw-g input { margin: 0; accent-color: var(--ac, var(--a1)); }
+@media (max-width: 700px) { .rw-mdays { grid-template-columns: repeat(7, minmax(0, 1fr)); } .rw-mdays .rw-day { width: auto; } .rw-day { width: 40px; height: 40px; } }

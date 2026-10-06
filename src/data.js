@@ -324,13 +324,20 @@ export function dueRule(c) {
     월간 기준일이 그 달에 없으면(예: 31일) 그 달 말일에 도래한다 */
 /** 매일 항목 중 평일만(wd) · 주말만(we) 하는 것: 그날 해당하는지 (d: Date) */
 export const DAYS = { wd: '평일', we: '주말' };
-export const dayOk = (r, d) => !r.days || (r.days === 'wd') === (d.getDay() !== 0 && d.getDay() !== 6);
+/** 요일 목록: days = 'wd' | 'we' | '2,4'(0=일 … 6=토) → [요일 번호] */
+export const WEEK_KO = '일월화수목금토';
+export const daySet = days => (days === 'wd' ? [1, 2, 3, 4, 5] : days === 'we' ? [0, 6] : /^[0-6](,[0-6])*$/.test(String(days || '')) ? [...new Set(String(days).split(',').map(Number))] : null);
+/** 요일 이름 (월 · 화 순서, 월~일): 평일 · 주말 · 화 · 목 */
+export const dayLabel = days => (DAYS[days] || (daySet(days) ? [1, 2, 3, 4, 5, 6, 0].filter(w => daySet(days).includes(w)).map(w => WEEK_KO[w]).join(' · ') : ''));
+/** 요일 번호 목록 → 저장 값 (7개면 없음 = 매일, 월~금 = wd, 토·일 = we) */
+export const daysOf = wds => { const s = [...new Set(wds)].sort(); const k = s.join(','); return !s.length || s.length === 7 ? undefined : k === '1,2,3,4,5' ? 'wd' : k === '0,6' ? 'we' : k; };
+export const dayOk = (r, d) => { const s = daySet(r.days); return !s || s.includes(d.getDay()); };
 /** 주기 이름 (평일 · 주말 포함) */
-export const cycleName = r => (r.c === 'D' && DAYS[r.days] ? DAYS[r.days] : CYCLES[r.c]);
+export const cycleName = r => (r.c === 'D' && dayLabel(r.days) ? dayLabel(r.days) : CYCLES[r.c]);
 /** 주기 고르기 칸: 'D' · 'D:wd'(평일) · 'D:we'(주말) · 'W' … */
-export const CYC_OPTS = () => [['D', CYCLES.D], ['D:wd', '평일 (월~금)'], ['D:we', '주말 (토 · 일)'], ...Object.entries(CYCLES).filter(([k]) => k !== 'D')];
-export const cycOf = r => (r.c === 'D' && DAYS[r.days] ? `D:${r.days}` : r.c);
-export const parseCyc = v => { const [c, days] = String(v).split(':'); return { c, days: DAYS[days] ? days : undefined }; };
+export const CYC_OPTS = (r = null) => [['D', CYCLES.D], ['D:wd', '평일 (월~금)'], ['D:we', '주말 (토 · 일)'], ...(r && r.c === 'D' && daySet(r.days) && !DAYS[r.days] ? [[`D:${r.days}`, `요일: ${dayLabel(r.days)}`]] : []), ...Object.entries(CYCLES).filter(([k]) => k !== 'D')];
+export const cycOf = r => (r.c === 'D' && daySet(r.days) ? `D:${r.days}` : r.c);
+export const parseCyc = v => { const [c, days] = String(v).split(':'); return { c, days: daySet(days) ? days : undefined }; };
 export function isDue(c, d) {
   if (c === 'D') return true;
   if (c === 'W') return d.getDay() === Number(RULES.weekDay);
