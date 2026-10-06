@@ -2139,3 +2139,9 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .go-m input:not([type]) { width: 170px; }
 .go-m input[type=date] { width: 128px; }
 @media (max-width: 700px) { .go-todos li { grid-template-columns: auto minmax(0, 1fr); } .go-td { grid-column: 2; } }
+.go-start { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.go-start .cob-card { padding: 18px 40px 18px 16px; }
+.go-start .cob-card b { font-size: 16px; }
+.go-rt input { flex: 1 1 200px; }
+.go-rt select { flex: 0 1 140px; }
+@media (max-width: 700px) { .go-start { grid-template-columns: minmax(0, 1fr); } }

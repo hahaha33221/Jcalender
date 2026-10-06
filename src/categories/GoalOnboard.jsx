@@ -26,6 +26,13 @@ export function goalOnboardNeed(store, area, today) {
   return 'month';
 }
 /** 목표를 둘 수 있는 카테고리 (영역 공통이 먼저) */
+/** 루틴 추천: [이름, 주기, 카테고리] */
+const ROUTINE_SUGG = {
+  P: [['아침 스트레칭 10분', 'D', '건강 관리'], ['물 2L 마시기', 'D', '건강 관리'], ['30분 걷기', 'D', '건강 관리'], ['책 20쪽 읽기', 'D', '자기계발/학습'], ['영어 공부 20분', 'D', '자기계발/학습'],
+    ['가계부 정리', 'W', '개인 재무'], ['주간 회고 쓰기', 'W', '저널링'], ['부모님께 안부 전화', 'W', '인맥 관리'], ['카드값 · 고정비 확인', 'M', '개인 재무']],
+  B: [['오늘 매출 기록', 'D', '매출/매입'], ['고객 문의 답변', 'D', '고객 관리'], ['콘텐츠 1개 올리기', 'D', '콘텐츠 관리'], ['주간 매출 점검', 'W', '매출/매입'], ['재고 확인', 'W', '재고/상품'], ['주간 회고', 'W', '리뷰/회고'], ['월 정산 · 세금 자료 정리', 'M', '세금/정산']],
+  W: [['오늘 할 일 3개 정하기', 'D', '업무 할일/프로젝트'], ['퇴근 전 내일 할 일 적기', 'D', '업무 할일/프로젝트'], ['주간 업무 보고 정리', 'W', '업무 문서'], ['업무 자료 정리', 'W', '업무 문서'], ['월간 성과 정리', 'M', '목표 관리']],
+};
 const goalCats = area => ['목표 관리', ...new Set(CATS.filter(r => r.a === area && r.cat !== '목표 관리').map(r => r.cat))].filter(c => hasGoals(area, c));
 
 export default function GoalOnboard({ area, mode, onClose }) {
@@ -91,12 +98,38 @@ export default function GoalOnboard({ area, mode, onClose }) {
     } catch (e) { setAi({ busy: false, msg: e.status === 404 ? '서버를 업데이트하면 AI 추천을 쓸 수 있습니다 (기본 추천은 그대로 사용)' : e.message, bad: true }); }
   };
 
-  const steps = mode === 'month' ? ['review', 'period', 'ask', 'todos', 'done'] : ['period', 'ask', 'todos', 'done'];
+  // 맨 처음: 목표별 To do 추천받기 / 루틴 입력 중 하나
+  const [choice, setChoice] = useState(null);                // 'todo' | 'routine'
+  const steps = choice === 'routine' ? ['start', 'routine', 'rdone'] : mode === 'month' ? ['start', 'review', 'period', 'ask', 'todos', 'done'] : ['start', 'period', 'ask', 'todos', 'done'];
+  // 루틴: 체크리스트에 내 항목으로 들어가고, 목표에 연결하면 그 목표 아래 작업(진행률 = 이 루틴 체크)으로도 들어감
+  const RCYC = [['D', '매일'], ['W', '매주'], ['M', '매월']];
+  const routineSugg = (ROUTINE_SUGG[area] || []).map(([n, c, cat]) => [n, c, cats.includes(cat) ? cat : cats[0]]);
+  const [routines, setRoutines] = useState([{ key: uid(), action: '', c: 'D', cat: cats.find(c => c !== '목표 관리') || cats[0], goal: '' }]);
+  const rList = routines.filter(r => r.action.trim());
+  const setR = (key, patch) => setRoutines(v => v.map(x => (x.key === key ? { ...x, ...patch } : x)));
+  const goalOpts = existing.filter(g => !g.ex);
+  const saveRoutines = () => {
+    setStore(s => {
+      const cl = s.checklist || {};
+      const cur = s.goals?.v === 2 ? s.goals : seedGoals(now);
+      const bs = { ...cur.boards };
+      const rows = rList.map(r => { const g = goalOpts.find(x => x.key === r.goal); const cat = g && g.cat !== '목표 관리' ? g.cat : r.cat;   // 목표와 같은 카테고리여야 진행률에 잡힘
+        return { row: { id: uid(), a: area, c: r.c, cat, item: cat, action: r.action.trim(), detail: '루틴 (목표 온보딩)' }, g }; });
+      rows.filter(x => x.g).forEach(({ row, g }) => {
+        const k = boardKey(area, g.cat), b = bs[k] || { ...EMPTY };
+        bs[k] = { ...b, items: [...b.items, { id: uid(), parent: g.key, name: `${row.action} (${RCYC.find(x => x[0] === row.c)[1]})`, start: today, end: g.end, progress: 0, link: row.id }] };
+      });
+      const ob = s.goalOnboard?.[area] || {};
+      return { ...s, checklist: { ...cl, custom: [...(cl.custom || []), ...rows.map(x => x.row)] }, goals: { ...cur, boards: bs },
+        goalOnboard: { ...(s.goalOnboard || {}), [area]: { ...ob, setupAt: ob.setupAt || today, months: { ...(ob.months || {}), [ym(today)]: 'done' } } } };
+    });
+    onClose(true, `루틴 ${rList.length}개를 체크리스트에 넣었습니다${rList.some(r => r.goal) ? ' · 목표에 연결한 루틴은 체크할수록 목표 진행률이 올라갑니다' : ''}`);
+  };
   const [si, setSi] = useState(0);
   const step = steps[si];
-  const NAMES = { review: '지난달 돌아보기', period: '기간 설정', ask: '온보딩 · 목표', todos: '상세 To do 추천', done: '확인 · 저장' };
-  const canNext = step === 'period' ? period.end >= period.start : step === 'ask' ? chosen.length > 0 : true;
-  const nextLabel = step === 'ask' && !topics.length && !own.some(g => g.name.trim()) ? '이루고 싶은 것을 하나 이상 골라 주세요' : step === 'ask' && !chosen.length ? '목표를 하나 이상 남겨 주세요' : step === 'ask' ? '상세 To do 추천 받기' : '다음';
+  const NAMES = { start: '시작 방식', routine: '루틴 입력', rdone: '확인 · 저장', review: '지난달 돌아보기', period: '기간 설정', ask: '온보딩 · 목표', todos: '상세 To do 추천', done: '확인 · 저장' };
+  const canNext = step === 'start' ? !!choice : step === 'routine' ? rList.length > 0 : step === 'period' ? period.end >= period.start : step === 'ask' ? chosen.length > 0 : true;
+  const nextLabel = step === 'start' && !choice ? '둘 중 하나를 골라 주세요' : step === 'routine' && !rList.length ? '루틴을 하나 이상 적어 주세요' : step === 'ask' && !topics.length && !own.some(g => g.name.trim()) ? '이루고 싶은 것을 하나 이상 골라 주세요' : step === 'ask' && !chosen.length ? '목표를 하나 이상 남겨 주세요' : step === 'ask' ? '상세 To do 추천 받기' : '다음';
 
   const markOnly = kind => setStore(s => {
     const ob = s.goalOnboard?.[area] || {};
@@ -138,11 +171,41 @@ export default function GoalOnboard({ area, mode, onClose }) {
 
   const Card = ({ on, onClick, title: t, sub, children }) => (
     <button type="button" className={`cob-card ${on ? 'on' : ''}`} aria-pressed={on} onClick={onClick}><b>{t}</b>{sub && <small>{sub}</small>}{children}<span className="cob-tick" aria-hidden="true">{on ? '✓' : ''}</span></button>);
-  const title = mode === 'month' ? `${Number(today.slice(5, 7))}월 목표 점검 · ${AREAS[area].n}` : `상세 To do 추천받기 · ${AREAS[area].n}`;
+  const title = mode === 'month' ? `${Number(today.slice(5, 7))}월 목표 점검 · ${AREAS[area].n}` : `${choice === 'routine' ? '루틴 입력' : choice === 'todo' ? '목표별 To do 추천받기' : '목표 온보딩'} · ${AREAS[area].n}`;
   return (
-    <Popup wide title={title} sub="기간을 정하고 몇 가지를 고르면, 마지막에 목표별 상세 To do 와 마일스톤을 추천해 드립니다 (AI 로도 받을 수 있음)" onClose={() => onClose(false)}>
+    <Popup wide title={title} sub={choice === 'routine' ? '반복할 일을 적으면 체크리스트로 만들고, 목표와 연결할 수 있습니다' : '목표별 To do 를 추천받거나, 반복할 루틴을 바로 입력할 수 있습니다'} onClose={() => onClose(false)}>
       <ol className="go-steps">{steps.map((k, i) => <li key={k} className={i === si ? 'on' : i < si ? 'past' : ''}><span>{i + 1}</span>{NAMES[k]}</li>)}</ol>
       <div className="go-body" style={{ '--ac': `var(${AREAS[area].v})` }}>
+
+        {step === 'start' && <>
+          <p className="cob-q">어떻게 시작할까요?</p>
+          <div className="cob-cards go-start">
+            <Card on={choice === 'todo'} title="목표별 To do 추천받기" sub="기간과 목표를 정하면 목표마다 상세 To do · 마일스톤을 추천해 드려요 (AI 가능)" onClick={() => setChoice('todo')} />
+            <Card on={choice === 'routine'} title="루틴 입력" sub="매일 · 매주 · 매월 반복할 일을 적어 체크리스트로 만들어요. 목표에 연결하면 체크할수록 진행률이 올라가요" onClick={() => setChoice('routine')} />
+          </div>
+        </>}
+
+        {step === 'routine' && <>
+          <p className="cob-q">반복할 루틴을 적어 주세요<span className="muted">아래 추천을 눌러도 됩니다 · 체크리스트에 "내 항목"으로 들어갑니다</span></p>
+          {routines.map(r => (
+            <div key={r.key} className="go-row go-rt">
+              <input value={r.action} onChange={e => setR(r.key, { action: e.target.value })} placeholder="예: 아침 스트레칭 10분" aria-label="루틴" />
+              <select value={r.c} onChange={e => setR(r.key, { c: e.target.value })} aria-label="주기">{RCYC.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
+              <select value={r.cat} onChange={e => setR(r.key, { cat: e.target.value })} aria-label="카테고리" disabled={!!r.goal && goalOpts.find(g => g.key === r.goal)?.cat !== '목표 관리'}>{cats.map(c => <option key={c} value={c}>{catLabel(c)}</option>)}</select>
+              <select value={r.goal} onChange={e => setR(r.key, { goal: e.target.value })} aria-label="연결할 목표"><option value="">목표 연결 안 함</option>{goalOpts.map(g => <option key={g.key} value={g.key}>목표: {g.name}</option>)}</select>
+              <button className="tl-del" onClick={() => setRoutines(v => v.filter(x => x.key !== r.key))} aria-label="빼기">×</button>
+            </div>))}
+          <button className="btn sm" onClick={() => setRoutines(v => [...v, { key: uid(), action: '', c: 'D', cat: v.at(-1)?.cat || cats[0], goal: '' }])}>+ 루틴 더하기</button>
+          <div className="go-sugg"><small className="muted">추천</small>{routineSugg.map(([n, c, cat]) => (
+            <button key={n} className="chip-btn" onClick={() => setRoutines(v => { const empty = v.find(x => !x.action.trim()); const r = { key: empty?.key || uid(), action: n, c, cat, goal: '' }; return empty ? v.map(x => (x.key === empty.key ? r : x)) : [...v, r]; })}>
+              <small>{RCYC.find(x => x[0] === c)[1]}</small> {n}</button>))}</div>
+          {!goalOpts.length && <p className="note">아직 목표가 없어 목표 연결은 건너뜁니다. 나중에 "목표별 To do 추천받기"로 목표를 만들면 연결할 수 있어요.</p>}
+        </>}
+
+        {step === 'rdone' && <>
+          <p className="go-lead">이 루틴들을 체크리스트에 넣을까요? 체크리스트 › 편집에서 언제든 고치거나 뺄 수 있습니다.</p>
+          <ul className="go-sum">{rList.map(r => <li key={r.key}><b>{r.action}</b> <small className="muted">{RCYC.find(x => x[0] === r.c)[1]} · {catLabel(r.cat)}{r.goal ? ` · 목표 "${goalOpts.find(g => g.key === r.goal)?.name}" 에 연결` : ''}</small></li>)}</ul>
+        </>}
 
         {step === 'review' && <>
           <p className="go-lead">{Number(last.slice(5))}월 마일스톤 {doneLast + review.filter(r => r.kind === 'mile').length}개 중 <b>{doneLast}개 완료</b>{review.length ? ` · 못 끝낸 것 ${review.length}개를 어떻게 할지 골라 주세요` : ' · 못 끝낸 것이 없습니다. 잘하셨어요!'}</p>
@@ -239,7 +302,8 @@ export default function GoalOnboard({ area, mode, onClose }) {
       <div className="go-foot">
         {si > 0 && <button className="btn" onClick={() => setSi(si - 1)}>이전</button>}
         <button className="linkish" onClick={() => { markOnly(mode); onClose(false); }}>{mode === 'month' ? '이번 달은 건너뛰기' : '나중에 직접 할게요'}</button>
-        {step === 'done' ? <button className="btn primary grow-r" onClick={save}>저장</button>
+        {step === 'rdone' ? <button className="btn primary grow-r" onClick={saveRoutines}>체크리스트에 넣기</button>
+          : step === 'done' ? <button className="btn primary grow-r" onClick={save}>저장</button>
           : <button className="btn primary grow-r" disabled={!canNext} onClick={() => setSi(si + 1)}>{nextLabel}</button>}
       </div>
     </Popup>
@@ -256,8 +320,8 @@ export function GoalOnboardCard() {
   return (
     <section className="panel dash-start go-card" aria-label="목표 온보딩">
       <div><h2>{month.length ? `${now.getMonth() + 1}월 목표 점검을 해 볼까요?` : '목표와 상세 To do 를 추천받아 볼까요?'}</h2>
-        <p className="muted">{month.length ? '지난달을 돌아보고 이번 달 목표를 추천받습니다 (2~3분)' : '기간을 정하고 몇 가지만 고르면 상세 To do 를 추천해 드려요 (AI 가능)'}</p></div>
-      <span className="go-card-b">{[...month, ...setup].map(x => <button key={x.a} className="btn primary" onClick={() => openCat(x.a, '목표 관리')}>{AREAS[x.a].n} {x.need === 'month' ? '점검' : 'To do 추천받기'}</button>)}</span>
+        <p className="muted">{month.length ? '지난달을 돌아보고 이번 달 목표를 추천받습니다 (2~3분)' : '목표별 To do 를 추천받거나(AI 가능), 반복할 루틴을 입력해 시작하세요'}</p></div>
+      <span className="go-card-b">{[...month, ...setup].map(x => <button key={x.a} className="btn primary" onClick={() => openCat(x.a, '목표 관리')}>{AREAS[x.a].n} {x.need === 'month' ? '점검' : '시작하기'}</button>)}</span>
     </section>
   );
 }
