@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { parseGoalBook } from '../goalImport.js';
+import GoalOnboard, { goalOnboardNeed } from './GoalOnboard.jsx';
 import { AREAS, CATS, CYCLES, ROWS, iso, periodKeysBetween } from '../data.js';
 import { areaVar, useCtx } from '../shared.jsx';
 import {
@@ -256,6 +257,10 @@ export default function GoalView({ area, cat, group }) {
   const { now, openCat, store } = useCtx();
   const today = iso(now);
   const [year, setYear] = useState(now.getFullYear());
+  // 온보딩 팝업: 처음이면 목표 설정부터, 매월 1일부터는 이번 달 점검 (닫으면 다시 들어올 때 또 뜸, "건너뛰기"를 누르면 그달은 안 뜸)
+  const need = goalOnboardNeed(store, area, today);
+  const [onb, setOnb] = useState(need);
+  const [onbMsg, setOnbMsg] = useState('');
   const [tasks, setTasks] = useState(false);        // 작업(3단계)까지 펼치기
   const [fold, setFold] = useState({});             // 접은 카테고리
   const { boards } = useGoals(area, cat);
@@ -317,7 +322,10 @@ export default function GoalView({ area, cat, group }) {
 
       <div className="bar"><YearPicker year={year} setYear={setYear} />
         <div className="chips grow-r" role="group" aria-label="보기"><button aria-pressed={tasks} onClick={() => setTasks(!tasks)}>작업까지 보기</button></div>
+        <button className="btn primary sm" onClick={() => setOnb(need === 'setup' || !store.goalOnboard?.[area]?.setupAt ? 'setup' : 'month')}>{need === 'month' ? `${now.getMonth() + 1}월 목표 점검` : need === 'setup' ? '목표 설정 시작' : '월간 목표 온보딩'}</button>
         <GoalExcel onDone={y => setYear(y)} /></div>
+      {onbMsg && <p className="banner ok" role="status">{onbMsg}<button className="linkish" onClick={() => setOnbMsg('')}>닫기</button></p>}
+      {onb && <GoalOnboard area={area} mode={onb} onClose={saved => { setOnb(null); if (saved) { setYear(now.getFullYear()); setOnbMsg('저장했습니다. 아래 목표 · 마일스톤 표에 들어갔습니다. 다음 달 1일에 다시 점검 창이 열립니다.'); } }} />}
 
       <div className="gv-top">
         <section className="panel">

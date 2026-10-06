@@ -11,6 +11,7 @@ import { seedHealth } from './categories/health.js';
 import { clearFinanceOnce, seedFinance } from './categories/finance.js';
 import { addExampleGoals, boardForYear, boardKey, dropNoGoal, hasGoals, migrateGoals, seedGoals, setUserNoGoal } from './categories/goals.js';
 import { DashYearGantt, GoalBoard } from './categories/GoalView.jsx';
+import { GoalOnboardCard } from './categories/GoalOnboard.jsx';
 import ShoppingList from './categories/Shopping.jsx';
 import { migratePeople, seedPeople } from './categories/RelationView.jsx';
 import { seedLeisure } from './categories/LeisureView.jsx';
@@ -305,6 +306,7 @@ function Home() {
       {!ROWS.length && <section className="panel dash-start" aria-label="체크리스트 만들기">
         <div><h2>체크리스트부터 만들어 볼까요?</h2><p className="muted">관리하고 싶은 것과 체크 리듬을 클릭으로 고르면 나에게 맞는 체크리스트를 추천해 드려요. 1분이면 됩니다.</p></div>
         <button className="btn primary" onClick={() => go('check')}>추천받아 시작하기</button></section>}
+      <GoalOnboardCard />
       <div className="dash-top">
         <Remain />
         <DueCards />

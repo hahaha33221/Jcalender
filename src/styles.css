@@ -2067,3 +2067,34 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .sh-pre li small { padding-left: 22px; }
 .sh-pre li.on b { color: var(--ok); }
 @media (max-width: 700px) { .sh-pre ul { grid-template-columns: minmax(0, 1fr); } }
+
+/* 목표 관리 온보딩 (팝업) */
+.go-steps { list-style: none; display: flex; gap: 6px; padding: 0; margin: 0 0 14px; flex-wrap: wrap; }
+.go-steps li { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink3); padding: 4px 10px 4px 4px; border-radius: 16px; background: var(--line2); }
+.go-steps li span { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--card); font-weight: 700; font-size: 11.5px; }
+.go-steps li.on { background: var(--ink); color: var(--card); font-weight: 700; }
+.go-steps li.on span { color: var(--ink); }
+.go-steps li.past { color: var(--ok); }
+.go-body { display: flex; flex-direction: column; gap: 10px; min-height: 220px; }
+.go-lead { margin: 0; font-size: 14px; }
+.go-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.go-row input:not([type=date]), .go-row select { flex: 1 1 180px; min-width: 0; }
+.go-row select { flex: 0 1 150px; }
+.go-end { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--ink3); }
+.go-ex, .go-review, .go-sum { list-style: none; margin: 0; padding: 0; }
+.go-ex li { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--line2); }
+.go-ex li.off { opacity: .45; text-decoration: line-through; }
+.go-clear { font-size: 13px; }
+.go-sugg { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.go-sugg .chip-btn { border: 1px dashed var(--line); background: var(--card); border-radius: 14px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; text-align: left; }
+.go-sugg .chip-btn small { color: var(--ink3); }
+.go-goal { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.go-goal .go-row { width: 100%; }
+.go-review li { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line2); }
+.go-rn { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.go-sum li { padding: 6px 0; border-bottom: 1px solid var(--line2); font-size: 14px; }
+.go-foot { display: flex; gap: 10px; align-items: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line2); }
+.go-card-b { display: flex; gap: 8px; flex-wrap: wrap; }
+.go-body > .btn, .go-goal > .btn { align-self: flex-start; }
+.go-body label.go-clear, .go-body label.go-end { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; text-align: left; justify-content: flex-start; }
+.go-body label.go-clear input { width: auto; margin: 0; }
