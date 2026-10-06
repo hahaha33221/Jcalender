@@ -1,4 +1,4 @@
-import { iso } from '../data.js';
+import { dayOk, iso } from '../data.js';
 import { EXTRA_MILES, GOAL_EXAMPLES } from './goalExamples.js';
 
 /* 목표 관리 (WBS + 마일스톤). 카테고리마다 따로 저장하고 연 단위로 본다
@@ -182,7 +182,7 @@ export function checkProgress(rows, done, periodKeysBetween) {
     if (cache.has(ck)) return cache.get(ck);
     const use = (it.link ? rows.filter(r => r.id === it.link) : rows).filter(r => r.c !== 'S');
     let need = 0, got = 0;
-    use.forEach(r => periodKeysBetween(r.c, it.start, it.end).forEach(k => { need++; if (done[`${r.id}@${k}`]) got++; }));
+    use.forEach(r => periodKeysBetween(r.c, it.start, it.end).forEach(k => { if (r.days && r.c === 'D' && !dayOk(r, new Date(`${k}T00:00:00`))) return; need++; if (done[`${r.id}@${k}`]) got++; }));   // 평일 · 주말 루틴은 그날만
     const p = need ? Math.round(got / need * 100) : 0;
     cache.set(ck, p);
     return p;

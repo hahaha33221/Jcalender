@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AREAS, BASE_ROWS, allowedAreas, areaEntries, CATS, CYCLES, PRIO, ROWS, defaultPrio } from './data.js';
+import { AREAS, BASE_ROWS, allowedAreas, areaEntries, CATS, CYCLES, CYC_OPTS, PRIO, ROWS, cycOf, cycleName, defaultPrio, parseCyc } from './data.js';
 import { areaVar, useCtx } from './shared.jsx';
 
 /* 체크리스트 › 편집: 계정마다 체크리스트를 직접 만든다 (store.checklist, data.js applyCategories 참고)
@@ -28,7 +28,7 @@ export default function ChecklistEdit({ onDone, onRecommend }) {
     e.preventDefault();
     if (!form.action.trim()) return;
     const id = uid(), cat = form.cat.trim() || '기타';
-    set(c => ({ ...c, custom: [...(c.custom || []), { id, a: form.a, c: form.c, cat, item: form.item.trim() || cat, action: form.action.trim(), detail: form.detail.trim() }] }));
+    set(c => ({ ...c, custom: [...(c.custom || []), { id, a: form.a, ...parseCyc(form.c), cat, item: form.item.trim() || cat, action: form.action.trim(), detail: form.detail.trim() }] }));
     if (Number(form.prio) !== 2) setStore(s => ({ ...s, prio: { ...(s.prio || {}), [id]: Number(form.prio) } }));
     setForm({ ...blank, a: form.a, cat: form.cat, item: form.item, c: form.c });
   };
@@ -69,7 +69,7 @@ export default function ChecklistEdit({ onDone, onRecommend }) {
           <label>카테고리<input list="cle-cats" value={form.cat} onChange={e => setForm({ ...form, cat: e.target.value })} placeholder="고르거나 새 이름 (예: 운동)" />
             <datalist id="cle-cats">{catsOf(form.a).map(c => <option key={c} value={c} />)}</datalist></label>
           <label>묶음 (선택)<input value={form.item} onChange={e => setForm({ ...form, item: e.target.value })} placeholder="예: 아침 루틴" /></label>
-          <label>주기<select value={form.c} onChange={e => setForm({ ...form, c: e.target.value })}>{Object.entries(CYCLES).map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></label>
+          <label>주기<select value={form.c} onChange={e => setForm({ ...form, c: e.target.value })}>{CYC_OPTS().map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></label>
           <label>우선순위<select value={form.prio} onChange={e => setForm({ ...form, prio: e.target.value })}>{[1, 2, 3].map(p => <option key={p} value={p}>{PRIO[p]}</option>)}</select></label>
           <label className="wide">할 일<input value={form.action} onChange={e => setForm({ ...form, action: e.target.value })} placeholder="예: 물 2L 마시기" required /></label>
           <label className="wide">설명 (선택)<input value={form.detail} onChange={e => setForm({ ...form, detail: e.target.value })} placeholder="체크할 때 참고할 내용" /></label>
@@ -88,7 +88,7 @@ export default function ChecklistEdit({ onDone, onRecommend }) {
               <div key={r.id} className={`cle-row ${r.custom ? 'mine' : ''}`}>
                 <input className="cle-act" value={r.action} onChange={e => patch(r, { action: e.target.value })} aria-label="할 일" />
                 <input className="cle-item" value={r.item} onChange={e => patch(r, { item: e.target.value })} aria-label="묶음" title="묶음" />
-                <select className="cle-cyc" value={r.c} onChange={e => patch(r, { c: e.target.value })} aria-label="주기">{Object.entries(CYCLES).map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
+                <select className="cle-cyc" value={cycOf(r)} onChange={e => patch(r, parseCyc(e.target.value))} aria-label="주기">{CYC_OPTS().map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
                 <input className="cle-det" value={r.detail} onChange={e => patch(r, { detail: e.target.value })} aria-label="설명" placeholder="설명" />
                 <span className="cle-tag">{r.custom ? <span className="tag mine">내 항목</span> : edits[r.id] ? <button type="button" className="linkish" onClick={() => revert(r)} title="기본 내용으로 되돌리기">원래대로</button> : <span className="tag">기본</span>}</span>
                 <button type="button" className={`tl-del cle-del ${arm === r.id ? 'arm' : ''}`} onClick={() => remove(r)}>{arm === r.id ? (r.custom ? '정말 삭제?' : '정말 빼기?') : r.custom ? '삭제' : '빼기'}</button>
@@ -101,7 +101,7 @@ export default function ChecklistEdit({ onDone, onRecommend }) {
           <div className="csum-h"><h2>뺀 기본 항목</h2><span className="muted">{hiddenRows.length}개</span>
             <button className="btn sm grow-r" onClick={() => set(c => ({ ...c, hide: [] }))}>모두 다시 넣기</button></div>
           <ul className="cle-hidden">{hiddenRows.map(r => (
-            <li key={r.id}><span className="grow">{AREAS[r.a].n} · {r.cat} › <b>{r.action}</b> <small className="muted">{CYCLES[r.c]} · 우선순위 {PRIO[defaultPrio(r)]}</small></span>
+            <li key={r.id}><span className="grow">{AREAS[r.a].n} · {r.cat} › <b>{r.action}</b> <small className="muted">{cycleName(r)} · 우선순위 {PRIO[defaultPrio(r)]}</small></span>
               <button className="btn sm" onClick={() => unhide(r.id)}>다시 넣기</button></li>))}</ul>
         </div>)}
     </section>
@@ -118,9 +118,9 @@ export function QuickAdd({ onAdded }) {
     const action = f.action.trim();
     if (!action) return;
     const cat = f.cat.trim() || '내 할 일';
-    setStore(s => { const c = s.checklist || {}; return { ...s, checklist: { ...c, custom: [...(c.custom || []), { id: uid(), a: f.a, c: f.c, cat, item: cat, action, detail: '' }] } }; });
+    setStore(s => { const c = s.checklist || {}; return { ...s, checklist: { ...c, custom: [...(c.custom || []), { id: uid(), a: f.a, ...parseCyc(f.c), cat, item: cat, action, detail: '' }] } }; });
     setF(x => ({ ...x, action: '' }));
-    onAdded?.(action, f.c);
+    onAdded?.(action, parseCyc(f.c).c);
   };
   return (
     <form className="panel cqa" onSubmit={add} aria-label="체크리스트 직접 추가">
@@ -129,7 +129,7 @@ export function QuickAdd({ onAdded }) {
       <select value={f.a} onChange={e => setF({ ...f, a: e.target.value, cat: '' })} aria-label="영역">{areaEntries(f.a).map(([k, v]) => <option key={k} value={k}>{v.n}</option>)}</select>
       <input className="cqa-cat" list="cqa-cats" value={f.cat} onChange={e => setF({ ...f, cat: e.target.value })} placeholder="카테고리 (선택)" aria-label="카테고리" />
       <datalist id="cqa-cats">{cats.map(c => <option key={c} value={c} />)}</datalist>
-      <select value={f.c} onChange={e => setF({ ...f, c: e.target.value })} aria-label="주기">{Object.entries(CYCLES).map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
+      <select value={f.c} onChange={e => setF({ ...f, c: e.target.value })} aria-label="주기">{CYC_OPTS().map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
       <button className="btn primary" disabled={!f.action.trim()}>추가</button>
     </form>
   );

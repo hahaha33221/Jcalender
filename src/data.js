@@ -322,6 +322,15 @@ export function dueRule(c) {
 
 /** 해당 날짜에 주기가 도래하는지. 수시체크는 도래 개념이 없다.
     월간 기준일이 그 달에 없으면(예: 31일) 그 달 말일에 도래한다 */
+/** 매일 항목 중 평일만(wd) · 주말만(we) 하는 것: 그날 해당하는지 (d: Date) */
+export const DAYS = { wd: '평일', we: '주말' };
+export const dayOk = (r, d) => !r.days || (r.days === 'wd') === (d.getDay() !== 0 && d.getDay() !== 6);
+/** 주기 이름 (평일 · 주말 포함) */
+export const cycleName = r => (r.c === 'D' && DAYS[r.days] ? DAYS[r.days] : CYCLES[r.c]);
+/** 주기 고르기 칸: 'D' · 'D:wd'(평일) · 'D:we'(주말) · 'W' … */
+export const CYC_OPTS = () => [['D', CYCLES.D], ['D:wd', '평일 (월~금)'], ['D:we', '주말 (토 · 일)'], ...Object.entries(CYCLES).filter(([k]) => k !== 'D')];
+export const cycOf = r => (r.c === 'D' && DAYS[r.days] ? `D:${r.days}` : r.c);
+export const parseCyc = v => { const [c, days] = String(v).split(':'); return { c, days: DAYS[days] ? days : undefined }; };
 export function isDue(c, d) {
   if (c === 'D') return true;
   if (c === 'W') return d.getDay() === Number(RULES.weekDay);

@@ -16,7 +16,7 @@ import ShoppingList from './categories/Shopping.jsx';
 import { migratePeople, seedPeople } from './categories/RelationView.jsx';
 import { seedLeisure } from './categories/LeisureView.jsx';
 import { seedJournal } from './categories/ReviewView.jsx';
-import { AREAS, CATS, areaEntries, CYCLES, DEFAULT_RULES, ROWS, PRIO, applyCategories, rowsVersion, defaultPrio, dueRule, isDue, iso, nextDue, pad, periodKey, setRules } from './data.js';
+import { AREAS, CATS, areaEntries, CYCLES, DEFAULT_RULES, ROWS, PRIO, applyCategories, rowsVersion, defaultPrio, dueRule, isDue, iso, dayOk, cycleName, nextDue, pad, periodKey, setRules } from './data.js';
 import { mockAi, mockApi } from './mock.js';
 import { SpeechRec, parseKoEvent } from './voice.js';
 import { HOLIDAYS } from './holidays.js';
@@ -363,7 +363,7 @@ function AnnivStrip() {
 function Remain() {
   const { now, isDone, prioOf, go } = useCtx();
   const cycles = Object.keys(CYCLES).filter(c => isDue(c, now));
-  const base = ROWS.filter(r => cycles.includes(r.c));
+  const base = ROWS.filter(r => cycles.includes(r.c) && dayOk(r, now));   // 평일 · 주말 루틴은 그날만
   const doneN = base.filter(isDone).length;
   const left = { 1: 0, 2: 0, 3: 0 };
   base.filter(r => !isDone(r)).forEach(r => { left[prioOf(r)]++; });
@@ -405,14 +405,14 @@ function DueCards() {
 
 /* 주기별 · 영역별 · 카테고리별 요약 */
 function CycleSummary({ c, title, note, hot }) {
-  const { isDone, prioOf, go } = useCtx();
+  const { isDone, prioOf, go, now } = useCtx();
   return (
     <section className={`panel csum ${hot ? 'hot' : ''}`} aria-label={title}>
       <div className="csum-h"><h2>{title}</h2><span className="muted">{note}</span>
         <button className="btn sm" onClick={() => go('check', { cyc: c })}>전체 보기</button></div>
       <div className="acards">
         {Object.keys(AREAS).map(a => {
-          const rs = ROWS.filter(r => r.a === a && r.c === c);
+          const rs = ROWS.filter(r => r.a === a && r.c === c && dayOk(r, now));
           if (!rs.length) return null;
           const d = rs.filter(isDone).length;
           const cats = [];
@@ -916,7 +916,7 @@ function Checklist({ init, onEdit, onRecommend }) {
   const active = cyc ?? auto;
   const toggleCyc = c => { const n = new Set(active); n.has(c) ? n.delete(c) : n.add(c); setCyc(n); };
 
-  const base = ROWS.filter(r => active.has(r.c));
+  const base = ROWS.filter(r => active.has(r.c) && dayOk(r, now));
   const doneN = base.filter(isDone).length;
   const left = { 1: 0, 2: 0, 3: 0 };
   base.filter(r => !isDone(r)).forEach(r => { left[prioOf(r)]++; });
@@ -991,7 +991,7 @@ const CAT_ORDER = { P: { last: ['개인 재무'] } };
 function categoriesOf(area, now, isDone, cats = []) {
   const m = new Map();
   CATS.filter(c => c.a === area).forEach(c => m.set(c.cat, { cat: c.cat, rows: [], items: [], cyc: {} }));   // 체크 항목이 없어도 카테고리는 보인다
-  ROWS.filter(r => r.a === area).forEach(r => {
+  ROWS.filter(r => r.a === area && dayOk(r, now)).forEach(r => {
     if (!m.has(r.cat)) m.set(r.cat, { cat: r.cat, rows: [], items: [], cyc: {} });
     const g = m.get(r.cat);
     g.rows.push(r);

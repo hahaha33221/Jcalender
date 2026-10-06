@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AREAS, CATS, iso } from '../data.js';
+import { AREAS, CATS, iso, parseCyc } from '../data.js';
 import { Popup, useCtx } from '../shared.jsx';
 import { GOAL_TOPICS, HOURS, LEVELS, recommend } from './goalRecs.js';
 import { EMPTY, addDays, boardForYear, boardKey, childrenOf, daysBetween, delItem, hasGoals, progressOf, seedGoals, toDate } from './goals.js';
@@ -28,10 +28,10 @@ export function goalOnboardNeed(store, area, today) {
 /** 목표를 둘 수 있는 카테고리 (영역 공통이 먼저) */
 /** 루틴 추천: [이름, 주기, 카테고리] */
 const ROUTINE_SUGG = {
-  P: [['아침 스트레칭 10분', 'D', '건강 관리'], ['물 2L 마시기', 'D', '건강 관리'], ['30분 걷기', 'D', '건강 관리'], ['책 20쪽 읽기', 'D', '자기계발/학습'], ['영어 공부 20분', 'D', '자기계발/학습'],
+  P: [['평일 아침 30분 일찍 일어나기', 'D:wd', '건강 관리'], ['주말 장보기 · 식단 준비', 'D:we', '건강 관리'], ['주말 가족 · 친구와 시간 보내기', 'D:we', '인맥 관리'], ['아침 스트레칭 10분', 'D', '건강 관리'], ['물 2L 마시기', 'D', '건강 관리'], ['30분 걷기', 'D', '건강 관리'], ['책 20쪽 읽기', 'D', '자기계발/학습'], ['영어 공부 20분', 'D', '자기계발/학습'],
     ['가계부 정리', 'W', '개인 재무'], ['주간 회고 쓰기', 'W', '저널링'], ['부모님께 안부 전화', 'W', '인맥 관리'], ['카드값 · 고정비 확인', 'M', '개인 재무']],
-  B: [['오늘 매출 기록', 'D', '매출/매입'], ['고객 문의 답변', 'D', '고객 관리'], ['콘텐츠 1개 올리기', 'D', '콘텐츠 관리'], ['주간 매출 점검', 'W', '매출/매입'], ['재고 확인', 'W', '재고/상품'], ['주간 회고', 'W', '리뷰/회고'], ['월 정산 · 세금 자료 정리', 'M', '세금/정산']],
-  W: [['오늘 할 일 3개 정하기', 'D', '업무 할일/프로젝트'], ['퇴근 전 내일 할 일 적기', 'D', '업무 할일/프로젝트'], ['주간 업무 보고 정리', 'W', '업무 문서'], ['업무 자료 정리', 'W', '업무 문서'], ['월간 성과 정리', 'M', '목표 관리']],
+  B: [['영업일 마감 매출 기록', 'D:wd', '매출/매입'], ['주말 다음 주 일정 · 발주 준비', 'D:we', '사업 할일/일정'], ['고객 문의 답변', 'D', '고객 관리'], ['콘텐츠 1개 올리기', 'D', '콘텐츠 관리'], ['주간 매출 점검', 'W', '매출/매입'], ['재고 확인', 'W', '재고/상품'], ['주간 회고', 'W', '리뷰/회고'], ['월 정산 · 세금 자료 정리', 'M', '세금/정산']],
+  W: [['출근 후 메일 · 메신저 정리', 'D:wd', '업무 할일/프로젝트'], ['오늘 할 일 3개 정하기', 'D:wd', '업무 할일/프로젝트'], ['퇴근 전 내일 할 일 적기', 'D:wd', '업무 할일/프로젝트'], ['주간 업무 보고 정리', 'W', '업무 문서'], ['업무 자료 정리', 'W', '업무 문서'], ['월간 성과 정리', 'M', '목표 관리']],
 };
 const goalCats = area => ['목표 관리', ...new Set(CATS.filter(r => r.a === area && r.cat !== '목표 관리').map(r => r.cat))].filter(c => hasGoals(area, c));
 
@@ -102,7 +102,7 @@ export default function GoalOnboard({ area, mode, onClose }) {
   const [choice, setChoice] = useState(null);                // 'todo' | 'routine'
   const steps = choice === 'routine' ? ['start', 'routine', 'rdone'] : mode === 'month' ? ['start', 'review', 'period', 'ask', 'todos', 'done'] : ['start', 'period', 'ask', 'todos', 'done'];
   // 루틴: 체크리스트에 내 항목으로 들어가고, 목표에 연결하면 그 목표 아래 작업(진행률 = 이 루틴 체크)으로도 들어감
-  const RCYC = [['D', '매일'], ['W', '매주'], ['M', '매월']];
+  const RCYC = [['D', '매일'], ['D:wd', '평일'], ['D:we', '주말'], ['W', '매주'], ['M', '매월']];
   const routineSugg = (ROUTINE_SUGG[area] || []).map(([n, c, cat]) => [n, c, cats.includes(cat) ? cat : cats[0]]);
   const [routines, setRoutines] = useState([{ key: uid(), action: '', c: 'D', cat: cats.find(c => c !== '목표 관리') || cats[0], goal: '' }]);
   const rList = routines.filter(r => r.action.trim());
@@ -114,10 +114,10 @@ export default function GoalOnboard({ area, mode, onClose }) {
       const cur = s.goals?.v === 2 ? s.goals : seedGoals(now);
       const bs = { ...cur.boards };
       const rows = rList.map(r => { const g = goalOpts.find(x => x.key === r.goal); const cat = g && g.cat !== '목표 관리' ? g.cat : r.cat;   // 목표와 같은 카테고리여야 진행률에 잡힘
-        return { row: { id: uid(), a: area, c: r.c, cat, item: cat, action: r.action.trim(), detail: '루틴 (목표 온보딩)' }, g }; });
-      rows.filter(x => x.g).forEach(({ row, g }) => {
+        return { row: { id: uid(), a: area, ...parseCyc(r.c), cat, item: cat, action: r.action.trim(), detail: '루틴 (목표 온보딩)' }, r, g }; });
+      rows.filter(x => x.g).forEach(({ row, r, g }) => {
         const k = boardKey(area, g.cat), b = bs[k] || { ...EMPTY };
-        bs[k] = { ...b, items: [...b.items, { id: uid(), parent: g.key, name: `${row.action} (${RCYC.find(x => x[0] === row.c)[1]})`, start: today, end: g.end, progress: 0, link: row.id }] };
+        bs[k] = { ...b, items: [...b.items, { id: uid(), parent: g.key, name: `${row.action} (${RCYC.find(x => x[0] === r.c)[1]})`, start: today, end: g.end, progress: 0, link: row.id }] };
       });
       const ob = s.goalOnboard?.[area] || {};
       return { ...s, checklist: { ...cl, custom: [...(cl.custom || []), ...rows.map(x => x.row)] }, goals: { ...cur, boards: bs },

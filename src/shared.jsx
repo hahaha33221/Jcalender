@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef } from 'react';
-import { AREAS, CYCLES, PRIO } from './data.js';
+import { AREAS, CYCLES, DAYS, PRIO, cycleName } from './data.js';
 
 /* 여러 화면(App, 카테고리 전용 화면)이 함께 쓰는 공통 요소 */
 export const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
@@ -49,7 +49,7 @@ export function ActionRow({ row, showCycle }) {
     <div className={`row ${done ? 'done' : ''}`} style={{ '--ac': areaVar(row.a) }}>
       <input type="checkbox" checked={done} disabled={busy} onChange={() => toggle(row)} aria-label={`${name} 완료`} />
       <div className="act"><b>{name}</b>{row.action.includes('(제안)') && <span className="tag">제안</span>}{sens && <span className="tag sens">민감정보</span>}
-        <div className="sub">{row.item}{showCycle && ` · ${CYCLES[row.c]}`}</div></div>
+        <div className="sub">{row.item}{showCycle && ` · ${cycleName(row)}`}{!showCycle && DAYS[row.days] && ` · ${DAYS[row.days]}만`}</div></div>
       <span className={`badge ${row.code}`}>{row.ty}</span>
       <button className={`prio p${p}`} onClick={() => cyclePrio(row)} title="눌러서 우선순위 변경">{PRIO[p]}</button>
       <div className="det">{row.detail}</div>
