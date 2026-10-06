@@ -1,5 +1,4 @@
-import React, { useRef, useState } from 'react';
-import { parseGoalBook } from '../goalImport.js';
+import React, { useState } from 'react';
 import GoalOnboard, { goalOnboardNeed } from './GoalOnboard.jsx';
 import { AREAS, CATS, CYCLES, ROWS, iso, periodKeysBetween } from '../data.js';
 import { areaVar, useCtx } from '../shared.jsx';
@@ -216,45 +215,6 @@ export function GoalBoard({ area, cat, title = '목표 관리', year: yearProp, 
   );
 }
 
-/* 엑셀(마스터플랜: YYYY_로드맵 · Master · (1) 개념 시트)로 모든 목표를 바꾸기 — goalImport.js */
-function GoalExcel({ onDone }) {
-  const { store, setStore, now } = useCtx();
-  const ref = useRef(null);
-  const [pre, setPre] = useState(null);                    // { name, boards, counts }
-  const [msg, setMsg] = useState(null);
-  const pick = async file => {
-    if (!file) return;
-    try { const r = await parseGoalBook(file); setPre({ name: file.name, ...r }); setMsg(null); }
-    catch (e) { setMsg({ err: true, t: `읽지 못했습니다: ${e.message}` }); }
-    finally { if (ref.current) ref.current.value = ''; }
-  };
-  const oldCount = Object.values(store.goals?.boards || {}).reduce((a, b) => a + (b.items?.length || 0), 0);
-  const apply = () => {
-    setStore(s => ({ ...s, goals: { ...(s.goals || {}), v: 2, examples: true, miles2: true, boards: pre.boards } }));   // 기존 보드는 모두 지움 (예시 다시 넣지 않음)
-    const y = pre.counts.roadmapYears[0] || now.getFullYear();
-    setMsg({ t: `${pre.name} 내용으로 바꿨습니다.` }); setPre(null); onDone?.(y);
-  };
-  const n = k => pre?.boards[k]?.items.length || 0;
-  return (
-    <>
-      <button className="btn sm" onClick={() => ref.current?.click()}>엑셀로 목표 바꾸기</button>
-      <input ref={ref} type="file" accept=".xlsx" hidden onChange={e => pick(e.target.files[0])} />
-      {(pre || msg) && <div className={`ge-box ${pre || msg?.err ? "" : "ok"}`} role="alert">
-        {pre ? <>
-          <p><b>{pre.name}</b></p>
-          <ul>
-            {n('P|목표 관리') > 0 && <li>개인 › 목표 관리: {pre.counts.roadmapYears.join(', ')} 로드맵 · 항목 {n('P|목표 관리')}개</li>}
-            {n('B|목표 관리') > 0 && <li>사업 › 목표 관리: 프로젝트 {pre.counts.projects}개 (Master · 착수 시기) · 항목 {n('B|목표 관리')}개 · 착수 마일스톤 {pre.boards['B|목표 관리'].miles.length}개</li>}
-            {pre.counts.skippedSame.length > 0 && <li className="muted">내용이 같아 한 번만 넣음: {pre.counts.skippedSame.join(', ')}</li>}
-          </ul>
-          <p className="ge-warn">지금 있는 목표 {oldCount}개(모든 영역 · 카테고리)를 <b>모두 지우고</b> 위 내용으로 바꿉니다. 필요하면 설정 › 백업으로 먼저 받아 두세요.</p>
-          <span className="ds-row"><button className="btn danger" onClick={apply}>모두 지우고 바꾸기</button><button className="btn" onClick={() => setPre(null)}>취소</button></span>
-        </> : <p className={`sh-msg ${msg.err ? 'err' : ''}`}>{msg.t} <button className="btn sm" onClick={() => setMsg(null)}>닫기</button></p>}
-      </div>}
-    </>
-  );
-}
-
 /* '목표 관리' 카테고리 화면: 영역의 모든 카테고리 목표를 모아서 본다 (통합 WBS · 연간 일정표 · 마일스톤) + 영역 공통 목표 */
 export default function GoalView({ area, cat, group }) {
   const { now, openCat, store } = useCtx();
@@ -325,8 +285,7 @@ export default function GoalView({ area, cat, group }) {
 
       <div className="bar"><YearPicker year={year} setYear={setYear} />
         <div className="chips grow-r" role="group" aria-label="보기"><button aria-pressed={tasks} onClick={() => setTasks(!tasks)}>작업까지 보기</button></div>
-        <button className="btn primary sm" onClick={() => setOnb(need === 'month' ? 'month' : 'setup')}>{need === 'month' ? `${now.getMonth() + 1}월 목표 점검` : '목표 · 루틴 온보딩'}</button>
-        <GoalExcel onDone={y => setYear(y)} /></div>
+        <button className="btn primary sm" onClick={() => setOnb(need === 'month' ? 'month' : 'setup')}>{need === 'month' ? `${now.getMonth() + 1}월 목표 점검` : '목표 · 루틴 온보딩'}</button></div>
       {onbMsg && <p className="banner ok" role="status">{onbMsg}<button className="linkish" onClick={() => setOnbMsg('')}>닫기</button></p>}
       {onb && <GoalOnboard area={area} mode={onb} onClose={(saved, msg) => { setOnb(null); if (saved) { setYear(now.getFullYear()); setOnbMsg(msg || '저장했습니다. 아래 목표 · 마일스톤 표에 들어갔습니다. 다음 달 1일에 다시 점검 창이 열립니다.'); } }} />}
 
