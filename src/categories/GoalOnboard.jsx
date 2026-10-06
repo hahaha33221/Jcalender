@@ -26,16 +26,6 @@ export function goalOnboardNeed(store, area, today) {
   return 'month';
 }
 /** 목표를 둘 수 있는 카테고리 (영역 공통이 먼저) */
-/** 루틴 추천: [이름, 주기, 카테고리] */
-const ROUTINE_SUGG = {
-  P: [['평일 아침 30분 일찍 일어나기', 'D:wd', '건강 관리'], ['주말 장보기 · 식단 준비', 'D:we', '건강 관리'], ['주말 가족 · 친구와 시간 보내기', 'D:we', '인맥 관리'], ['아침 스트레칭 10분', 'D', '건강 관리'], ['물 2L 마시기', 'D', '건강 관리'], ['30분 걷기', 'D', '건강 관리'], ['책 20쪽 읽기', 'D', '자기계발/학습'], ['영어 공부 20분', 'D', '자기계발/학습'],
-    ['가계부 정리', 'W', '개인 재무'], ['주간 회고 쓰기', 'W', '저널링'], ['부모님께 안부 전화', 'W', '인맥 관리'], ['카드값 · 고정비 확인', 'M', '개인 재무']],
-  B: [['영업일 마감 매출 기록', 'D:wd', '매출/매입'], ['주말 다음 주 일정 · 발주 준비', 'D:we', '사업 할일/일정'], ['고객 문의 답변', 'D', '고객 관리'], ['콘텐츠 1개 올리기', 'D', '콘텐츠 관리'], ['주간 매출 점검', 'W', '매출/매입'], ['재고 확인', 'W', '재고/상품'], ['주간 회고', 'W', '리뷰/회고'], ['월 정산 · 세금 자료 정리', 'M', '세금/정산']],
-  W: [['출근 후 메일 · 메신저 정리', 'D:wd', '업무 할일/프로젝트'], ['오늘 할 일 3개 정하기', 'D:wd', '업무 할일/프로젝트'], ['퇴근 전 내일 할 일 적기', 'D:wd', '업무 할일/프로젝트'], ['주간 업무 보고 정리', 'W', '업무 문서'], ['업무 자료 정리', 'W', '업무 문서'], ['월간 성과 정리', 'M', '목표 관리']],
-};
-/** 추천 루틴의 기본 시간 */
-const SUGG_TIME = { '평일 아침 30분 일찍 일어나기': '06:30', '아침 스트레칭 10분': '07:00', '30분 걷기': '19:30', '책 20쪽 읽기': '22:00', '영어 공부 20분': '21:00', '주간 회고 쓰기': '21:00',
-  '출근 후 메일 · 메신저 정리': '09:00', '오늘 할 일 3개 정하기': '09:10', '퇴근 전 내일 할 일 적기': '17:50', '영업일 마감 매출 기록': '18:00' };
 const goalCats = area => ['목표 관리', ...new Set(CATS.filter(r => r.a === area && r.cat !== '목표 관리').map(r => r.cat))].filter(c => hasGoals(area, c));
 
 export default function GoalOnboard({ area, mode, onClose }) {
@@ -106,7 +96,6 @@ export default function GoalOnboard({ area, mode, onClose }) {
   const steps = choice === 'routine' ? ['start', 'routine', 'rdone'] : mode === 'month' ? ['start', 'review', 'period', 'ask', 'todos', 'done'] : ['start', 'period', 'ask', 'todos', 'done'];
   // 루틴: 체크리스트에 내 항목으로 들어가고, 목표에 연결하면 그 목표 아래 작업(진행률 = 이 루틴 체크)으로도 들어감
   const RCYC = [['D', '매일'], ['D:wd', '평일'], ['D:we', '주말'], ['W', '매주'], ['M', '매월']];
-  const routineSugg = (ROUTINE_SUGG[area] || []).map(([n, c, cat]) => [n, c, cats.includes(cat) ? cat : cats[0]]);
   const WD = '일월화수목금토';
   const blankR = (o = {}) => ({ key: uid(), action: '', c: 'D', wd: now.getDay(), time: '', end: '', cat: cats.find(c => c !== '목표 관리') || cats[0], goal: '', ...o });
   const [routines, setRoutines] = useState([blankR()]);
@@ -206,7 +195,7 @@ export default function GoalOnboard({ area, mode, onClose }) {
             {period.kind === 'custom' && <span className="go-td"><input type="date" value={period.start} onChange={e => setPeriod(p => ({ ...p, start: e.target.value || today }))} aria-label="시작" />~<input type="date" value={period.end} min={period.start} onChange={e => setPeriod(p => ({ ...p, end: e.target.value || p.end }))} aria-label="끝" /></span>}
             <small className="muted">{md(period.start)} ~ {md(period.end)} · {days}일</small></div>
           <label className="sh-chk go-clear"><input type="checkbox" checked={toCal} onChange={e => setToCal(e.target.checked)} />대시보드 캘린더에도 넣기</label>
-          <p className="cob-q">반복할 루틴을 적어 주세요<span className="muted">시간을 넣으면 캘린더에 그 시간으로 들어갑니다 · 아래 추천을 눌러도 됩니다</span></p>
+          <p className="cob-q">반복할 루틴을 적어 주세요<span className="muted">시간을 넣으면 캘린더에 그 시간으로 들어갑니다</span></p>
           {routines.map(r => (
             <div key={r.key} className="go-row go-rt">
               <input value={r.action} onChange={e => setR(r.key, { action: e.target.value })} placeholder="예: 아침 스트레칭 10분" aria-label="루틴" />
@@ -218,9 +207,6 @@ export default function GoalOnboard({ area, mode, onClose }) {
               <button className="tl-del" onClick={() => setRoutines(v => v.filter(x => x.key !== r.key))} aria-label="빼기">×</button>
             </div>))}
           <button className="btn sm" onClick={() => setRoutines(v => [...v, blankR({ cat: v.at(-1)?.cat || cats[0] })])}>+ 루틴 더하기</button>
-          <div className="go-sugg"><small className="muted">추천</small>{routineSugg.map(([n, c, cat]) => (
-            <button key={n} className="chip-btn" onClick={() => setRoutines(v => { const empty = v.find(x => !x.action.trim()); const r = { ...blankR({ action: n, c, cat, time: SUGG_TIME[n] || '' }), key: empty?.key || uid() }; return empty ? v.map(x => (x.key === empty.key ? r : x)) : [...v, r]; })}>
-              <small>{RCYC.find(x => x[0] === c)[1]}</small> {n}</button>))}</div>
           {!goalOpts.length && <p className="note">아직 목표가 없어 목표 연결은 건너뜁니다. 나중에 "목표별 To do 추천받기"로 목표를 만들면 연결할 수 있어요.</p>}
         </>}
 
