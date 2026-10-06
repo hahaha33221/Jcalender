@@ -2179,3 +2179,23 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .go-ctopics { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .rw-cats { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .rw-g small { margin-left: 4px; }
+/* 목표 관리 › 목표 편집 (CRUD) */
+.gc-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.gc-add input:not([type]) { flex: 1 1 220px; }
+.gc-list { list-style: none; margin: 0; padding: 0; }
+.gc-list > li { border-bottom: 1px solid var(--line2); padding: 6px 0; }
+.gc-list > li.ex .gc-name { color: var(--ink3); }
+.gc-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.gc-cat { flex: 0 0 130px; }
+.gc-name { flex: 1 1 200px; min-width: 0; font-weight: 600; }
+.gc-dates { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--ink3); }
+.gc-dates input { width: 128px; }
+.gc-p { display: inline-flex; gap: 6px; align-items: center; min-width: 110px; }
+.gc-p .gv-mini { width: 60px; }
+.gc-act { display: inline-flex; gap: 10px; align-items: center; }
+.gc-todos { margin: 6px 0 4px 34px; display: flex; flex-direction: column; gap: 4px; }
+.gc-todo { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+.gc-todo input[type=checkbox] { width: 16px; height: 16px; margin: 0; }
+.gc-todo.done input:not([type]) { text-decoration: line-through; color: var(--ink3); }
+.gc-tadd { grid-template-columns: 22px minmax(0, 1fr) auto; }
+@media (max-width: 700px) { .gc-cat { flex: 1 1 100%; } .gc-todos { margin-left: 0; } .gc-todo { grid-template-columns: 22px minmax(0, 1fr) auto; } .gc-todo .gc-dates { grid-column: 2; } }

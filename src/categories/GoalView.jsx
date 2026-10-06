@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import GoalOnboard, { goalOnboardNeed } from './GoalOnboard.jsx';
+import GoalCrud from './GoalCrud.jsx';
 import { AREAS, CATS, CYCLES, ROWS, iso, periodKeysBetween } from '../data.js';
 import { areaVar, useCtx } from '../shared.jsx';
 import {
@@ -288,6 +289,8 @@ export default function GoalView({ area, cat, group }) {
         <button className="btn primary sm" onClick={() => setOnb(need === 'month' ? 'month' : 'setup')}>{need === 'month' ? `${now.getMonth() + 1}월 목표 점검` : '목표 · 루틴 온보딩'}</button></div>
       {onbMsg && <p className="banner ok" role="status">{onbMsg}<button className="linkish" onClick={() => setOnbMsg('')}>닫기</button></p>}
       {onb && <GoalOnboard area={area} mode={onb} onClose={(saved, msg) => { setOnb(null); if (saved) { setYear(now.getFullYear()); setOnbMsg(msg || '저장했습니다. 아래 목표 · 마일스톤 표에 들어갔습니다. 다음 달 1일에 다시 점검 창이 열립니다.'); } }} />}
+
+      <GoalCrud area={area} year={year} />
 
       <div className="gv-top">
         <section className="panel">
