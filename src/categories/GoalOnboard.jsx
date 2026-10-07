@@ -138,6 +138,8 @@ export default function GoalOnboard({ area, mode, onClose }) {
     return period.end;
   };
   const rList = routines.filter(r => r.action.trim());
+  /** 루틴이 끝나는 날: 고른 기간 끝, 이미 있는 목표에 연결했으면 그 목표가 끝나는 날을 넘지 않게 (캘린더 반복 · 목표 작업에 같은 날짜) */
+  const rEnd = r => { const g = r.goal && r.goal !== '__new' ? goalOpts.find(x => x.key === r.goal) : null; return g?.end && g.end >= period.start && g.end < period.end ? g.end : period.end; };
   const saveRoutines = () => {
     setStore(s => {
       const cl = s.checklist || {};
@@ -155,10 +157,12 @@ export default function GoalOnboard({ area, mode, onClose }) {
         return { row: { id: uid(), a: area, ...rowCyc(r), cat, item: cat, action: r.action.trim(), detail: `루틴 · ${cycTxt(r)}${r.time ? ` ${timeTxt(r)}` : ''} (목표 온보딩)`, ...(r.time ? { time: r.time } : {}) }, r, g }; });
       // 대시보드 캘린더: 기간 동안 반복 일정 (평일 · 주말은 그날만, 매주는 고른 요일, 매월은 시작일의 날짜)
       const evs = toCal ? rows.map(({ row, r }) => { const pc = rowCyc(r); return { id: uid(), date: firstDate(r), time: r.time || '', end: r.time && r.end && toMin(r.end) > toMin(r.time) ? r.end : '', title: row.action, area, routine: true, memo: '루틴 (목표 온보딩)',
-        repeat: { freq: pc.c, until: period.end, skip: [], ...(pc.days ? { days: pc.days } : {}) }, routineId: row.id }; }).filter(e => e.date <= period.end) : [];
+        repeat: { freq: pc.c, until: rEnd(r), skip: [], ...(pc.days ? { days: pc.days } : {}) }, routineId: row.id }; }).filter(e => e.date <= e.repeat.until) : [];
       rows.filter(x => x.g).forEach(({ row, r, g }) => {
         const k = boardKey(area, g.cat), b = bs[k] || { ...EMPTY };   // (새 목표도 위에서 bs 에 넣었으므로 같은 보드에 붙음)
-        bs[k] = { ...b, items: [...b.items, { id: uid(), parent: g.key, name: `${row.action} (${cycTxt(r)})`, start: today, end: g.end, progress: 0, link: row.id }] };
+        // 목표의 루틴 작업 기간 = 캘린더 반복 일정과 같은 기간 (첫 날 ~ 루틴 끝) — 대시보드와 목표 화면의 날짜가 어긋나지 않게
+        const end = rEnd(r), st = firstDate(r) <= end ? firstDate(r) : period.start;
+        bs[k] = { ...b, items: [...b.items, { id: uid(), parent: g.key, name: `${row.action} (${cycTxt(r)})`, start: st, end, progress: 0, link: row.id }] };
       });
       const ob = s.goalOnboard?.[area] || {};
       return { ...s, checklist: { ...cl, custom: [...(cl.custom || []), ...rows.map(x => x.row)] }, goals: { ...cur, boards: bs }, events: [...(s.events || []), ...evs],
@@ -248,7 +252,7 @@ export default function GoalOnboard({ area, mode, onClose }) {
 
         {step === 'rdone' && <>
           <p className="go-lead">이 루틴들을 체크리스트에 넣을까요?{toCal ? <> <b>{md(period.start)} ~ {md(period.end)}</b> 동안 대시보드 캘린더에도 반복 일정으로 들어갑니다.</> : ''} 체크리스트 › 편집 · 캘린더에서 언제든 고치거나 뺄 수 있습니다.</p>
-          <ul className="go-sum">{rList.map(r => <li key={r.key}><b>{r.action}</b> <small className="muted">{cycTxt(r)} · {timeTxt(r)} · {catLabel(autoCat(r))}{goalName(r) ? ` · ${r.goal === '__new' ? '새 ' : ''}목표 "${goalName(r)}" 에 연결` : ''}</small></li>)}</ul>
+          <ul className="go-sum">{rList.map(r => <li key={r.key}><b>{r.action}</b> <small className="muted">{cycTxt(r)} · {timeTxt(r)} · {catLabel(autoCat(r))}{goalName(r) ? ` · ${r.goal === '__new' ? '새 ' : ''}목표 "${goalName(r)}" 에 연결` : ''} · {rEnd(r) < period.end ? <b>{md(rEnd(r))}까지 (목표가 끝나는 날)</b> : `${md(period.end)}까지`}</small></li>)}</ul>
         </>}
 
         {step === 'review' && <>
