@@ -197,6 +197,18 @@ export function statusOf(it, progress, today) {
   return { k: 'run', t: '진행' };
 }
 
+/** 마감(최종 데드라인) 기준 상태 · D-day: 완료 / 마감 지남 / 임박(7일 이내) / 예정(시작 전) / 진행
+    완료는 직접 체크(it.done) — 진행률 대신 데드라인으로 관리 */
+export function deadlineOf(it, today) {
+  const d = daysBetween(today, it.end);
+  const dd = d === 0 ? 'D-day' : d > 0 ? `D-${d}` : `D+${-d}`;
+  if (it.done) return { k: 'done', t: '완료', dd: '완료', d };
+  if (d < 0) return { k: 'late', t: '마감 지남', dd, d };
+  if (d <= 7) return { k: 'soon', t: '임박', dd, d };
+  if (it.start > today) return { k: 'plan', t: '예정', dd, d };
+  return { k: 'run', t: '진행', dd, d };
+}
+
 /* ── 변경 ── */
 /** 항목 추가. 최상위 목표는 선택한 해 안에서 (올해면 오늘부터) 연말까지로 잡는다 */
 export const addItem = (g, parent, today, year = Number(today.slice(0, 4))) => {

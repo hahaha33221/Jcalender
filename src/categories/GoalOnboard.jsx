@@ -169,7 +169,7 @@ export default function GoalOnboard({ area, mode, onClose }) {
         goalOnboard: { ...(s.goalOnboard || {}), [area]: { ...ob, setupAt: ob.setupAt || today, months: { ...(ob.months || {}), [ym(today)]: 'done' } } } };
     });
     const newN = new Set(rList.filter(r => r.goal === '__new' && r.newGoal.trim()).map(r => r.newGoal.trim())).size;
-    onClose(true, `루틴 ${rList.length}개를 체크리스트에 넣었습니다${newN ? ` · 새 목표 ${newN}개를 만들었습니다` : ''}${toCal ? ` · ${md(period.start)}~${md(period.end)} 대시보드 캘린더에 반복 일정으로 넣었습니다` : ''}${rList.some(r => goalName(r)) ? ' · 목표에 연결한 루틴은 체크할수록 목표 진행률이 올라갑니다' : ''}`);
+    onClose(true, `루틴 ${rList.length}개를 체크리스트에 넣었습니다${newN ? ` · 새 목표 ${newN}개를 만들었습니다` : ''}${toCal ? ` · ${md(period.start)}~${md(period.end)} 대시보드 캘린더에 반복 일정으로 넣었습니다` : ''}${rList.some(r => goalName(r)) ? ' · 목표에 연결한 루틴은 목표 관리에서 마감 · D-day 로 볼 수 있습니다' : ''}`);
   };
   const [si, setSi] = useState(0);
   const step = steps[si];
@@ -227,7 +227,7 @@ export default function GoalOnboard({ area, mode, onClose }) {
           <p className="cob-q">어떻게 시작할까요?</p>
           <div className="cob-cards go-start">
             <Card on={choice === 'todo'} title="목표별 To do 추천받기" sub="기간과 목표를 정하면 목표마다 상세 To do · 마일스톤을 추천해 드려요 (AI 가능)" onClick={() => setChoice('todo')} />
-            <Card on={choice === 'routine'} title="루틴 입력" sub="매일 · 매주 · 매월 반복할 일을 적어 체크리스트로 만들어요. 목표에 연결하면 체크할수록 진행률이 올라가요" onClick={() => setChoice('routine')} />
+            <Card on={choice === 'routine'} title="루틴 입력" sub="매일 · 매주 · 매월 반복할 일을 적어 체크리스트로 만들어요. 목표에 연결하면 목표 아래 작업으로 들어가요" onClick={() => setChoice('routine')} />
           </div>
         </>}
 
@@ -399,11 +399,6 @@ function RoutineWizard({ wiz, setWiz, byDay, goalOpts, areaCats, target, goalOk,
           <p className="cob-q">{r.freq === 'WD' ? '평일 중 어느 요일에 하나요?' : r.freq === 'WE' ? '주말 중 어느 날에 하나요?' : '어느 요일에 하나요? (특정 요일)'}<span className="muted">여러 개 고를 수 있어요</span></p>
           <div className="rw-days" role="group" aria-label="요일">{SHOW[r.freq].map(w => (
             <button key={w} type="button" className={`rw-day ${r.wds.includes(w) ? 'on' : ''} ${w === 0 ? 'sun' : w === 6 ? 'sat' : ''}`} aria-pressed={r.wds.includes(w)} onClick={() => toggleWd(w)}>{WEEK_KO[w]}</button>))}</div>
-          <div className="chips rw-quick"><small className="muted">빠르게</small>
-            {r.freq === 'WE' ? <><button onClick={() => set({ wds: [6, 0] })}>토 · 일</button><button onClick={() => set({ wds: [6] })}>토요일만</button><button onClick={() => set({ wds: [0] })}>일요일만</button></>
-              : <><button onClick={() => set({ wds: [1, 2, 3, 4, 5] })}>월~금 전부</button><button onClick={() => set({ wds: [2, 4] })}>화 · 목</button><button onClick={() => set({ wds: [1, 3, 5] })}>월 · 수 · 금</button>
-                {r.freq === 'W' && <button onClick={() => set({ wds: [0, 6] })}>토 · 일</button>}</>}
-            <button onClick={() => set({ wds: [] })}>지우기</button></div>
           <p className="go-pinfo">{r.wds.length ? cycTxt(r) : '요일을 하나 이상 골라 주세요'}</p>
         </>}
         {step === 'when' && r.freq === 'M' && <>
@@ -425,7 +420,7 @@ function RoutineWizard({ wiz, setWiz, byDay, goalOpts, areaCats, target, goalOk,
             <Opt key={c} on={r.cat === c} t={c === '목표 관리' ? '영역 공통' : c} sub={`목표 ${goalOpts.filter(g => g.cat === target(c)).length}개${goalOk(c) ? '' : ' · 목표는 영역 공통에 저장'}`} onClick={() => pickCat(c)} />))}</div>
         </>}
         {step === 'goal' && <>
-          <p className="cob-q">{r.cat === '목표 관리' ? '영역 공통' : r.cat}의 어느 목표에 연결할까요?<span className="muted">연결하면 이 루틴을 체크할수록 그 목표 진행률이 올라가요 · 새 목표는 이 카테고리에 자동으로 만들어져요</span></p>
+          <p className="cob-q">{r.cat === '목표 관리' ? '영역 공통' : r.cat}의 어느 목표에 연결할까요?<span className="muted">연결하면 그 목표 아래 작업으로 들어가요 (마감 · D-day 로 관리) · 새 목표는 이 카테고리에 자동으로 만들어져요</span></p>
           <div className="rw-goals">
             <label className={`rw-g ${!r.goal ? 'on' : ''}`}><input type="radio" checked={!r.goal} onChange={() => set({ goal: '' })} />연결 안 함</label>
             {[...new Set(routines.filter(x => x.key !== r.key && x.goal === '__new' && x.newGoal.trim() && target(x.cat) === target(r.cat)).map(x => x.newGoal.trim()))].map(n => (

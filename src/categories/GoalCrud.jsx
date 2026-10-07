@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { CATS, iso } from '../data.js';
 import { useCtx } from '../shared.jsx';
-import { EMPTY, boardForYear, boardKey, childrenOf, hasGoals, progressOf, seedGoals } from './goals.js';
-import { leafFor } from './GoalView.jsx';
+import { EMPTY, boardForYear, boardKey, childrenOf, deadlineOf, hasGoals, seedGoals } from './goals.js';
+import { DDay } from './GoalView.jsx';
 
 /* 목표 관리 화면의 목표 편집 (CRUD): 영역의 모든 카테고리 목표를 한곳에서
    - 추가: 카테고리 · 이름 · 기간 → 그 카테고리 목표 보드에 최상위 목표
-   - 수정: 이름 · 시작 · 끝 · 카테고리 옮기기(하위 작업 · 연결 마일스톤 · 연결된 내 체크 항목도 함께)
+   - 수정: 이름 · 시작 · 마감(최종 데드라인, D-day 표시) · 완료 · 카테고리 옮기기(하위 작업 · 연결 마일스톤 · 연결된 내 체크 항목도 함께)
    - 삭제: 목록 왼쪽 체크로 고르고 위의 "선택 삭제" 버튼으로 한꺼번에 (하위 작업 · 연결 마일스톤까지, 확인 후)
    - 펼치면 그 목표의 To do(작업) 추가 · 이름 · 날짜 · 완료 표시, 왼쪽 체크로 골라 "선택 삭제"로 한꺼번에 삭제 */
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -34,12 +34,11 @@ export default function GoalCrud({ area, year }) {
   const list = cats.flatMap(c => {
     const b = goals.boards[boardKey(area, c)];
     if (!b) return [];
-    const leaf = leafFor(area, c, store.done);
     return boardForYear(b, year).items.filter(i => !i.parent).map(it => {
       const kids = b.items.filter(i => subtree(b.items, it.id).has(i.id) && i.id !== it.id);
-      return { c, it, kids, p: progressOf(b.items, it.id, leaf), miles: b.miles.filter(m => m.link === it.id).length };
+      return { c, it, kids, st: deadlineOf(it, today), miles: b.miles.filter(m => m.link === it.id).length };
     });
-  });
+  }).sort((a, b) => (a.st.k === 'done') - (b.st.k === 'done') || a.it.end.localeCompare(b.it.end));   // 마감 가까운 순, 완료는 뒤로
 
   const add = e => {
     e.preventDefault();
@@ -101,7 +100,7 @@ export default function GoalCrud({ area, year }) {
 
   return (
     <section className="panel gc">
-      <div className="csum-h"><h2>목표 편집</h2><span className="muted">{year}년 · {list.length}개 · 추가 · 수정 · 카테고리 옮기기 · 삭제, 펼치면 To do 관리</span></div>
+      <div className="csum-h"><h2>목표 편집</h2><span className="muted">{year}년 · {list.length}개 · 마감 가까운 순 · 추가 · 수정 · 카테고리 옮기기 · 삭제, 펼치면 To do 관리</span></div>
       {msg && <p className="banner ok" role="status">{msg}<button className="linkish" onClick={() => setMsg('')}>닫기</button></p>}
       <form className="gc-add" onSubmit={add}>
         <select value={form.cat} onChange={e => setForm({ ...form, cat: e.target.value })} aria-label="카테고리">{cats.map(c => <option key={c} value={c}>{catLabel(c)}</option>)}</select>
@@ -126,8 +125,9 @@ export default function GoalCrud({ area, year }) {
               <button className="fold" onClick={() => setOpen(v => ({ ...v, [g.it.id]: !isOpen }))} aria-label={isOpen ? '접기' : '펼치기'}>{isOpen ? '▾' : '▸'}</button>
               <select value={g.c} onChange={e => move(g, e.target.value)} aria-label="카테고리 옮기기" className="gc-cat">{cats.map(c => <option key={c} value={c}>{catLabel(c)}</option>)}</select>
               <input className="gc-name" value={g.it.name} onChange={e => patchItem(g.c, g.it.id, { name: e.target.value })} aria-label="목표 이름" />
-              <span className="gc-dates"><input type="date" value={g.it.start} onChange={e => e.target.value && patchItem(g.c, g.it.id, { start: e.target.value })} aria-label="시작" />~<input type="date" value={g.it.end} min={g.it.start} onChange={e => e.target.value && patchItem(g.c, g.it.id, { end: e.target.value })} aria-label="끝" /></span>
-              <span className="gc-p"><span className="gv-mini"><i style={{ width: `${g.p}%` }} /></span><b>{g.p}%</b></span>
+              <span className="gc-dates"><input type="date" value={g.it.start} onChange={e => e.target.value && patchItem(g.c, g.it.id, { start: e.target.value })} aria-label="시작" />~<input type="date" value={g.it.end} min={g.it.start} onChange={e => e.target.value && patchItem(g.c, g.it.id, { end: e.target.value })} aria-label="마감" title="최종 데드라인" /></span>
+              <span className="gc-p"><DDay it={g.it} today={today} />
+                <button type="button" className={`gc-done ${g.it.done ? 'on' : ''}`} aria-pressed={!!g.it.done} onClick={() => patchItem(g.c, g.it.id, { done: !g.it.done })}>{g.it.done ? '✓ 완료' : '완료'}</button></span>
               <small className="muted gc-n">To do {todos.length}</small>
               <span className="gc-act"><button className="linkish" onClick={() => openCat(area, g.c)}>열기</button></span>
             </div>
@@ -142,8 +142,7 @@ export default function GoalCrud({ area, year }) {
                   <input type="checkbox" className="gc-chk" checked={!!tsel[t.id]} onChange={e => setTsel(v => ({ ...v, [t.id]: e.target.checked }))} aria-label={`${t.name} 고르기`} />
                   <input value={t.name} onChange={e => patchItem(g.c, t.id, { name: e.target.value })} aria-label="To do 이름" />
                   <span className="gc-dates"><input type="date" value={t.start} onChange={e => e.target.value && patchItem(g.c, t.id, { start: e.target.value })} aria-label="시작" />~<input type="date" value={t.end} min={t.start} onChange={e => e.target.value && patchItem(g.c, t.id, { end: e.target.value })} aria-label="끝" /></span>
-                  {t.todo ? <button type="button" className={`gc-done ${t.done ? 'on' : ''}`} aria-pressed={!!t.done} onClick={() => patchItem(g.c, t.id, { done: !t.done })}>{t.done ? '✓ 완료' : '완료'}</button>
-                    : <small className="muted gc-auto" title="연결된 체크리스트 체크로 진행률 계산">자동</small>}
+                  <span className="gc-tr"><DDay it={t} today={today} /><button type="button" className={`gc-done ${t.done ? 'on' : ''}`} aria-pressed={!!t.done} onClick={() => patchItem(g.c, t.id, { done: !t.done })}>{t.done ? '✓ 완료' : '완료'}</button></span>
                 </div>)) : <p className="muted">To do 가 없습니다.</p>}
               <form className="gc-todo gc-tadd" onSubmit={e => { e.preventDefault(); addTodo(g); }}>
                 <span />

@@ -2199,7 +2199,6 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .gc-dates { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--ink3); }
 .gc-dates input { width: 128px; }
 .gc-p { display: inline-flex; gap: 6px; align-items: center; min-width: 110px; }
-.gc-p .gv-mini { width: 60px; }
 .gc-act { display: inline-flex; gap: 10px; align-items: center; }
 .gc-todos { margin: 6px 0 4px 34px; display: flex; flex-direction: column; gap: 4px; }
 .gc-todo { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
@@ -2208,10 +2207,10 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .gc-tbulk { padding: 2px 0 6px; }
 .gc-done { font-size: 12px; padding: 3px 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink2); cursor: pointer; white-space: nowrap; min-width: 64px; }
 .gc-done.on { background: var(--a1); border-color: var(--a1); color: #fff; }
-.gc-auto { min-width: 64px; text-align: center; }
+.gc-tr { display: inline-flex; gap: 6px; align-items: center; }
 .gc-todo.done input:not([type]) { text-decoration: line-through; color: var(--ink3); }
 .gc-tadd { grid-template-columns: 22px minmax(0, 1fr) auto; }
-@media (max-width: 700px) { .gc-cat { flex: 1 1 100%; } .gc-todos { margin-left: 0; } .gc-todo { grid-template-columns: 22px minmax(0, 1fr) auto; } .gc-todo .gc-dates { grid-column: 2 / -1; } .gc-todo > .gc-done, .gc-todo > .gc-auto { grid-column: 3; grid-row: 1; min-width: 0; } }
+@media (max-width: 700px) { .gc-cat { flex: 1 1 100%; } .gc-todos { margin-left: 0; } .gc-todo { grid-template-columns: 22px minmax(0, 1fr) auto; } .gc-todo .gc-dates { grid-column: 2 / -1; } .gc-todo > .gc-tr { grid-column: 3; grid-row: 1; } }
 
 /* 대시보드 캘린더 › 루틴 빼고 보기 */
 .cal-nort { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--ink2); padding: 3px 10px; border: 1px solid var(--line); border-radius: 16px; cursor: pointer; white-space: nowrap; }
@@ -2219,3 +2218,23 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .cal-nort.on { border-color: var(--a1); color: var(--a1); font-weight: 600; }
 .rw-dur { display: inline-block; margin-left: 8px; padding: 2px 10px; border-radius: 14px; font-size: 12.5px; font-weight: 700; color: var(--ac, var(--a1)); border: 1px solid var(--ac, var(--a1)); vertical-align: middle; }
 .cal-clear { margin-left: 8px; color: var(--over); font-size: 12px; }
+
+/* 목표: 진행률 대신 마감(최종 데드라인) · D-day */
+.dd { display: inline-block; min-width: 46px; text-align: center; font-size: 11.5px; font-weight: 700; border-radius: 10px; padding: 1px 8px; white-space: nowrap; background: var(--nonesoft); color: var(--ink2); }
+.dd.run { background: var(--apisoft); color: var(--a3); }
+.dd.soon { background: #fff1d6; color: #a15c00; }
+.dd.late { background: var(--oversoft); color: var(--over); }
+.dd.done { background: var(--oksoft); color: var(--ok); }
+.st.soon { background: #fff1d6; color: #a15c00; }
+.gantt-label .dd { margin-left: 4px; min-width: 0; font-size: 10.5px; padding: 0 6px; }
+.gbar.dl { background: color-mix(in srgb, var(--ac) 26%, transparent); border-right: 3px solid var(--ac); }
+.gbar.dl.done { background: var(--ac); }
+.gbar.dl.soon { border-right-color: #d98200; }
+.gbar.dl.late { border-right-color: var(--over); }
+.gv-dl li { display: flex; gap: 8px; align-items: center; }
+.gv-dl li .gv-gn { flex: 1; min-width: 0; }
+.gv-dl li.done .gv-gn { color: var(--ink3); text-decoration: line-through; }
+.dg-up { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 10px; }
+.dg-dd { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-left: 3px solid var(--ac); border-radius: 8px; background: var(--card); padding: 4px 10px 4px 6px; font-size: 12.5px; cursor: pointer; color: var(--ink); max-width: 100%; }
+.dg-dd small { color: var(--ink3); }
+.g-done { width: 16px; height: 16px; margin: 0; accent-color: var(--ac); }
