@@ -28,6 +28,9 @@ export function goalOnboardNeed(store, area, today) {
 /** 목표를 둘 수 있는 카테고리 (영역 공통이 먼저) */
 const goalCats = area => ['목표 관리', ...new Set(CATS.filter(r => r.a === area && r.cat !== '목표 관리').map(r => r.cat))].filter(c => hasGoals(area, c));
 
+/** 걸리는 시간: "1시간 30분" · "45분" (끝이 시작보다 늦을 때만) */
+const durTxt = (a, b) => { const m = (t => { const [h, mm] = String(t).split(':').map(Number); return h * 60 + mm; }); const d = a && b ? m(b) - m(a) : 0; if (!(d > 0)) return ''; const h = Math.floor(d / 60), mm = d % 60; return `${h ? `${h}시간` : ''}${h && mm ? ' ' : ''}${mm ? `${mm}분` : ''}`; };
+
 export default function GoalOnboard({ area, mode, onClose }) {
   const { store, setStore, now, sync } = useCtx();
   const today = iso(now), year = now.getFullYear(), mEnd = monthEnd(today), last = prevMonth(today);
@@ -113,7 +116,7 @@ export default function GoalOnboard({ area, mode, onClose }) {
   const [wiz, setWiz] = useState(null);                       // 루틴 추가 팝업 { r, si, edit }
   const [toCal, setToCal] = useState(true);                  // 기간 동안 대시보드 캘린더에 반복 일정으로
   const toMin = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + m; };
-  const timeTxt = r => (r.time ? `${r.time}${r.end && toMin(r.end) > toMin(r.time) ? `~${r.end}` : ''}` : '시간 없음');
+  const timeTxt = r => (r.time ? `${r.time}${r.end && toMin(r.end) > toMin(r.time) ? `~${r.end} (${durTxt(r.time, r.end)})` : ''}` : '시간 없음');
   /** 체크리스트 · 캘린더에 쓸 주기: 매주(요일들)는 '그 요일에만 하는 매일 항목' */
   const byDay = r => r.freq === 'W' || r.freq === 'WD' || r.freq === 'WE';   // 요일을 고르는 주기
   const rowCyc = r => (byDay(r) ? { c: 'D', days: daysOf(r.wds) } : { c: r.freq });
@@ -406,11 +409,10 @@ function RoutineWizard({ wiz, setWiz, byDay, goalOpts, areaCats, target, goalOk,
           {r.mday > 28 && <p className="note">{r.mday}일이 없는 달은 건너뜁니다.</p>}
         </>}
         {step === 'time' && <>
-          <p className="cob-q">몇 시에 하나요?<span className="muted">시간을 넣으면 캘린더의 그 시간 칸에 들어갑니다 (안 넣으면 종일)</span></p>
+          <p className="cob-q">몇 시에 하나요?{durTxt(r.time, r.end) && <span className="rw-dur">{durTxt(r.time, r.end)}</span>}<span className="muted">시간을 넣으면 캘린더의 그 시간 칸에 들어갑니다 (안 넣으면 종일)</span></p>
           <div className="rw-time"><label>시작<input type="time" value={r.time} onChange={e => set({ time: e.target.value })} /></label>
             <label>끝<input type="time" value={r.end} onChange={e => set({ end: e.target.value })} disabled={!r.time} /></label>
             {r.time && <button className="linkish" onClick={() => set({ time: '', end: '' })}>시간 없이</button>}</div>
-          <div className="chips rw-quick"><small className="muted">빠르게</small>{['06:30', '07:00', '12:30', '19:00', '21:00', '22:00'].map(t => <button key={t} onClick={() => set({ time: t, end: '' })}>{t}</button>)}</div>
           {r.end && r.time && toMin(r.end) <= toMin(r.time) && <p className="sh-err">끝 시간이 시작보다 늦어야 합니다</p>}
         </>}
         {step === 'cat' && <>
