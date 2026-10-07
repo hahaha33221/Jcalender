@@ -598,6 +598,13 @@ function Calendar({ sel, setSel }) {
     }
     if (over.date) pick(over.date);
   };
+  /** 일정 모두 지우기 (일정 노트는 그대로) — 바로 위 "되돌리기"로 되살림 */
+  const clearAll = () => {
+    const n = (store.events || []).length;
+    if (!n || !window.confirm(`캘린더의 일정 ${n}개(반복 일정 · 루틴 일정 포함)를 모두 지울까요?\n일정 노트와 체크리스트는 그대로 둡니다. 지운 뒤 바로 "되돌리기"로 되살릴 수 있습니다.`)) return;
+    setMoved({ events: store.events, notes: store.eventNotes || [], back: sel, msg: `일정 ${n}개를 모두 지웠습니다.` });
+    setStore(s => ({ ...s, events: [] }));
+  };
   const undoMove = () => { if (!moved) return; setStore(s => ({ ...s, events: moved.events, eventNotes: moved.notes })); pick(moved.back); setMoved(null); };
   const openEdit = e => { if (dragged.current) return; pick(e.date); setAdding({ ...e, occ: e.sid ? e.date : undefined }); };
   const { drag, start: startDrag, dragged } = useEventDrag(moveEvent);
@@ -633,7 +640,8 @@ function Calendar({ sel, setSel }) {
         </div>
         {moved ? <p className="cal-moved" role="status">{moved.msg}
           <button className="btn sm" onClick={undoMove}>되돌리기</button><button className="btn sm" onClick={() => setMoved(null)}>닫기</button></p>
-          : <p className="cal-tip">일정을 누르면 수정, 끌면 다른 날짜·시각으로 이동합니다 (휴대폰은 길게 누른 뒤 이동). 날짜를 두 번 누르면 일정 추가.</p>}
+          : <p className="cal-tip">일정을 누르면 수정, 끌면 다른 날짜·시각으로 이동합니다 (휴대폰은 길게 누른 뒤 이동). 날짜를 두 번 누르면 일정 추가.
+            {(store.events || []).length > 0 && <button className="linkish cal-clear" onClick={clearAll}>일정 모두 지우기</button>}</p>}
         <div className={`cal-grid ${drag ? 'dragging' : ''}`} role="grid">
           {WEEK.map((w, i) => <div key={w} className={`cal-dow ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}`}>{w}</div>)}
           {cells.map(d => {
