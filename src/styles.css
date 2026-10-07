@@ -2181,7 +2181,15 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .rw-g small { margin-left: 4px; }
 /* 목표 관리 › 목표 편집 (CRUD) */
 .gc-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.gc-add > * { width: auto; }
+.gc-add select { flex: 0 1 150px; }
 .gc-add input:not([type]) { flex: 1 1 220px; }
+.gc-add input[type=date] { flex: 0 1 140px; }
+.gc-bulk { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 6px 0 8px; border-bottom: 1px solid var(--line); }
+.gc-bulk .btn { margin-left: auto; }
+.gc-all { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; cursor: pointer; }
+.gc-all input, .gc-chk { width: 16px; height: 16px; margin: 0; flex: 0 0 16px; }
+.gc-list > li.sel { background: color-mix(in srgb, var(--a1) 9%, transparent); }
 .gc-list { list-style: none; margin: 0; padding: 0; }
 .gc-list > li { border-bottom: 1px solid var(--line2); padding: 6px 0; }
 .gc-list > li.ex .gc-name { color: var(--ink3); }
