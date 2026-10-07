@@ -2204,6 +2204,16 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .gc-todos { margin: 6px 0 4px 34px; display: flex; flex-direction: column; gap: 4px; }
 .gc-todo { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
 .gc-todo input[type=checkbox] { width: 16px; height: 16px; margin: 0; }
+.gc-todo.sel { background: color-mix(in srgb, var(--a1) 9%, transparent); border-radius: 6px; }
+.gc-tbulk { padding: 2px 0 6px; }
+.gc-done { font-size: 12px; padding: 3px 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink2); cursor: pointer; white-space: nowrap; min-width: 64px; }
+.gc-done.on { background: var(--a1); border-color: var(--a1); color: #fff; }
+.gc-auto { min-width: 64px; text-align: center; }
 .gc-todo.done input:not([type]) { text-decoration: line-through; color: var(--ink3); }
 .gc-tadd { grid-template-columns: 22px minmax(0, 1fr) auto; }
-@media (max-width: 700px) { .gc-cat { flex: 1 1 100%; } .gc-todos { margin-left: 0; } .gc-todo { grid-template-columns: 22px minmax(0, 1fr) auto; } .gc-todo .gc-dates { grid-column: 2; } }
+@media (max-width: 700px) { .gc-cat { flex: 1 1 100%; } .gc-todos { margin-left: 0; } .gc-todo { grid-template-columns: 22px minmax(0, 1fr) auto; } .gc-todo .gc-dates { grid-column: 2 / -1; } .gc-todo > .gc-done, .gc-todo > .gc-auto { grid-column: 3; grid-row: 1; min-width: 0; } }
+
+/* 대시보드 캘린더 › 루틴 빼고 보기 */
+.cal-nort { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--ink2); padding: 3px 10px; border: 1px solid var(--line); border-radius: 16px; cursor: pointer; white-space: nowrap; }
+.cal-nort input { width: 14px; height: 14px; margin: 0; }
+.cal-nort.on { border-color: var(--a1); color: var(--a1); font-weight: 600; }

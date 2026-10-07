@@ -151,7 +151,7 @@ export default function GoalOnboard({ area, mode, onClose }) {
       const rows = rList.map(r => { const g = r.goal === '__new' ? made[mk(r)] : goalOpts.find(x => x.key === r.goal); const cat = g && g.cat !== '목표 관리' ? g.cat : autoCat(r);   // 목표와 같은 카테고리여야 진행률에 잡힘
         return { row: { id: uid(), a: area, ...rowCyc(r), cat, item: cat, action: r.action.trim(), detail: `루틴 · ${cycTxt(r)}${r.time ? ` ${timeTxt(r)}` : ''} (목표 온보딩)`, ...(r.time ? { time: r.time } : {}) }, r, g }; });
       // 대시보드 캘린더: 기간 동안 반복 일정 (평일 · 주말은 그날만, 매주는 고른 요일, 매월은 시작일의 날짜)
-      const evs = toCal ? rows.map(({ row, r }) => { const pc = rowCyc(r); return { id: uid(), date: firstDate(r), time: r.time || '', end: r.time && r.end && toMin(r.end) > toMin(r.time) ? r.end : '', title: row.action, area, memo: '루틴 (목표 온보딩)',
+      const evs = toCal ? rows.map(({ row, r }) => { const pc = rowCyc(r); return { id: uid(), date: firstDate(r), time: r.time || '', end: r.time && r.end && toMin(r.end) > toMin(r.time) ? r.end : '', title: row.action, area, routine: true, memo: '루틴 (목표 온보딩)',
         repeat: { freq: pc.c, until: period.end, skip: [], ...(pc.days ? { days: pc.days } : {}) }, routineId: row.id }; }).filter(e => e.date <= period.end) : [];
       rows.filter(x => x.g).forEach(({ row, r, g }) => {
         const k = boardKey(area, g.cat), b = bs[k] || { ...EMPTY };   // (새 목표도 위에서 bs 에 넣었으므로 같은 보드에 붙음)

@@ -8,7 +8,7 @@ import { leafFor } from './GoalView.jsx';
    - 추가: 카테고리 · 이름 · 기간 → 그 카테고리 목표 보드에 최상위 목표
    - 수정: 이름 · 시작 · 끝 · 카테고리 옮기기(하위 작업 · 연결 마일스톤 · 연결된 내 체크 항목도 함께)
    - 삭제: 목록 왼쪽 체크로 고르고 위의 "선택 삭제" 버튼으로 한꺼번에 (하위 작업 · 연결 마일스톤까지, 확인 후)
-   - 펼치면 그 목표의 To do(작업) 추가 · 이름 · 날짜 · 완료 체크 · 삭제 */
+   - 펼치면 그 목표의 To do(작업) 추가 · 이름 · 날짜 · 완료 표시, 왼쪽 체크로 골라 "선택 삭제"로 한꺼번에 삭제 */
 const uid = () => Math.random().toString(36).slice(2, 10);
 const catLabel = c => (c === '목표 관리' ? '영역 공통' : c);
 const md = s => (s ? `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}` : '');
@@ -23,6 +23,7 @@ export default function GoalCrud({ area, year }) {
   const [newTodo, setNewTodo] = useState({});
   const [msg, setMsg] = useState('');
   const [sel, setSel] = useState({});                          // 고른 목표 (키: 카테고리|id)
+  const [tsel, setTsel] = useState({});                        // 고른 To do (키: To do id)
 
   /** 보드들을 고치는 공통 함수 (fn: boards → boards) */
   const upd = fn => setStore(s => { const cur = s.goals?.v === 2 ? s.goals : seedGoals(now); return { ...s, goals: { ...cur, boards: fn({ ...cur.boards }) } }; });
@@ -83,7 +84,20 @@ export default function GoalCrud({ area, year }) {
     upd(bs => { const b = B(bs, g.c); bs[boardKey(area, g.c)] = { ...b, items: [...b.items, { id: uid(), parent: g.it.id, name, start: today >= g.it.start && today <= g.it.end ? today : g.it.start, end: g.it.end, progress: 0, todo: true, done: false }] }; return bs; });
     setNewTodo(v => ({ ...v, [g.it.id]: '' }));
   };
-  const delTodo = (g, t) => upd(bs => { const b = B(bs, g.c), ids = subtree(b.items, t.id); bs[boardKey(area, g.c)] = { items: b.items.filter(i => !ids.has(i.id)), miles: b.miles.filter(m => !ids.has(m.link)) }; return bs; });
+  /** 그 목표에서 고른 To do 를 한꺼번에 삭제 */
+  const delTodos = (g, ts) => {
+    if (!ts.length || !window.confirm(`"${g.it.name}" 의 To do ${ts.length}개를 지울까요?\n${ts.slice(0, 5).map(t => `· ${t.name}`).join('\n')}${ts.length > 5 ? `\n· 외 ${ts.length - 5}개` : ''}`)) return;
+    upd(bs => {
+      const b = B(bs, g.c), ids = new Set(ts.flatMap(t => [...subtree(b.items, t.id)])), under = subtree(b.items, g.it.id);
+      const emptied = i => i.id !== g.it.id && under.has(i.id) && !ids.has(i.id) && b.items.some(k => k.parent === i.id) && b.items.every(k => k.parent !== i.id || ids.has(k.id));
+      let grew = true;                                         // 하위 To do 가 모두 지워져 빈 중간 묶음도 함께 (목표 자체는 남김)
+      while (grew) { grew = false; b.items.forEach(i => { if (emptied(i)) { ids.add(i.id); grew = true; } }); }
+      bs[boardKey(area, g.c)] = { items: b.items.filter(i => !ids.has(i.id)), miles: b.miles.filter(m => !ids.has(m.link)) };
+      return bs;
+    });
+    setTsel(v => { const n = { ...v }; ts.forEach(t => delete n[t.id]); return n; });
+    setMsg(`"${g.it.name}" 의 To do ${ts.length}개를 지웠습니다`);
+  };
 
   return (
     <section className="panel gc">
@@ -104,6 +118,7 @@ export default function GoalCrud({ area, year }) {
       {list.length ? <ul className="gc-list">{list.map(g => {
         const todos = g.kids.filter(k => !childrenOf(g.kids, k.id).length);
         const isOpen = !!open[g.it.id];
+        const tp = todos.filter(t => tsel[t.id]), tAll = todos.length > 0 && tp.length === todos.length;
         return (
           <li key={g.it.id} className={`${/\(예시\)\s*$/.test(g.it.name) ? 'ex' : ''} ${sel[keyOf(g)] ? 'sel' : ''}`}>
             <div className="gc-row">
@@ -117,12 +132,18 @@ export default function GoalCrud({ area, year }) {
               <span className="gc-act"><button className="linkish" onClick={() => openCat(area, g.c)}>열기</button></span>
             </div>
             {isOpen && <div className="gc-todos">
+              {todos.length > 0 && <div className="gc-bulk gc-tbulk">
+                <label className="gc-all"><input type="checkbox" checked={tAll} onChange={e => setTsel(v => ({ ...v, ...Object.fromEntries(todos.map(t => [t.id, e.target.checked])) }))} aria-label="To do 전체 선택" />To do 전체 선택</label>
+                <small className="muted">{tp.length ? `${tp.length}개 고름` : '지울 To do 를 왼쪽 체크로 고르세요'}</small>
+                <button className="btn sm danger" disabled={!tp.length} onClick={() => delTodos(g, tp)}>선택 삭제{tp.length ? ` (${tp.length})` : ''}</button>
+              </div>}
               {todos.length ? todos.map(t => (
-                <div key={t.id} className={`gc-todo ${t.done ? 'done' : ''}`}>
-                  {t.todo ? <input type="checkbox" checked={!!t.done} onChange={e => patchItem(g.c, t.id, { done: e.target.checked })} aria-label="완료" /> : <small className="muted" title="체크리스트로 진행률 계산">자동</small>}
+                <div key={t.id} className={`gc-todo ${t.done ? 'done' : ''} ${tsel[t.id] ? 'sel' : ''}`}>
+                  <input type="checkbox" className="gc-chk" checked={!!tsel[t.id]} onChange={e => setTsel(v => ({ ...v, [t.id]: e.target.checked }))} aria-label={`${t.name} 고르기`} />
                   <input value={t.name} onChange={e => patchItem(g.c, t.id, { name: e.target.value })} aria-label="To do 이름" />
                   <span className="gc-dates"><input type="date" value={t.start} onChange={e => e.target.value && patchItem(g.c, t.id, { start: e.target.value })} aria-label="시작" />~<input type="date" value={t.end} min={t.start} onChange={e => e.target.value && patchItem(g.c, t.id, { end: e.target.value })} aria-label="끝" /></span>
-                  <button className="tl-del" onClick={() => delTodo(g, t)} aria-label="삭제">×</button>
+                  {t.todo ? <button type="button" className={`gc-done ${t.done ? 'on' : ''}`} aria-pressed={!!t.done} onClick={() => patchItem(g.c, t.id, { done: !t.done })}>{t.done ? '✓ 완료' : '완료'}</button>
+                    : <small className="muted gc-auto" title="연결된 체크리스트 체크로 진행률 계산">자동</small>}
                 </div>)) : <p className="muted">To do 가 없습니다.</p>}
               <form className="gc-todo gc-tadd" onSubmit={e => { e.preventDefault(); addTodo(g); }}>
                 <span />

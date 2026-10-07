@@ -57,5 +57,8 @@ export function expandEvents(events, from, to) {
   return out;
 }
 
+/** 루틴 일정: 루틴 입력으로 만든 일정(routine 표시 · 메모 "루틴 …") 또는 매일 · 평일 · 요일마다 반복하는 일정 */
+export const isRoutine = e => !!(e.routine || /^루틴/.test(e.memo || '') || e.repeat?.freq === 'D');
+
 /** 반복 일정에서 한 날짜만 빼기 */
 export const skipDate = (events, sid, date) => events.map(x => (x.id === sid ? { ...x, repeat: { ...x.repeat, skip: [...new Set([...(x.repeat.skip || []), date])] } } : x));

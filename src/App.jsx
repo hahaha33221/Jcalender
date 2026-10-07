@@ -21,7 +21,7 @@ import { mockAi, mockApi } from './mock.js';
 import { SpeechRec, parseKoEvent } from './voice.js';
 import { HOLIDAYS } from './holidays.js';
 import { annivOn, lunarTag, nextAnniv, replaceAnnivOnce, seedAnniv } from './anniv.js';
-import { FREQ, expandEvents, repeatText, skipDate } from './recur.js';
+import { FREQ, expandEvents, isRoutine, repeatText, skipDate } from './recur.js';
 import { ddaysOn } from './dday.js';
 import { SECRETS_KEY, mergeSecrets, migrate, purgeTrash, renameCategories, readSecrets, splitSecrets, toTrash } from './schema.js';
 import { useServerSync } from './serverSync.js';
@@ -527,12 +527,14 @@ function Calendar({ sel, setSel }) {
   const cells = Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
   // 반복 일정은 보이는 42일(+ 선택한 날)만 펼쳐서 그린다
   const from0 = iso(cells[0]), to0 = iso(cells[41]);
+  const noRoutine = !!store.calNoRoutine;                    // 루틴 빼고 보기 (켜 두면 다음에도 유지)
+  const routineN = useMemo(() => (store.events || []).filter(isRoutine).length, [store.events]);
   const byDate = useMemo(() => {
     const m = {};
-    for (const e of expandEvents(store.events, sel < from0 ? sel : from0, sel > to0 ? sel : to0)) (m[e.date] ||= []).push(e);
+    for (const e of expandEvents(store.events, sel < from0 ? sel : from0, sel > to0 ? sel : to0)) if (!noRoutine || !isRoutine(e)) (m[e.date] ||= []).push(e);
     for (const k in m) m[k].sort((a, b) => (a.time || '').localeCompare(b.time || ''));
     return m;
-  }, [store.events, from0, to0, sel]);
+  }, [store.events, from0, to0, sel, noRoutine]);
   const move = n => { const d = new Date(ym.y, ym.m + n, 1); setYm({ y: d.getFullYear(), m: d.getMonth() }); };
   const goToday = () => { setYm({ y: now.getFullYear(), m: now.getMonth() }); setSel(todayStr); };
   const pick = k => { setSel(k); const d = new Date(k + 'T00:00:00'); if (d.getMonth() !== ym.m) setYm({ y: d.getFullYear(), m: d.getMonth() }); };
@@ -625,6 +627,8 @@ function Calendar({ sel, setSel }) {
             <button className="btn sm" onClick={() => move(-1)} aria-label="이전 달">이전</button><button className="btn sm" onClick={goToday}>오늘</button><button className="btn sm" onClick={() => move(1)} aria-label="다음 달">다음</button>
             <button className="btn sm primary" onClick={() => setAdding({ date: sel, time: '' })}>+ 일정 추가</button>
             <button className="btn sm" onClick={() => setVoice(true)}>음성으로 추가</button>
+            {(routineN > 0 || noRoutine) && <label className={`cal-nort ${noRoutine ? 'on' : ''}`} title="루틴 입력으로 만든 일정과 매일 · 평일 · 요일마다 반복하는 일정을 캘린더에서 숨깁니다 (지우지 않음)">
+              <input type="checkbox" checked={noRoutine} onChange={e => setStore(s => ({ ...s, calNoRoutine: e.target.checked }))} />루틴 빼고 보기</label>}
           </div>
         </div>
         {moved ? <p className="cal-moved" role="status">{moved.msg}
