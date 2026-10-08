@@ -34,7 +34,7 @@ import { socialRoutes, socialOf, startSocialWorker } from './shortsSocial.mjs';
 import { demoRoutes } from './shortsDemo.mjs';
 import { goalAiRoutes } from './goalAi.mjs';
 
-const VERSION = '1.10.0';
+const VERSION = '1.11.0';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
 const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐

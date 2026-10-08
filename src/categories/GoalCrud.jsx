@@ -132,6 +132,10 @@ export default function GoalCrud({ area, year }) {
               <span className="gc-act"><button className="linkish" onClick={() => openCat(area, g.c)}>열기</button></span>
             </div>
             {isOpen && <div className="gc-todos">
+              {(g.it.info || g.it.detail) && <div className="go-info gc-info">
+                {g.it.detail && <p><b>목표 정보</b> {g.it.detail}</p>}
+                {g.it.info?.guide && <><b>AI 목표 안내</b><p>{g.it.info.guide}</p></>}
+                {g.it.info?.tips?.length > 0 && <ul>{g.it.info.tips.map((t, i) => <li key={i}>{t}</li>)}</ul>}</div>}
               {todos.length > 0 && <div className="gc-bulk gc-tbulk">
                 <label className="gc-all"><input type="checkbox" checked={tAll} onChange={e => setTsel(v => ({ ...v, ...Object.fromEntries(todos.map(t => [t.id, e.target.checked])) }))} aria-label="To do 전체 선택" />To do 전체 선택</label>
                 <small className="muted">{tp.length ? `${tp.length}개 고름` : '지울 To do 를 왼쪽 체크로 고르세요'}</small>
@@ -140,7 +144,7 @@ export default function GoalCrud({ area, year }) {
               {todos.length ? todos.map(t => (
                 <div key={t.id} className={`gc-todo ${t.done ? 'done' : ''} ${tsel[t.id] ? 'sel' : ''}`}>
                   <input type="checkbox" className="gc-chk" checked={!!tsel[t.id]} onChange={e => setTsel(v => ({ ...v, [t.id]: e.target.checked }))} aria-label={`${t.name} 고르기`} />
-                  <input value={t.name} onChange={e => patchItem(g.c, t.id, { name: e.target.value })} aria-label="To do 이름" />
+                  <span className="gc-tname"><input value={t.name} onChange={e => patchItem(g.c, t.id, { name: e.target.value })} aria-label="To do 이름" />{t.note && <small className="muted">{t.note}</small>}</span>
                   <span className="gc-dates"><input type="date" value={t.start} onChange={e => e.target.value && patchItem(g.c, t.id, { start: e.target.value })} aria-label="시작" />~<input type="date" value={t.end} min={t.start} onChange={e => e.target.value && patchItem(g.c, t.id, { end: e.target.value })} aria-label="끝" /></span>
                   <span className="gc-tr"><DDay it={t} today={today} /><button type="button" className={`gc-done ${t.done ? 'on' : ''}`} aria-pressed={!!t.done} onClick={() => patchItem(g.c, t.id, { done: !t.done })}>{t.done ? '✓ 완료' : '완료'}</button></span>
                 </div>)) : <p className="muted">To do 가 없습니다.</p>}

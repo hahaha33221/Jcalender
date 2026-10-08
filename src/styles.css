@@ -2238,3 +2238,20 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .dg-dd { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-left: 3px solid var(--ac); border-radius: 8px; background: var(--card); padding: 4px 10px 4px 6px; font-size: 12.5px; cursor: pointer; color: var(--ink); max-width: 100%; }
 .dg-dd small { color: var(--ink3); }
 .g-done { width: 16px; height: 16px; margin: 0; accent-color: var(--ac); }
+
+/* 목표별 To do (AI): 내 목표 입력 · AI 목표 안내 */
+.go-own { display: flex; flex-direction: column; gap: 8px; }
+.go-ogoal { align-items: stretch; }
+.go-ogoal .go-row input:not([type]) { flex: 1 1 220px; }
+.go-detail { width: 100%; font-size: 13px; }
+.go-exl { display: flex; flex-direction: column; gap: 4px; }
+.go-body label.go-exg { display: flex; flex-direction: row; gap: 8px; align-items: center; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13.5px; color: var(--ink); }
+.go-exg.on { border-color: var(--ac); background: color-mix(in srgb, var(--ac) 7%, transparent); }
+.go-exg input { width: 16px; height: 16px; margin: 0; flex: 0 0 16px; accent-color: var(--ac); }
+.go-exg .muted { margin-left: auto; }
+.go-info { border-left: 3px solid var(--ac, var(--a1)); background: color-mix(in srgb, var(--ac, var(--a1)) 6%, transparent); border-radius: 6px; padding: 8px 12px; font-size: 13px; width: 100%; box-sizing: border-box; }
+.go-info p { margin: 4px 0; }
+.go-info ul { margin: 4px 0 0; padding-left: 18px; }
+.go-info li { margin: 2px 0; }
+.gc-tname { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gc-tname small { font-size: 11.5px; }

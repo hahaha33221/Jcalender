@@ -105,7 +105,7 @@ const fake = http.createServer((req, res) => {
     let b = ''; req.on('data', c => { b += c; }); req.on('end', () => {
       aiCalls.push({ url: req.url, headers: req.headers, body: JSON.parse(b) });
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      if (JSON.parse(b).response_format?.json_schema?.name === 'goal_todos') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ goals: [{ index: 0,
+      if (JSON.parse(b).response_format?.json_schema?.name === 'goal_todos') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ goals: [{ index: 0, guide: '주간 거리를 천천히 늘리세요.', tips: ['무리하지 않기', ''],
         milestones: [{ name: '5km 완주', date: '2026-11-15' }, { name: '범위 밖', date: '2030-01-01' }], todos: [{ name: '러닝화 사기', start: '2026-10-08', end: '2026-10-10', how: '매장에서 신어 보기' }, { name: '주 3회 3km', start: '2026-10-01', end: '2026-12-31', how: '' }] }] }) } }] }));
       if (JSON.parse(b).response_format?.json_schema?.name === 'asset_keywords') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ keywords: ['office desk', 'meeting room'], mood: '긴장' }) } }] }));
       res.end(JSON.stringify({ id: 'chatcmpl-test', object: 'chat.completion', model: 'gpt-5-mini', choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', refusal: null,
@@ -374,6 +374,11 @@ try {
     check('회원도 AI To do 받기 (기간 안으로 날짜 맞춤 · 정렬)', gt.status === 200 && gt.json.goals[0].todos.length === 2 && gt.json.goals[0].todos[0].start === '2026-10-06' && gt.json.goals[0].todos[1].start === '2026-10-08'
       && gt.json.goals[0].todos[0].end === '2026-12-05' && gt.json.goals[0].milestones.at(-1).date === '2026-12-05' && gt.json.goals[0].todos[1].how === '매장에서 신어 보기', JSON.stringify(gt.json));
     check('AI 에게 기간 · 수준 · 메모 전달', req?.response_format.json_schema.name === 'goal_todos' && req.messages[1].content.includes('2026-10-06 ~ 2026-12-05') && req.messages[1].content.includes('평일 저녁만') && req.messages[1].content.includes('처음 시작함'));
+    check('목표 안내(guide · tips) 전달', gt.json.goals[0].guide === '주간 거리를 천천히 늘리세요.' && JSON.stringify(gt.json.goals[0].tips) === '["무리하지 않기"]', JSON.stringify(gt.json.goals[0]));
+    const gt2 = await call('POST', '/api/goals/todos', { area: 'P', start: '2026-10-06', end: '2026-12-05', goals: [{ name: '하프 마라톤', cat: '건강 관리', end: '2026-11-20', detail: '지금 10km 65분' }] }, T);
+    const req2 = aiCalls.at(-1)?.body;
+    check('목표마다 마감 · 목표 정보 전달, 날짜는 그 목표의 마감 안으로', gt2.status === 200 && req2.messages[1].content.includes('마감 2026-11-20') && req2.messages[1].content.includes('목표 정보: 지금 10km 65분')
+      && gt2.json.goals[0].todos.every(t => t.end <= '2026-11-20') && gt2.json.goals[0].milestones.every(m => m.date <= '2026-11-20'), JSON.stringify(gt2.json));
     check('목표 없으면 400 · 로그인 안 하면 401', (await call('POST', '/api/goals/todos', { start: '2026-10-06', end: '2026-12-05', goals: [] }, T)).status === 400 && (await call('POST', '/api/goals/todos', { start: '2026-10-06', end: '2026-12-05', goals: [{ name: 'x' }] })).status === 401);
   }
 
