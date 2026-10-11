@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useCtx } from '../shared.jsx';
+import { API_BASE } from '../serverSync.js';
 import { clipsNeeded, estSeconds } from '../../server/shortsText.mjs';
 
 /* 숏폼 제작 3차 화면: ⑤ 영상 만들기 — 스크립트별 "영상 만들기" → 대기열 → 진행률 → 미리보기 · 내려받기
@@ -63,7 +64,7 @@ export function Renders({ d, act, busy, patch, goPrep, goUpload }) {
 
 function RenderItem({ r, act, showTitle, goUpload }) {
   const { sync } = useCtx();
-  const full = u => `${sync.conf.url}${u}`;
+  const full = u => `${API_BASE}${u}`;
   const del = () => window.confirm(r.status === 'running' ? '만드는 중인 영상을 멈추고 지울까요?' : '이 영상을 지울까요?') && act('', '/api/shorts/render/remove', { id: r.id }, '영상을 지웠습니다');
   return (
     <div className={`sr-item s-${r.status}`}>

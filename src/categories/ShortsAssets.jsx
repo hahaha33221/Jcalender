@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Popup, useCtx } from '../shared.jsx';
+import { API_BASE } from '../serverSync.js';
 import { FONTS, MOODS, VOICES, autoPick, clipsNeeded, estSeconds, splitSubs } from '../../server/shortsText.mjs';
 
 /* 숏폼 제작 2차 화면: ③ 소재함 (올리기 · Pexels 무료 소재) · ④ 제작 준비 (스크립트별 배경 · 음악) · 영상 설정 (자막 미리보기)
@@ -7,7 +8,7 @@ import { FONTS, MOODS, VOICES, autoPick, clipsNeeded, estSeconds, splitSubs } fr
 const KIND = { video: '영상', image: '이미지', music: '음악' };
 const mb = n => (n >= 1073741824 ? `${(n / 1073741824).toFixed(1)}GB` : `${Math.max(0.1, n / 1048576).toFixed(1)}MB`);
 const sec = n => (n == null ? '' : n >= 60 ? `${Math.floor(n / 60)}분 ${Math.round(n % 60)}초` : `${Math.round(n * 10) / 10}초`);
-const fullUrl = (sync, u) => (u ? `${sync.conf.url}${u}` : '');
+const fullUrl = (sync, u) => (u ? `${API_BASE}${u}` : '');
 
 /* ── ③ 소재함 ── */
 export function AssetLibrary({ d, act, busy, reload }) {
@@ -31,7 +32,7 @@ export function AssetLibrary({ d, act, busy, reload }) {
       if (f.size > d.storage.maxUpload) { set({ err: `${mb(d.storage.maxUpload)} 까지 올릴 수 있습니다` }); continue; }
       await new Promise(resolve => {
         const x = new XMLHttpRequest();
-        x.open('POST', `${sync.conf.url}/api/shorts/upload`);
+        x.open('POST', `${API_BASE}/api/shorts/upload`);
         x.setRequestHeader('Authorization', `Bearer ${sync.conf.token}`);
         x.setRequestHeader('Content-Type', f.type || 'application/octet-stream');
         x.setRequestHeader('X-File-Name', encodeURIComponent(f.name));

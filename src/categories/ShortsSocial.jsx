@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { num, useCtx } from '../shared.jsx';
+import { API_BASE } from '../serverSync.js';
 
 /* 숏폼 제작 4차 화면: ⑥ 업로드 — 계정 연결(유튜브 · 인스타그램) → 완성 영상 올리기(지금 · 예약) → 올린 목록 · 성과
    서버: server/shortsSocial.mjs. 올린 영상과 성과는 콘텐츠 관리 › 성과 탭에도 자동으로 들어간다 (shortsPerf.js) */
@@ -95,7 +96,7 @@ function UploadForm({ d, act, busy, pick, goRender }) {
       <div className="su-form">
         <div className="su-left">
           <label>영상<select value={rid} onChange={e => setRid(e.target.value)}>{done.map(x => <option key={x.id} value={x.id}>{x.title} · {dt(x.finished_at)}</option>)}</select></label>
-          {r?.thumb && <img className="su-th" src={`${sync.conf.url}${r.thumb}`} alt="" />}
+          {r?.thumb && <img className="su-th" src={`${API_BASE}${r.thumb}`} alt="" />}
         </div>
         <div className="su-right">
           <div className="su-plats" role="group" aria-label="올릴 곳">{['youtube', 'instagram'].map(p => (

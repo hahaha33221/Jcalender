@@ -248,7 +248,7 @@ export default function App() {
     { id: 'settings', label: '설정', icon: 'settings' },
   ];
 
-  if (!sync.connected && !sync.guest) return <Welcome sync={sync} />;   // 처음: 로그인 / 회원가입
+  if (!sync.connected) return <Welcome sync={sync} />;   // 로그인해야 쓸 수 있음 (로그인 / 회원가입)
 
   return (
     <Ctx.Provider value={ctx}>

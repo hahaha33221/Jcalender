@@ -6,6 +6,7 @@
 
 - 목적: 맥북 · 휴대폰 · Vercel 주소 어디서 열어도 같은 데이터를 쓰도록 VPS에 로그인 · 동기화 서버를 둔다.
 - 구성: 화면(Vercel `https://jcalender-amber.vercel.app` 또는 맥북 `npm run dev`) → `https://jcal-31-97-71-87.sslip.io` (기존 Nginx 에 전용 설정 1개) → API 서버(전용 Node, 127.0.0.1:8787) → 기존 PostgreSQL 16 클러스터(5433) 안의 전용 `jcal` DB (테이블 48개).
+- 화면은 서버 주소를 모른다: 화면은 같은 사이트의 `/api/...` 를 부르고 Vercel 이 `vercel.json` 의 rewrites 로 VPS 에 넘긴다 (내 컴퓨터 `npm run dev` 는 `vite.config.js` proxy, 기본 `http://127.0.0.1:8787`, 다른 서버는 `JCAL_API=https://… npm run dev`). 그래서 화면 HTML · JS 에 VPS 주소가 없고, 로그인 없이 쓰는 모드도 없다.
 - 도메인: 사지 않는다. `jcal-31-97-71-87.sslip.io` 는 무료 주소로 31.97.71.87 로 연결되며, Jcalender 만 쓰는 이름이라 다른 사이트와 겹치지 않는다.
 - 다른 서비스와 분리: 아래 3-6 표 참고. 방화벽 · 다른 Nginx 사이트 · 도커 · 시스템 Node · pm2 는 건드리지 않는다.
 
