@@ -34,8 +34,9 @@ import { socialRoutes, socialOf, startSocialWorker } from './shortsSocial.mjs';
 import { demoRoutes } from './shortsDemo.mjs';
 import { goalAiRoutes } from './goalAi.mjs';
 import { pushModule } from './push.mjs';
+import { ideaRoutes } from './ideas.mjs';
 
-const VERSION = '1.12.0';
+const VERSION = '1.13.0';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
 const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐
@@ -320,11 +321,13 @@ Object.assign(routes, renderRoutes({ pool, adminUser: shortsUser, HttpError }));
 Object.assign(routes, goalAiRoutes({ authUser, HttpError }));   // 목표 관리 › 상세 To do 추천 (AI)
 const push = pushModule({ pool, authUser, HttpError, owner: config.ownerEmails[0] });   // 웹 푸시 (1분마다 보낼 알림 확인)
 Object.assign(routes, push.routes);
+const ideas = ideaRoutes({ authUser, HttpError });   // 아이디어 뱅크 (녹음 받아쓰기 · AI 정리)
+Object.assign(routes, ideas.json);
 Object.assign(routes, demoRoutes({ pool, tx, adminUser: shortsUser, HttpError }));   // 예시 채우기
 const social = socialRoutes({ pool, adminUser: shortsUser, HttpError, originOk });
 Object.assign(routes, social.json);
 routes['GET /api/shorts'] = async (req, body, res) => { const base = await shortsBase(req, body, res), uid = (await shortsUser(req)).id; return { ...base, ...(await assetData(pool, uid)), ...(await rendersOf(pool, uid)), ...(await socialOf(pool, uid)) }; };   // + 소재함 · 제작 준비 · 영상 · 업로드
-const rawRoutes = { ...assets.raw, ...social.raw };                                    // 본문을 JSON 으로 읽지 않는 경로 (파일 올리기 · 내려주기)
+const rawRoutes = { ...assets.raw, ...social.raw, ...ideas.raw };                                    // 본문을 JSON 으로 읽지 않는 경로 (파일 올리기 · 내려주기)
 
 const server = http.createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0].replace(/\/+$/, '') || '/';

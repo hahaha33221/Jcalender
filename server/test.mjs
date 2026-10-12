@@ -43,7 +43,7 @@ const IMG = media('p.jpg', ['-f', 'lavfi', '-i', 'color=c=blue:s=400x600', '-fra
 const MP3 = media('m.mp3', ['-f', 'lavfi', '-i', 'sine=frequency=440:duration=3'], Buffer.alloc(800, 3));
 // 숏폼 시험용: 가짜 게시판(RSS · 글 페이지) + 가짜 OpenAI API (실제 AI 호출 없음)
 const FAKE = 18788, F = `http://127.0.0.1:${FAKE}`;
-const aiCalls = [], ttsCalls = [];
+const aiCalls = [], ttsCalls = [], sttCalls = [];
 let ttsFail = 0;
 const soc = { gToken: [], ytMeta: null, ytBytes: 0, ytAuth: '', ytQuota: false, igMedia: null, igFetch: null, revoked: 0 };   // 가짜 Google · YouTube · Instagram
 /** 가짜 음성: 앞 0.3초 조용 + 글자당 0.08초 소리 + 뒤 0.4초 조용 (24kHz 모노 WAV) */
@@ -95,6 +95,12 @@ const fake = http.createServer((req, res) => {
       J({ error: { message: 'not found' } }, 404);
     }); return;
   }
+  if (req.url === '/v1/audio/transcriptions') {                    // 아이디어 뱅크 받아쓰기
+    const chunks = []; req.on('data', c => chunks.push(c)); req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('latin1'); sttCalls.push({ headers: req.headers, size: raw.length, model: /name="model"\r\n\r\n([^\r]+)/.exec(raw)?.[1], lang: /name="language"\r\n\r\n([^\r]+)/.exec(raw)?.[1], file: /filename="([^"]+)"/.exec(raw)?.[1] });
+      res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ text: '음 그러니까 주말마다 동네 러닝 모임을 만들면 좋겠어. 다음 주 토요일 아침 7시에 첫 모임' }));
+    }); return;
+  }
   if (req.url === '/v1/audio/speech') {
     let b = ''; req.on('data', c => { b += c; }); req.on('end', () => {
       const j = JSON.parse(b); ttsCalls.push({ headers: req.headers, body: j });
@@ -108,6 +114,8 @@ const fake = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       if (JSON.parse(b).response_format?.json_schema?.name === 'goal_todos') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ goals: [{ index: 0, guide: '주간 거리를 천천히 늘리세요.', tips: ['무리하지 않기', ''],
         milestones: [{ name: '5km 완주', date: '2026-11-15' }, { name: '범위 밖', date: '2030-01-01' }], todos: [{ name: '러닝화 사기', start: '2026-10-08', end: '2026-10-10', how: '매장에서 신어 보기' }, { name: '주 3회 3km', start: '2026-10-01', end: '2026-12-31', how: '' }] }] }) } }] }));
+      if (JSON.parse(b).response_format?.json_schema?.name === 'idea_card') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ title: '주말 동네 러닝 모임', summary: '주말마다 함께 달리면 꾸준해진다.', area: 'P', cat: '건강 관리', tags: ['#러닝', '모임'],
+        actions: [{ type: 'event', title: '첫 러닝 모임', date: '2026-10-17', time: '07:00', cycle: '', goal: '', detail: '' }, { type: 'todo', title: '모임 공지 올리기', date: 'bad', time: '25:00', cycle: 'X', goal: 'no-such-goal', detail: '' }, { type: 'zzz', title: '', date: '', time: '', cycle: '', goal: '', detail: '' }] }) } }] }));
       if (JSON.parse(b).response_format?.json_schema?.name === 'asset_keywords') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ keywords: ['office desk', 'meeting room'], mood: '긴장' }) } }] }));
       res.end(JSON.stringify({ id: 'chatcmpl-test', object: 'chat.completion', model: 'gpt-5-mini', choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', refusal: null,
         content: JSON.stringify({ candidates: [{ title: '회사에서 생긴 반전', script: '여러분 이거 실화입니다. 어떻게 생각하세요?', hashtags: ['#회사', '썰'] }, { title: '두 번째 후보', script: '스크립트 둘', hashtags: [] }] }) } }] }));
@@ -384,6 +392,24 @@ try {
     check('목표 없으면 400 · 로그인 안 하면 401', (await call('POST', '/api/goals/todos', { start: '2026-10-06', end: '2026-12-05', goals: [] }, T)).status === 400 && (await call('POST', '/api/goals/todos', { start: '2026-10-06', end: '2026-12-05', goals: [{ name: 'x' }] })).status === 401);
   }
 
+  console.log('아이디어 뱅크 (녹음 받아쓰기 · AI 정리)');
+  {
+    const voice = async (buf, type, token = T) => { const r = await fetch(BASE + '/api/ideas/voice', { method: 'POST', headers: { 'Content-Type': type, Origin: ORIGIN, ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: buf }); return { status: r.status, json: await r.json().catch(() => ({})) }; };
+    const v = await voice(Buffer.alloc(4000, 7), 'audio/webm');
+    check('녹음 → 받아쓰기 (OpenAI, 한국어, 모델)', v.status === 200 && v.json.text.includes('러닝 모임') && sttCalls.at(-1)?.lang === 'ko' && sttCalls.at(-1)?.model === 'gpt-4o-mini-transcribe' && sttCalls.at(-1)?.file === 'idea.webm', JSON.stringify({ v, s: sttCalls.at(-1) }));
+    check('아이폰 녹음(mp4) 도 받음 · 너무 짧으면 400 · 형식 아니면 415 · 로그인 안 하면 401', (await voice(Buffer.alloc(4000, 1), 'audio/mp4')).status === 200 && (await voice(Buffer.alloc(100), 'audio/webm')).status === 400
+      && (await voice(Buffer.alloc(4000), 'text/plain')).status === 415 && (await voice(Buffer.alloc(4000), 'audio/webm', null)).status === 401);
+    const st = await call('POST', '/api/ideas/structure', { text: v.json.text, today: '2026-10-12', areas: [{ a: 'P', n: '개인', cats: ['건강 관리', '여가 관리'] }], goals: [{ id: 'g1', name: '체력 키우기', a: 'P', cat: '건강 관리', end: '2026-12-31' }] }, T);
+    const req2 = aiCalls.at(-1)?.body;
+    check('AI 정리: 제목 · 요약 · 카테고리 · 태그(# 뺌)', st.status === 200 && st.json.title === '주말 동네 러닝 모임' && st.json.cat === '건강 관리' && JSON.stringify(st.json.tags) === '["러닝","모임"]', JSON.stringify(st.json));
+    check('AI 정리: 행동 검사 (잘못된 날짜 · 시각 · 주기 · 없는 목표 · 빈 제목 뺌)', st.json.actions?.length === 2 && st.json.actions[0].date === '2026-10-17' && st.json.actions[0].time === '07:00'
+      && st.json.actions[1].date === '' && st.json.actions[1].time === '' && st.json.actions[1].cycle === '' && st.json.actions[1].goal === '', JSON.stringify(st.json.actions));
+    check('AI 에게 오늘 · 카테고리 · 목표 전달', req2?.response_format.json_schema.name === 'idea_card' && req2.messages[1].content.includes('2026-10-12 (월요일)') && req2.messages[1].content.includes('g1 · 체력 키우기') && req2.messages[1].content.includes('건강 관리, 여가 관리'));
+    check('너무 짧은 글 400', (await call('POST', '/api/ideas/structure', { text: '음' }, T)).status === 400);
+    const cf = await call('GET', '/api/ideas/config', null, T);
+    check('설정: 받아쓰기 · AI 준비', cf.json.stt === true && cf.json.ai === true);
+  }
+
   console.log('웹 푸시');
   {
     const pushLog = () => (fs.existsSync(PUSH_LOG) ? fs.readFileSync(PUSH_LOG, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : []);
@@ -404,7 +430,8 @@ try {
     const data = { ...cur.data, notify: { enabled: true, eventMinutes: 10, goals: 'day' }, events: [...(cur.data.events || []), { id: 'push-ev', date: day, time: hm, title: '푸시 시험 회의', area: 'P' }],
       goals: { v: 2, boards: { 'P|목표 관리': { items: [{ id: 'push-goal', parent: null, name: '푸시 시험 목표', start: day, end: new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10) }], miles: [] } } } };
     const up = await call('PUT', '/api/sync', { baseVersion: cur.version, data, device: '맥북' }, T);
-    await new Promise(r => setTimeout(r, 2200));
+    for (let i = 0; i < 40 && !pushLog().some(x => x.tag === 'event:push-ev'); i++) await new Promise(r => setTimeout(r, 200));   // 1분 확인(시험은 0.7초) 기다리기
+    await new Promise(r => setTimeout(r, 800));
     const got = pushLog().filter(x => x.title !== 'Jcalender 시험 알림');
     const nowH = new Date(Date.now() + 9 * 3600e3).getUTCHours();
     check('일정 알림 푸시 (서버가 1분마다 계산)', up.status === 200 && got.some(x => x.title === '푸시 시험 회의' && x.tag === 'event:push-ev'), JSON.stringify(got));
