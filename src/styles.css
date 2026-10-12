@@ -1509,6 +1509,8 @@ body.report-open { overflow: hidden; }
 .auth-form input { font-size: 15px; padding: 9px 10px; }
 .auth-form .btn.primary { padding: 10px; font-size: 15px; margin-top: 2px; }
 .auth-form .sh-msg { margin: 0; }
+.auth-form label.auth-save { flex-direction: row; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; align-self: flex-start; }
+.auth-form .auth-save input { width: 16px; height: 16px; padding: 0; margin: 0; }
 .auth-note { margin: 0; font-size: 12px; color: var(--ink3); line-height: 1.5; }
 .auth-server { font-size: 12px; color: var(--ink3); }
 .auth-server summary { cursor: pointer; }
