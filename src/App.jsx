@@ -560,7 +560,13 @@ function Calendar({ sel, setSel }) {
         });
       } else if (id) events = events.map(x => (x.id === id ? { ...x, ...ev } : x));
       else events = [...events, { id: uid(), ...ev }];
-      return { ...s, events, eventNotes: fromNote ? (s.eventNotes || []).filter(n => n.id !== fromNote) : s.eventNotes };
+      // 루틴 일정(반복 전체)을 고치면 체크리스트의 그 루틴도 함께: 이름 · 시작 시각 · 5분 전 알림
+      const src = (sid && scope !== 'one') || (id && !sid) ? (s.events || []).find(x => x.id === (sid || id)) : null;
+      let checklist = s.checklist;
+      if (src?.routineId && checklist?.custom?.some(r => r.id === src.routineId)) {
+        checklist = { ...checklist, custom: checklist.custom.map(r => (r.id === src.routineId ? { ...r, action: ev.title || r.action, ...(ev.time ? { time: ev.time, alarm: String(ev.remind) === '5' } : { time: undefined, alarm: false }) } : r)) };
+      }
+      return { ...s, events, checklist, eventNotes: fromNote ? (s.eventNotes || []).filter(n => n.id !== fromNote) : s.eventNotes };
     });
     pick(ev.date);
     setAdding(null); setMoved(null);
@@ -836,7 +842,7 @@ function EventDialog({ init, onSave, onClose, onDelete, onToNote }) {
         <div className="row2">
           <ProjectSelect value={f.projectId} onChange={v => setF({ ...f, projectId: v })} />
           <label>알림<select value={f.remind} onChange={e => setF({ ...f, remind: e.target.value })} disabled={!f.time}>
-            <option value="">기본 (설정값)</option><option value="off">알림 없음</option><option value="0">정각</option><option value="10">10분 전</option><option value="30">30분 전</option><option value="60">1시간 전</option><option value="1440">하루 전</option></select></label>
+            <option value="">기본 (설정값)</option><option value="off">알림 없음</option><option value="0">정각</option><option value="5">5분 전</option><option value="10">10분 전</option><option value="30">30분 전</option><option value="60">1시간 전</option><option value="1440">하루 전</option></select></label>
         </div>
         <TagPicker value={f.tagIds} onChange={v => setF({ ...f, tagIds: v })} />
         {edit ? <AttachList owner={{ type: 'event', id: init.sid || init.id }} /> : <p className="note">첨부는 저장한 뒤 이 일정을 다시 열어 추가할 수 있습니다.</p>}

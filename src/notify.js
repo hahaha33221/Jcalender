@@ -15,16 +15,18 @@ export function dueNotifications(store, now = new Date()) {
   const N = store.notify || {};
   const sent = new Set((store.notifications || []).map(n => n.key));
   const out = dueJournal(store, now, sent);                 // 저널링 알림은 저널링 화면에서 따로 켠다 (reminders.js)
-  if (!N.enabled) return out;
+  // 루틴에 직접 켠 알림(예: 시작 5분 전)은 "알림 켜기"를 꺼 두어도 울린다
+  const own = e => e.routine && e.remind !== '' && e.remind != null && e.remind !== 'off';
   const t0 = iso(now), t1 = iso(new Date(now.getTime() + 2 * 864e5));
   for (const e of expandEvents(store.events || [], t0, t1)) {
-    if (!e.time) continue;
+    if (!e.time || (!N.enabled && !own(e))) continue;
     const r = e.remind === 'off' ? null : Number(e.remind === '' || e.remind == null ? N.eventMinutes ?? 10 : e.remind);
     if (r == null || Number.isNaN(r)) continue;
     const when = new Date(at(e.date, e.time).getTime() - r * 60000);
     const key = `event:${e.id}`;
     if (when <= now && now - when < 2 * 3600e3 && !sent.has(key)) out.push({ key, title: e.title, body: `${Number(e.date.slice(5, 7))}/${Number(e.date.slice(8, 10))} ${e.time}${r ? ` · ${r >= 1440 ? '하루' : `${r}분`} 전` : ''}`, when });
   }
+  if (!N.enabled) return out;
   const pd = Number(N.planDays ?? 1);
   if (pd >= 0) for (const p of store.plan?.plans || []) {
     if (!p.due || p.status === '확정' || p.status === '보류') continue;

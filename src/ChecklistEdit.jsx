@@ -6,7 +6,7 @@ import { areaVar, useCtx } from './shared.jsx';
    - 직접 만든 항목: 추가 · 고치기 · 삭제
    - 기본 항목(앱에 들어 있는 항목): 고치기(원래대로 되돌리기 가능) · 빼기(다시 넣기 가능) · 모두 쓰지 않기
    - 새 계정은 기본 항목 없이 빈 체크리스트로 시작하고, 원하면 "기본 항목 불러오기"
-   - 루틴(목표 온보딩으로 만든 항목)은 캘린더 반복 일정과 연결(events[].routineId): 지우면 일정도 지우고, 이름 · 주기를 고치면 일정도 함께 바뀜 */
+   - 루틴(목표 온보딩으로 만든 항목)은 캘린더 반복 일정과 연결(events[].routineId): 지우면 일정도 지우고, 이름 · 주기 · 시작 시각 · 5분 전 알림을 고치면 일정도 함께 바뀜 */
 const uid = () => `u${Math.random().toString(36).slice(2, 10)}`;
 
 export default function ChecklistEdit({ onDone, onRecommend }) {
@@ -35,14 +35,18 @@ export default function ChecklistEdit({ onDone, onRecommend }) {
   };
   const linked = id => (store.events || []).filter(e => e.routineId === id);
   /** 루틴 항목을 고치면 연결된 캘린더 반복 일정도: 할 일 이름 → 일정 제목, 주기 → 반복(매일 · 평일 · 요일 · 매주 · 매월, 분기 · 연간 · 수시는 캘린더 반복이 없어 그대로) */
+  const toMin = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + m; };
+  const fromMin = n => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
   const syncEvents = (id, p) => ev => (ev.routineId !== id ? ev : {
     ...ev, ...(p.action != null ? { title: p.action } : {}),
+    ...(p.time != null ? { time: p.time, end: p.time && ev.time && ev.end ? fromMin(Math.min(toMin(p.time) + toMin(ev.end) - toMin(ev.time), 23 * 60 + 59)) : '', ...(p.time ? {} : { remind: '' }) } : {}),   // 걸리는 시간은 그대로
+    ...(p.alarm != null ? { remind: p.alarm ? '5' : '' } : {}),
     ...(['D', 'W', 'M'].includes(p.c) ? { repeat: { ...(ev.repeat || { until: '', skip: [] }), freq: p.c, days: p.c === 'D' ? p.days : undefined } } : {}),
   });
   const patch = (row, p) => setStore(s => {
     const c = s.checklist || {};
     if (!row.custom) return { ...s, checklist: { ...c, edits: { ...(c.edits || {}), [row.id]: { ...((c.edits || {})[row.id] || {}), ...p } } } };
-    const ev = p.action != null || p.c ? (s.events || []).map(syncEvents(row.id, p)) : s.events;
+    const ev = p.action != null || p.c || p.time != null || p.alarm != null ? (s.events || []).map(syncEvents(row.id, p)) : s.events;
     return { ...s, checklist: { ...c, custom: (c.custom || []).map(r => (r.id === row.id ? { ...r, ...p } : r)) }, events: ev };
   });
   const revert = row => set(c => { const ed = { ...(c.edits || {}) }; delete ed[row.id]; return { ...c, edits: ed }; });
@@ -100,6 +104,10 @@ export default function ChecklistEdit({ onDone, onRecommend }) {
                 <input className="cle-act" value={r.action} onChange={e => patch(r, { action: e.target.value })} aria-label="할 일" />
                 <input className="cle-item" value={r.item} onChange={e => patch(r, { item: e.target.value })} aria-label="묶음" title="묶음" />
                 <select className="cle-cyc" value={cycOf(r)} onChange={e => patch(r, parseCyc(e.target.value))} aria-label="주기">{CYC_OPTS(r).map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
+                {r.custom ? <span className="cle-tm">
+                  <input type="time" value={r.time || ''} onChange={e => patch(r, { time: e.target.value, ...(e.target.value ? {} : { alarm: false }) })} aria-label="시작 시각" title="시작 시각 (캘린더 일정도 함께 바뀜)" />
+                  <label title="시작 5분 전 알림 (캘린더 일정 · 푸시)"><input type="checkbox" checked={!!r.time && !!r.alarm} disabled={!r.time} onChange={e => patch(r, { alarm: e.target.checked })} />5분 전</label>
+                </span> : <span />}
                 <input className="cle-det" value={r.detail} onChange={e => patch(r, { detail: e.target.value })} aria-label="설명" placeholder="설명" />
                 <span className="cle-tag">{r.custom ? <span className={`tag mine ${linked(r.id).length ? 'cle-cal' : ''}`} title={linked(r.id).length ? '캘린더 반복 일정과 연결된 루틴 — 지우면 일정도 함께 지워지고, 이름 · 주기를 고치면 일정도 바뀝니다' : undefined}>{linked(r.id).length ? '루틴 · 캘린더' : '내 항목'}</span> : edits[r.id] ? <button type="button" className="linkish" onClick={() => revert(r)} title="기본 내용으로 되돌리기">원래대로</button> : <span className="tag">기본</span>}</span>
                 <button type="button" className={`tl-del cle-del ${arm === r.id ? 'arm' : ''}`} onClick={() => remove(r)}>{arm === r.id ? (r.custom ? (linked(r.id).length ? '일정도 삭제?' : '정말 삭제?') : '정말 빼기?') : r.custom ? '삭제' : '빼기'}</button>
