@@ -30,6 +30,7 @@ import { sourcesOn } from './calendarSources.js';
 import { dueNotifications, playChime, recordSent, showOsNotification } from './notify.js';
 import { pushOnHere } from './push.js';
 import IdeaBank, { IdeaFab } from './IdeaBank.jsx';
+import AlarmManager from './AlarmManager.jsx';
 import DataSettings, { AccountPanel } from './DataSettings.jsx';
 import { AttachList, ProjectSelect, TagChips, TagPicker } from './common.jsx';
 import { DdayStrip } from './categories/DdayPanel.jsx';
@@ -52,7 +53,7 @@ const seedEvents = () => {
 };
 /** 관리자 계정: 회원 관리 · 진행 현황은 이 계정으로 로그인했을 때만 보인다 (서버 OWNER_EMAILS 와 같게) */
 export const ADMIN_EMAILS = ['koreamate2026@gmail.com'];
-const PAGES = ['home', 'members', 'check', 'ideas', 'P', 'B', 'W', 'progress', 'settings'];
+const PAGES = ['home', 'members', 'check', 'ideas', 'P', 'B', 'W', 'progress', 'alarms', 'settings'];
 const readHash = () => {
   let [p, c] = window.location.hash.replace(/^#\/?/, '').split('/');
   try { p = decodeURIComponent(p || ''); c = c ? decodeURIComponent(c) : null; } catch (e) { p = ''; c = null; }
@@ -256,6 +257,7 @@ export default function App() {
     { sec: '상세 내용' },
     ...['P', 'W', 'B'].filter(a => areasAllowed.includes(a) && (!screenOnly || CATS.some(c => c.a === a))).map(a => ({ id: a, label: AREAS[a].n, color: areaVar(a) })),
     { sec: '관리' },
+    { id: 'alarms', label: '알람 관리', icon: 'bell' },
     { id: 'settings', label: '설정', icon: 'settings' },
   ];
 
@@ -296,6 +298,7 @@ export default function App() {
           {page === 'progress' && (isAdmin ? <Progress /> : <div className="empty">진행 현황은 관리자 계정에서만 볼 수 있습니다. <button className="btn sm" onClick={() => go('home')}>대시보드로</button></div>)}
           {page === 'settings' && <Settings />}
           {page === 'ideas' && <IdeaBank />}
+          {page === 'alarms' && <AlarmManager />}
         </main>
         {page !== 'ideas' && <IdeaFab />}
         {panel && <Drawer key={`${panel.row.id}-${panel.kind}`} panel={panel} onClose={() => setPanel(null)} />}
@@ -1131,6 +1134,7 @@ const NAV_ICONS = {
   progress: 'M4 16V11M8.5 16V7M13 16V9.5M17 16V4',
   users: 'M7.5 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2.5 17c0-2.8 2.2-5 5-5s5 2.2 5 5M13.5 9.2a2.6 2.6 0 1 0-.6-5.1M14.5 12.2c1.8.5 3 2.2 3 4.8',
   check: 'M4 5.5l1.5 1.5L8 4.5M4 11l1.5 1.5L8 10M4 16.5l1.5 1.5L8 15.5M10.5 6h6M10.5 11.5h6M10.5 17h6',
+  bell: 'M10 3a4.5 4.5 0 0 0-4.5 4.5v3L4 13h12l-1.5-2.5v-3A4.5 4.5 0 0 0 10 3zM8.3 15.5a1.8 1.8 0 0 0 3.4 0',
   idea: 'M10 2.5a5 5 0 0 0-3 9c.6.5 1 1.2 1 2V14h4v-.5c0-.8.4-1.5 1-2a5 5 0 0 0-3-9zM8 16.5h4M8.8 18.5h2.4',
   settings: 'M10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4',
 };

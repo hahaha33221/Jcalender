@@ -16,7 +16,7 @@ export default function DataSettings({ hideBackup = false }) {   // hideBackup: 
   return (
     <>
       {!hideBackup && <Backup />}
-      <Notify />
+      <AlarmLink />
       <Categories />
       <Projects />
       <Tags />
@@ -132,8 +132,19 @@ function Backup() {
   );
 }
 
-/* ── 알림 ── */
-function Notify() {
+/** 설정 › 알림: 알람 관리 화면으로 */
+function AlarmLink() {
+  const { go } = useCtx();
+  return (
+    <section className="panel ds">
+      <div className="csum-h"><h2>알림</h2><span className="muted">알림 켜기 · 푸시 · 알림음 · 알람 목록은 알람 관리에서</span>
+        <button className="btn sm primary grow-r" onClick={() => go('alarms')}>알람 관리로</button></div>
+    </section>
+  );
+}
+
+/* ── 알림 (알람 관리 화면 맨 아래에 들어감) ── */
+export function Notify() {
   const { store, setStore } = useCtx();
   const N = { enabled: false, eventMinutes: 10, planDays: 1, goals: 'all', ...(store.notify || {}) };
   const set = p => setStore(s => ({ ...s, notify: { ...N, ...(s.notify || {}), ...p } }));

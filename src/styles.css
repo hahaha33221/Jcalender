@@ -2340,3 +2340,36 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .cle-tm label { display: inline-flex; gap: 3px; align-items: center; font-size: 12px; color: var(--ink2); cursor: pointer; }
 .cle-tm label input { width: 14px; height: 14px; margin: 0; padding: 0; }
 .rw-alarm.off { opacity: .55; }
+
+/* 알람 관리 (AlarmManager.jsx) */
+.am-day h3 { font-size: 13px; color: var(--ink2); margin: 10px 0 4px; }
+.am-up { list-style: none; margin: 0; padding: 0; }
+.am-up li { display: flex; gap: 10px; align-items: center; padding: 6px 4px; border-bottom: 1px solid var(--line2); }
+.am-up li.al .am-t { color: var(--a1); }
+.am-t { font-variant-numeric: tabular-nums; min-width: 46px; }
+.am-n { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.am-up .am-n { flex-direction: row; flex-wrap: wrap; gap: 0 4px; }
+.am-k { flex: 0 0 auto; }
+.am-k.routine { background: var(--oksoft); color: var(--ok); }
+.am-k.alarm { background: #fff1d6; color: #a15c00; }
+.am-k.goal, .am-k.plan { background: var(--oversoft); color: var(--over); }
+.am-k.journal { background: var(--apisoft); color: var(--a3); }
+.am-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.am-add > input:not([type]) { flex: 1 1 200px; }
+.am-add > * { width: auto; }
+.am-wd { display: inline-flex; gap: 4px; }
+.am-wd button { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); cursor: pointer; font-weight: 600; color: var(--ink); }
+.am-wd button.on { background: var(--a1); border-color: var(--a1); color: #fff; }
+.am-list { display: flex; flex-direction: column; }
+.am-row { display: grid; grid-template-columns: 28px auto minmax(0, 1fr) 120px 170px 120px; gap: 8px; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--line2); }
+.am-row.off { opacity: .55; }
+.am-row input, .am-row select { width: auto; }
+.am-sw input { width: 18px; height: 18px; margin: 0; accent-color: var(--a1); }
+.am-act { text-align: right; }
+@media (max-width: 700px) {
+  .am-row { grid-template-columns: 28px auto minmax(0, 1fr); }
+  .am-row > input[type=time] { grid-column: 2 / 3; }
+  .am-row > select { grid-column: 3 / 4; }
+  .am-row .am-act { grid-column: 1 / -1; }
+}
+.am-row .am-k { justify-self: start; }
