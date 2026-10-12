@@ -2322,3 +2322,13 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
   .ib-fab { right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
 }
 .modal .ib-dl { flex-direction: row; }
+
+/* 아이디어 뱅크 › 회의록 */
+.ib-mbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ib-min { font-size: 14px; line-height: 1.6; }
+.ib-min h4 { margin: 10px 0 4px; font-size: 14px; color: var(--ink); }
+.ib-min p { margin: 0; }
+.ib-min ol, .ib-min ul { margin: 2px 0; padding-left: 22px; }
+.ib-ag { margin: 4px 0 6px; }
+.ib-ag b { font-weight: 600; }
+.ib-acts.in-min .ib-ah b { font-size: 14px; }
