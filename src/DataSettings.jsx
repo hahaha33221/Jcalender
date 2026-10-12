@@ -1,10 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AREAS } from './data.js';
 import { useCtx } from './shared.jsx';
 import { download } from './xlsx.js';
 import { TRASH_TYPES, exportJson, importJson, mergeSecrets, restoreTrash, splitSecrets } from './schema.js';
 import { TAG_COLORS } from './common.jsx';
 import { AuthForm } from './Welcome.jsx';
+import { currentSub, disablePush, enablePush, isIos, isStandalone, pushSupported } from './push.js';
 
 /* 설정 › 데이터 관리 (schema.js v2 의 새 테이블 화면)
    백업(내보내기·가져오기) · 카테고리(표시·목표 보드·순서) · 프로젝트 · 태그 · 휴지통 · 알림 */
@@ -133,7 +134,7 @@ function Backup() {
 /* ── 알림 ── */
 function Notify() {
   const { store, setStore } = useCtx();
-  const N = { enabled: false, eventMinutes: 10, planDays: 1, ...(store.notify || {}) };
+  const N = { enabled: false, eventMinutes: 10, planDays: 1, goals: 'all', ...(store.notify || {}) };
   const set = p => setStore(s => ({ ...s, notify: { ...N, ...(s.notify || {}), ...p } }));
   const perm = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
   const turnOn = async on => {
@@ -143,18 +144,65 @@ function Notify() {
   const sent = (store.notifications || []).slice(0, 5);
   return (
     <section className="panel ds">
-      <div className="csum-h"><h2>알림</h2><span className="muted">앱이 열려 있을 때 일정·기획 마감을 알려 줍니다</span></div>
+      <div className="csum-h"><h2>알림</h2><span className="muted">일정 · 루틴 · 목표 마감 · 기획 마감 · 저널링 — 푸시를 켜면 앱이 꺼져 있어도 옵니다</span></div>
       <div className="ds-row">
         <label className="ds-chk"><input type="checkbox" checked={N.enabled} onChange={e => turnOn(e.target.checked)} />알림 켜기</label>
         <label>일정<select value={N.eventMinutes} onChange={e => set({ eventMinutes: Number(e.target.value) })} disabled={!N.enabled}>
           {[[0, '정각'], [10, '10분 전'], [30, '30분 전'], [60, '1시간 전'], [1440, '하루 전']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
         <label>기획 마감<select value={N.planDays} onChange={e => set({ planDays: Number(e.target.value) })} disabled={!N.enabled}>
           {[[-1, '알리지 않음'], [0, '당일 오전 9시'], [1, '하루 전 오전 9시'], [3, '3일 전 오전 9시']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+        <label>목표 마감<select value={N.goals} onChange={e => set({ goals: e.target.value })} disabled={!N.enabled}>
+          {[['all', 'D-7 · D-1 · 당일 오전 9시'], ['day', '당일 오전 9시'], ['off', '알리지 않음']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
         <span className="muted">{perm === 'granted' ? '브라우저 알림 허용됨' : perm === 'denied' ? '브라우저 알림이 막혀 있어 화면 안 알림만 뜹니다' : perm === 'unsupported' ? '이 브라우저는 알림을 지원하지 않아 화면 안 알림만 뜹니다' : '켜면 브라우저 알림 허용을 묻습니다'}</span>
       </div>
+      <PushPanel enabled={N.enabled} />
       {sent.length > 0 && <ul className="ds-list">{sent.map(n => <li key={n.id}><span className="muted">{n.at}</span> <b>{n.title}</b> {n.body}</li>)}</ul>}
-      <p className="note">일정마다 알림 시간을 따로 정하려면 캘린더에서 일정을 눌러 "알림"을 고르세요.</p>
+      <p className="note">일정마다 알림 시간을 따로 정하려면 캘린더에서 일정을 눌러 "알림"을 고르세요. 푸시는 서버가 1분마다 확인해 보냅니다 (바꾼 내용이 서버에 저장된 뒤부터 반영).</p>
     </section>
+  );
+}
+
+/** 웹 푸시: 이 기기에서 받기 · 시험 · 끄기, 등록된 기기 목록 (src/push.js, server/push.mjs) */
+function PushPanel({ enabled }) {
+  const { sync } = useCtx();
+  const [st, setSt] = useState({ here: null, devices: [], ready: null, busy: '', msg: '', bad: false });
+  const load = async () => {
+    const sub = await currentSub();
+    let d = { ready: null, devices: [] };
+    try { d = await sync.request('/api/push/devices'); } catch (e) { if (e.status === 404) d = { ready: false, devices: [], old: true }; }
+    setSt(v => ({ ...v, here: sub?.endpoint || '', devices: d.devices || [], ready: d.ready, old: d.old }));
+  };
+  useEffect(() => { if (sync.connected) load(); }, [sync.connected]);
+  const run = async (what, f, ok) => {
+    setSt(v => ({ ...v, busy: what, msg: '', bad: false }));
+    try { const r = await f(); setSt(v => ({ ...v, busy: '', msg: typeof ok === 'function' ? ok(r) : ok, bad: false })); await load(); }
+    catch (e) { setSt(v => ({ ...v, busy: '', msg: e.message, bad: true })); }
+  };
+  const here = st.here && st.devices.some(d => d.endpoint === st.here);
+  const iosNeedsInstall = isIos() && !isStandalone();
+  return (
+    <div className="push-box">
+      <div className="ds-row">
+        <b>푸시 알림 (앱이 꺼져 있어도)</b>
+        <span className={`tag ${here ? 'sh-ok' : ''}`}>{here ? '이 기기에서 받는 중' : '이 기기는 꺼짐'}</span>
+        <span className="muted">등록된 기기 {st.devices.length}대</span>
+      </div>
+      {!enabled && <p className="note">위의 "알림 켜기"를 켜야 일정 · 목표 마감 · 기획 마감 푸시가 갑니다 (저널링 알림은 저널링 화면에서 따로 켭니다).</p>}
+      {st.old && <p className="banner">서버를 업데이트해야 푸시를 쓸 수 있습니다 (VPS 에서 update.sh).</p>}
+      {iosNeedsInstall ? <p className="note push-ios">아이폰 · 아이패드는 사파리에서 <b>공유 버튼 → "홈 화면에 추가"</b>로 Jcalender 를 설치한 뒤, 홈 화면의 Jcalender 앱을 열어 여기서 켜 주세요 (iOS 16.4 이상).</p>
+        : !pushSupported() ? <p className="note">이 브라우저는 푸시 알림을 지원하지 않습니다. 크롬 · 엣지 · 사파리(맥) · 안드로이드 크롬에서 켜 주세요.</p>
+        : <div className="ds-row">
+          {!here ? <button className="btn primary" disabled={!!st.busy || st.ready === false} onClick={() => run('on', () => enablePush(sync.request), '이 기기에서 푸시를 받습니다. "시험 알림 보내기"로 확인해 보세요')}>{st.busy === 'on' ? '켜는 중…' : '이 기기에서 푸시 받기'}</button>
+            : <button className="btn" disabled={!!st.busy} onClick={() => run('off', () => disablePush(sync.request), '이 기기의 푸시를 껐습니다')}>이 기기 푸시 끄기</button>}
+          <button className="btn" disabled={!!st.busy || !st.devices.length} onClick={() => run('test', () => sync.request('/api/push/test', { method: 'POST', body: {} }), r => `시험 알림을 보냈습니다 (${r.sent}/${r.total}대) — 몇 초 안에 오지 않으면 기기의 알림 설정을 확인해 주세요`)}>{st.busy === 'test' ? '보내는 중…' : '시험 알림 보내기'}</button>
+          {st.ready === false && !st.old && <span className="muted">서버에 푸시 키가 없습니다 (VPS 에서 update.sh)</span>}
+        </div>}
+      {st.msg && <p className={st.bad ? 'banner' : 'banner ok'} role="status">{st.msg}</p>}
+      {st.devices.length > 0 && <ul className="ds-list push-devs">{st.devices.map(d => (
+        <li key={d.endpoint}><b>{d.device || '기기'}</b>{d.endpoint === st.here && <span className="tag sh-ok">이 기기</span>}
+          <span className="muted">등록 {sync.fmt ? sync.fmt(d.createdAt) : d.createdAt?.slice(0, 10)}{d.lastOk ? ` · 마지막 전송 ${sync.fmt ? sync.fmt(d.lastOk) : d.lastOk.slice(0, 10)}` : ''}</span>
+          <button className="tl-del" disabled={!!st.busy} onClick={() => run('del', () => sync.request('/api/push/unsubscribe', { method: 'POST', body: { endpoint: d.endpoint } }), '기기를 뺐습니다')}>빼기</button></li>))}</ul>}
+    </div>
   );
 }
 

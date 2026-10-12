@@ -33,8 +33,9 @@ import { renderRoutes, rendersOf, startRenderWorker } from './shortsRender.mjs';
 import { socialRoutes, socialOf, startSocialWorker } from './shortsSocial.mjs';
 import { demoRoutes } from './shortsDemo.mjs';
 import { goalAiRoutes } from './goalAi.mjs';
+import { pushModule } from './push.mjs';
 
-const VERSION = '1.11.0';
+const VERSION = '1.12.0';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
 const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐
@@ -317,6 +318,8 @@ Object.assign(routes, assets.json);
 const shortsBase = routes['GET /api/shorts'];
 Object.assign(routes, renderRoutes({ pool, adminUser: shortsUser, HttpError }));
 Object.assign(routes, goalAiRoutes({ authUser, HttpError }));   // 목표 관리 › 상세 To do 추천 (AI)
+const push = pushModule({ pool, authUser, HttpError, owner: config.ownerEmails[0] });   // 웹 푸시 (1분마다 보낼 알림 확인)
+Object.assign(routes, push.routes);
 Object.assign(routes, demoRoutes({ pool, tx, adminUser: shortsUser, HttpError }));   // 예시 채우기
 const social = socialRoutes({ pool, adminUser: shortsUser, HttpError, originOk });
 Object.assign(routes, social.json);
@@ -346,6 +349,7 @@ const server = http.createServer(async (req, res) => {
 if (process.env.SHORTS_CRON !== '0') startShortsCron(pool);   // 게시판 자동 수집 (5분마다 확인)
 startRenderWorker(pool).catch(e => console.error('[숏폼 영상 대기열]', e));   // 영상 만들기 (한 번에 1개)
 startSocialWorker(pool).catch(e => console.error('[숏폼 업로드 대기열]', e));   // 유튜브 · 인스타그램 올리기 · 성과 가져오기
+push.start();
 server.listen(config.port, config.host, () => console.log(`Jcalender API ${VERSION} — http://${config.host}:${config.port} (허용 화면: ${config.origins.join(', ')})`));
 const stop = () => server.close(() => pool.end().then(() => process.exit(0)));
 process.on('SIGTERM', stop);

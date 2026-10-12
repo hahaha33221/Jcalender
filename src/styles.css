@@ -2257,3 +2257,10 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .go-info li { margin: 2px 0; }
 .gc-tname { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .gc-tname small { font-size: 11.5px; }
+
+/* 설정 › 알림 › 푸시 */
+.push-box { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 10px 0; display: flex; flex-direction: column; gap: 8px; }
+.push-box .ds-row { margin: 0; }
+.push-ios { background: var(--apisoft); border-radius: 8px; padding: 8px 10px; }
+.push-devs li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.push-devs li .tl-del { margin-left: auto; }

@@ -166,7 +166,11 @@ export function useServerSync(store, setStore, blank) {
       const ok = await push();
       if (!ok) { say('서버에 아직 저장하지 못한 변경이 있습니다. 인터넷 연결을 확인하거나, 변경을 버리고 로그아웃하세요', true); return false; }
     }
-    if (c.token) await api(API_BASE, '/api/logout', { method: 'POST', token: c.token }).catch(() => {});
+    if (c.token) {
+      let ep = null; try { ep = localStorage.getItem('jcalender.push'); localStorage.removeItem('jcalender.push'); } catch { /* 무시 */ }
+      if (ep) await api(API_BASE, '/api/push/unsubscribe', { method: 'POST', token: c.token, body: { endpoint: ep } }).catch(() => {});   // 로그아웃한 기기로는 푸시를 보내지 않음
+      await api(API_BASE, '/api/logout', { method: 'POST', token: c.token }).catch(() => {});
+    }
     clearTimeout(timer.current);
     try { APP_KEYS.forEach(k => localStorage.removeItem(k)); } catch { /* 무시 */ }
     writeConf({ owner: '-' });

@@ -28,6 +28,7 @@ import { useServerSync } from './serverSync.js';
 import Welcome from './Welcome.jsx';
 import { sourcesOn } from './calendarSources.js';
 import { dueNotifications, recordSent, showOsNotification } from './notify.js';
+import { pushOnHere } from './push.js';
 import DataSettings, { AccountPanel } from './DataSettings.jsx';
 import { AttachList, ProjectSelect, TagChips, TagPicker } from './common.jsx';
 import { DdayStrip } from './categories/DdayPanel.jsx';
@@ -145,7 +146,7 @@ export default function App() {
     const tick = () => {
       const due = dueNotifications(storeRef.current);
       if (!due.length) return;
-      due.forEach(n => { showOsNotification(n); pushToast(n.title, n.body); });
+      due.forEach(n => { if (!pushOnHere()) showOsNotification(n); pushToast(n.title, n.body); });   // 이 기기가 푸시를 받으면 OS 알림은 푸시로만 (두 번 방지)
       setStore(s => recordSent(s, due));
     };
     tick();

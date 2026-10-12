@@ -9,4 +9,5 @@ API_HOST=${API_HOST:-jcal-31-97-71-87.sslip.io}
 ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://jcalender-amber.vercel.app,http://localhost:5288}
 cd "$(dirname "$0")/../.."
 echo "VPS($VPS) 로 파일을 보냅니다. root 비밀번호를 물으면 입력하세요."
-COPYFILE_DISABLE=1 tar czf - --exclude=node_modules server db | ssh "$VPS" "mkdir -p /opt/jcalender && tar xzf - -C /opt/jcalender && API_HOST='$API_HOST' ALLOWED_ORIGINS='$ALLOWED_ORIGINS' bash /opt/jcalender/server/deploy/setup.sh"
+# src · package.json: 서버의 웹 푸시가 화면과 같은 알림 규칙(src/notify.js)을 쓴다
+COPYFILE_DISABLE=1 tar czf - --exclude=node_modules server db src package.json | ssh "$VPS" "mkdir -p /opt/jcalender && tar xzf - -C /opt/jcalender && API_HOST='$API_HOST' ALLOWED_ORIGINS='$ALLOWED_ORIGINS' bash /opt/jcalender/server/deploy/setup.sh"

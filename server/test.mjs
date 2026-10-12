@@ -1,6 +1,7 @@
 /* API 서버 점검: 빈 DB 에 서버를 띄우고 로그인 · 동기화 · 충돌 · 화면 주소 제한을 확인한다
    DATABASE_URL=postgres://… [FIXTURE=백업.json] node test.mjs */
 import { spawn } from 'child_process';
+import crypto from 'crypto';
 import fs from 'fs';
 import { pool } from './db.mjs';
 import { hashPassword } from './auth.mjs';
@@ -115,7 +116,8 @@ const fake = http.createServer((req, res) => {
   res.writeHead(404); res.end();
 });
 await new Promise(r => fake.listen(FAKE, '127.0.0.1', r));
-const srv = spawn(process.execPath, ['index.mjs'], { env: { ...process.env, PORT: String(PORT), ALLOWED_ORIGINS: 'https://*.vercel.app', OWNER_EMAILS: OWNER,
+const VAPID = (await import('web-push')).default.generateVAPIDKeys(), PUSH_LOG = path.join(TMP, 'push.log');
+const srv = spawn(process.execPath, ['index.mjs'], { env: { ...process.env, VAPID_PUBLIC_KEY: VAPID.publicKey, VAPID_PRIVATE_KEY: VAPID.privateKey, PUSH_SEND_LOG: PUSH_LOG, PUSH_TICK_MS: '700', PORT: String(PORT), ALLOWED_ORIGINS: 'https://*.vercel.app', OWNER_EMAILS: OWNER,
   SHORTS_ALLOW_PRIVATE: '1', SHORTS_CRON: '0', OPENAI_API_KEY: 'sk-test-key', OPENAI_BASE_URL: `${F}/v1`, ANTHROPIC_API_KEY: '', AI_PROVIDER: '',
   PEXELS_API_KEY: 'test-pexels-key', YOUTUBE_CLIENT_ID: 'test.apps.googleusercontent.com', YOUTUBE_CLIENT_SECRET: 'gsecret', INSTAGRAM_APP_ID: '123456', INSTAGRAM_APP_SECRET: 'igsecret', SOCIAL_TEST_BASE: F, SHORTS_PRESETS: JSON.stringify([{ id: 'pa', name: '시험 추천 A', desc: 'd', fullText: false, urls: [`${F}/nofeed-404`, `${F}/euc.xml`] }, { id: 'pb', name: '시험 추천 B', desc: 'd', urls: [`${F}/nofeed`] }, { id: 'pc', name: '시험 추천 C', desc: 'd', urls: [`${F}/feed.xml`] }]), PUBLIC_URL: BASE, IG_POLL_MS: '200', PEXELS_BASE_URL: `${F}/pexels`, SHORTS_DIR: path.join(TMP, 'store'), SHORTS_MAX_UPLOAD_MB: '1' }, stdio: ['ignore', 'pipe', 'inherit'] });
 await new Promise(r => srv.stdout.once('data', r));
@@ -380,6 +382,39 @@ try {
     check('목표마다 마감 · 목표 정보 전달, 날짜는 그 목표의 마감 안으로', gt2.status === 200 && req2.messages[1].content.includes('마감 2026-11-20') && req2.messages[1].content.includes('목표 정보: 지금 10km 65분')
       && gt2.json.goals[0].todos.every(t => t.end <= '2026-11-20') && gt2.json.goals[0].milestones.every(m => m.date <= '2026-11-20'), JSON.stringify(gt2.json));
     check('목표 없으면 400 · 로그인 안 하면 401', (await call('POST', '/api/goals/todos', { start: '2026-10-06', end: '2026-12-05', goals: [] }, T)).status === 400 && (await call('POST', '/api/goals/todos', { start: '2026-10-06', end: '2026-12-05', goals: [{ name: 'x' }] })).status === 401);
+  }
+
+  console.log('웹 푸시');
+  {
+    const pushLog = () => (fs.existsSync(PUSH_LOG) ? fs.readFileSync(PUSH_LOG, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : []);
+    const b64u = b => Buffer.from(b).toString('base64url');
+    const ecdh = crypto.createECDH('prime256v1'); ecdh.generateKeys();
+    const sub = { endpoint: 'https://push.example.com/send/abc123def456', keys: { p256dh: b64u(ecdh.getPublicKey()), auth: b64u(crypto.randomBytes(16)) } };
+    const cf = await call('GET', '/api/push/config', null, T);
+    check('푸시 설정: 키 준비 · 공개키만 보임', cf.status === 200 && cf.json.ready === true && cf.json.publicKey === VAPID.publicKey && !JSON.stringify(cf.json).includes(VAPID.privateKey));
+    check('잘못된 구독 400 · 로그인 안 하면 401', (await call('POST', '/api/push/subscribe', { sub: { endpoint: 'http://x' } }, T)).status === 400 && (await call('POST', '/api/push/subscribe', { sub })).status === 401);
+    check('기기 등록', (await call('POST', '/api/push/subscribe', { sub, device: '안드로이드 크롬' }, T)).status === 200);
+    const dv = await call('GET', '/api/push/devices', null, T);
+    check('내 기기 목록', dv.json.devices.length === 1 && dv.json.devices[0].device === '안드로이드 크롬');
+    const tt = await call('POST', '/api/push/test', {}, T);
+    check('시험 알림 → 암호화해서 보냄', tt.status === 200 && tt.json.sent === 1 && pushLog().some(x => x.title === 'Jcalender 시험 알림' && x.endpoint === sub.endpoint), JSON.stringify(tt.json));
+    // 1분마다 확인: 5분 뒤 일정(10분 전 알림) · 오늘 마감 목표 → 푸시, 같은 알림은 한 번만 (한국 시간 기준)
+    const seoul = new Date(Date.now() + 9 * 3600e3 + 5 * 60e3), day = seoul.toISOString().slice(0, 10), hm = seoul.toISOString().slice(11, 16);
+    const cur = (await call('GET', '/api/sync', null, T)).json;
+    const data = { ...cur.data, notify: { enabled: true, eventMinutes: 10, goals: 'day' }, events: [...(cur.data.events || []), { id: 'push-ev', date: day, time: hm, title: '푸시 시험 회의', area: 'P' }],
+      goals: { v: 2, boards: { 'P|목표 관리': { items: [{ id: 'push-goal', parent: null, name: '푸시 시험 목표', start: day, end: new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10) }], miles: [] } } } };
+    const up = await call('PUT', '/api/sync', { baseVersion: cur.version, data, device: '맥북' }, T);
+    await new Promise(r => setTimeout(r, 2200));
+    const got = pushLog().filter(x => x.title !== 'Jcalender 시험 알림');
+    const nowH = new Date(Date.now() + 9 * 3600e3).getUTCHours();
+    check('일정 알림 푸시 (서버가 1분마다 계산)', up.status === 200 && got.some(x => x.title === '푸시 시험 회의' && x.tag === 'event:push-ev'), JSON.stringify(got));
+    check('목표 마감 D-day 푸시 (오전 9시 이후)', nowH < 9 || got.some(x => x.title === '목표 마감 D-day' && x.body === '푸시 시험 목표' && x.url.includes(encodeURIComponent('목표 관리'))), JSON.stringify(got));
+    await new Promise(r => setTimeout(r, 1500));
+    check('같은 알림은 한 번만', pushLog().filter(x => x.tag === 'event:push-ev').length === 1);
+    await call('POST', '/api/push/unsubscribe', { endpoint: sub.endpoint }, sh_T0);
+    check('다른 사람은 내 기기를 못 지움', (await call('GET', '/api/push/devices', null, T)).json.devices.length === 1);
+    check('내 기기 빼기', (await call('POST', '/api/push/unsubscribe', { endpoint: sub.endpoint }, T)).status === 200 && (await call('GET', '/api/push/devices', null, T)).json.devices.length === 0);
+    check('기기가 없으면 시험 알림 404', (await call('POST', '/api/push/test', {}, T)).status === 404);
   }
 
   console.log('숏폼 4차 (유튜브 · 인스타그램 연결 · 업로드 · 성과)');

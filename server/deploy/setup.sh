@@ -125,6 +125,11 @@ echo "jcal DB 테이블 수: $(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM i
 step "5/7 API 서버 (systemd 서비스 jcal-api, 127.0.0.1:$API_PORT)"
 cd "$APP_DIR/server"
 PATH="$NODE_DIR/bin:$PATH" "$NPM" ci --omit=dev --no-audit --no-fund --loglevel=error
+# 웹 푸시 키(VAPID): 없을 때만 한 번 만든다 (바꾸면 이미 등록한 기기는 다시 "푸시 받기"를 눌러야 함)
+if ! grep -q '^VAPID_PUBLIC_KEY=' "$ENV_FILE"; then
+  ( umask 077; "$NODE" -e "const k=require('web-push').generateVAPIDKeys();console.log('VAPID_PUBLIC_KEY='+k.publicKey+'\nVAPID_PRIVATE_KEY='+k.privateKey)" >> "$ENV_FILE" )
+  echo "웹 푸시 키를 만들었습니다"
+fi
 chown -R root:root "$APP_DIR"
 sed "s#__NODE__#${NODE}#" "$APP_DIR/server/deploy/jcal-api.service" > /etc/systemd/system/jcal-api.service
 printf '#!/bin/sh\ncd %s/server && exec %s admin.mjs "$@"\n' "$APP_DIR" "$NODE" > /usr/local/bin/jcal-admin

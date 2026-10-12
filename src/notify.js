@@ -1,6 +1,8 @@
 /* 알림 (store.notify 설정, store.notifications 보낸 기록)
    - 앱이 열려 있는 동안 1분마다 확인해 때가 된 알림을 보낸다 (브라우저 알림 허용 시 OS 알림, 아니면 화면 오른쪽 위 알림)
-   - 대상: 저널링 알림(journal.remind, reminders.js), 시간이 있는 일정(반복 회차 포함, 일정마다 remind 로 바꿀 수 있음), 기획 마감(planDays 일 전 오전 9시)
+   - 대상: 저널링 알림(journal.remind, reminders.js), 시간이 있는 일정(반복 회차 · 루틴 포함, 일정마다 remind 로 바꿀 수 있음), 기획 마감(planDays 일 전 오전 9시),
+     목표 마감(notify.goals: all = D-7 · D-1 · 당일 / day = 당일만 / off, 오전 9시, 완료한 목표는 빼고)
+   - 서버(server/push.mjs)도 같은 규칙으로 1분마다 계산해 웹 푸시로 보낸다 (앱이 꺼져 있어도)
    - 같은 알림은 key 로 한 번만 보낸다. 기록은 최근 100개 */
 import { iso, pad } from './data.js';
 import { expandEvents } from './recur.js';
@@ -29,6 +31,17 @@ export function dueNotifications(store, now = new Date()) {
     const d = new Date(`${p.due}T09:00:00`); d.setDate(d.getDate() - pd);
     const key = `plan:${p.id}:${p.due}`;
     if (d <= now && now - d < 12 * 3600e3 && !sent.has(key)) out.push({ key, title: `기획 마감 ${pd ? `D-${pd}` : '오늘'}`, body: p.title, when: d });
+  }
+  const gm = N.goals || 'all';
+  if (gm !== 'off') for (const [bk, b] of Object.entries(store.goals?.boards || {})) {
+    for (const g of b.items || []) {
+      if (g.parent || g.done || !g.end) continue;
+      for (const n of gm === 'day' ? [0] : [7, 1, 0]) {
+        const d = new Date(`${g.end}T09:00:00`); d.setDate(d.getDate() - n);
+        const key = `goal:${g.id}:${g.end}:${n}`;
+        if (d <= now && now - d < 12 * 3600e3 && !sent.has(key)) out.push({ key, title: `목표 마감 ${n ? `D-${n}` : 'D-day'}`, body: g.name, when: d, url: `/#/${encodeURIComponent(bk.split('|')[0])}/${encodeURIComponent('목표 관리')}` });
+      }
+    }
   }
   return out;
 }
