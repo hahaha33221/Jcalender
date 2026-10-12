@@ -27,7 +27,7 @@ import { SECRETS_KEY, mergeSecrets, migrate, purgeTrash, renameCategories, readS
 import { useServerSync } from './serverSync.js';
 import Welcome from './Welcome.jsx';
 import { sourcesOn } from './calendarSources.js';
-import { dueNotifications, recordSent, showOsNotification } from './notify.js';
+import { dueNotifications, playChime, recordSent, showOsNotification } from './notify.js';
 import { pushOnHere } from './push.js';
 import IdeaBank, { IdeaFab } from './IdeaBank.jsx';
 import DataSettings, { AccountPanel } from './DataSettings.jsx';
@@ -143,11 +143,19 @@ export default function App() {
 
   // 알림: 앱이 열려 있는 동안 1분마다 확인 (notify.js)
   const storeRef = useRef(store); storeRef.current = store;
+  // 푸시가 왔을 때 화면이 열려 있으면 알림음 (public/sw.js 가 알려 줌)
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return undefined;
+    const on = e => { if (e.data?.type === 'jcal-push' && storeRef.current.notify?.sound !== false) playChime(!!e.data.alarm); };
+    navigator.serviceWorker.addEventListener('message', on);
+    return () => navigator.serviceWorker.removeEventListener('message', on);
+  }, []);
   useEffect(() => {
     const tick = () => {
       const due = dueNotifications(storeRef.current);
       if (!due.length) return;
       due.forEach(n => { if (!pushOnHere()) showOsNotification(n); pushToast(n.title, n.body); });   // 이 기기가 푸시를 받으면 OS 알림은 푸시로만 (두 번 방지)
+      if (!pushOnHere() && storeRef.current.notify?.sound !== false) playChime(due.some(n => n.alarm));   // 화면 알림음 (푸시 받는 기기는 푸시가 올 때 냄)
       setStore(s => recordSent(s, due));
     };
     tick();

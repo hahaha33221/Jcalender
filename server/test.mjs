@@ -427,11 +427,11 @@ try {
     const dv = await call('GET', '/api/push/devices', null, T);
     check('내 기기 목록', dv.json.devices.length === 1 && dv.json.devices[0].device === '안드로이드 크롬');
     const tt = await call('POST', '/api/push/test', {}, T);
-    check('시험 알림 → 암호화해서 보냄', tt.status === 200 && tt.json.sent === 1 && pushLog().some(x => x.title === 'Jcalender 시험 알림' && x.endpoint === sub.endpoint), JSON.stringify(tt.json));
+    check('시험 알림 → 암호화해서 보냄', tt.status === 200 && tt.json.sent === 1 && pushLog().some(x => x.title === 'Jcalender 시험 알림' && x.endpoint === sub.endpoint && x.alarm === true), JSON.stringify(tt.json));
     // 1분마다 확인: 5분 뒤 일정(10분 전 알림) · 오늘 마감 목표 → 푸시, 같은 알림은 한 번만 (한국 시간 기준)
     const seoul = new Date(Date.now() + 9 * 3600e3 + 5 * 60e3), day = seoul.toISOString().slice(0, 10), hm = seoul.toISOString().slice(11, 16);
     const cur = (await call('GET', '/api/sync', null, T)).json;
-    const data = { ...cur.data, notify: { enabled: true, eventMinutes: 10, goals: 'day' }, events: [...(cur.data.events || []), { id: 'push-ev', date: day, time: hm, title: '푸시 시험 회의', area: 'P' }],
+    const data = { ...cur.data, notify: { enabled: true, eventMinutes: 10, goals: 'day' }, events: [...(cur.data.events || []), { id: 'push-ev', date: day, time: hm, title: '푸시 시험 회의', area: 'P' }, { id: 'push-rt', date: day, time: hm, title: '푸시 시험 루틴', area: 'P', routine: true, remind: '5' }],
       goals: { v: 2, boards: { 'P|목표 관리': { items: [{ id: 'push-goal', parent: null, name: '푸시 시험 목표', start: day, end: new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10) }], miles: [] } } } };
     const up = await call('PUT', '/api/sync', { baseVersion: cur.version, data, device: '맥북' }, T);
     for (let i = 0; i < 40 && !pushLog().some(x => x.tag === 'event:push-ev'); i++) await new Promise(r => setTimeout(r, 200));   // 1분 확인(시험은 0.7초) 기다리기
@@ -441,6 +441,7 @@ try {
     check('일정 알림 푸시 (서버가 1분마다 계산)', up.status === 200 && got.some(x => x.title === '푸시 시험 회의' && x.tag === 'event:push-ev'), JSON.stringify(got));
     check('목표 마감 D-day 푸시 (오전 9시 이후)', nowH < 9 || got.some(x => x.title === '목표 마감 D-day' && x.body === '푸시 시험 목표' && x.url.includes(encodeURIComponent('목표 관리'))), JSON.stringify(got));
     await new Promise(r => setTimeout(r, 1500));
+    check('루틴 알람은 alarm 표시(긴 진동 · 누를 때까지) · 보통 일정은 아님', got.some(x => x.title === '푸시 시험 루틴' && x.alarm === true) && got.some(x => x.title === '푸시 시험 회의' && x.alarm === false), JSON.stringify(got));
     check('같은 알림은 한 번만', pushLog().filter(x => x.tag === 'event:push-ev').length === 1);
     await call('POST', '/api/push/unsubscribe', { endpoint: sub.endpoint }, sh_T0);
     check('다른 사람은 내 기기를 못 지움', (await call('GET', '/api/push/devices', null, T)).json.devices.length === 1);

@@ -6,6 +6,7 @@ import { TRASH_TYPES, exportJson, importJson, mergeSecrets, restoreTrash, splitS
 import { TAG_COLORS } from './common.jsx';
 import { AuthForm } from './Welcome.jsx';
 import { currentSub, disablePush, enablePush, isIos, isStandalone, pushSupported } from './push.js';
+import { playChime } from './notify.js';
 
 /* 설정 › 데이터 관리 (schema.js v2 의 새 테이블 화면)
    백업(내보내기·가져오기) · 카테고리(표시·목표 보드·순서) · 프로젝트 · 태그 · 휴지통 · 알림 */
@@ -154,6 +155,12 @@ function Notify() {
         <label>목표 마감<select value={N.goals} onChange={e => set({ goals: e.target.value })} disabled={!N.enabled}>
           {[['all', 'D-7 · D-1 · 당일 오전 9시'], ['day', '당일 오전 9시'], ['off', '알리지 않음']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
         <span className="muted">{perm === 'granted' ? '브라우저 알림 허용됨' : perm === 'denied' ? '브라우저 알림이 막혀 있어 화면 안 알림만 뜹니다' : perm === 'unsupported' ? '이 브라우저는 알림을 지원하지 않아 화면 안 알림만 뜹니다' : '켜면 브라우저 알림 허용을 묻습니다'}</span>
+      </div>
+      <div className="ds-row">
+        <label className="ds-chk"><input type="checkbox" checked={N.sound !== false} onChange={e => set({ sound: e.target.checked })} />앱 화면이 열려 있을 때 알림음</label>
+        <button className="btn sm" onClick={() => playChime(false)}>알림음 듣기</button>
+        <button className="btn sm" onClick={() => playChime(true)}>루틴 알람 듣기</button>
+        <span className="muted">루틴 알람은 세 번 울리고 휴대폰은 길게 진동 · 앱이 꺼져 있을 때 소리 · 진동은 기기의 알림 설정을 따릅니다</span>
       </div>
       <PushPanel enabled={N.enabled} />
       {sent.length > 0 && <ul className="ds-list">{sent.map(n => <li key={n.id}><span className="muted">{n.at}</span> <b>{n.title}</b> {n.body}</li>)}</ul>}

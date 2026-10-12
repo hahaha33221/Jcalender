@@ -24,7 +24,7 @@ export function dueNotifications(store, now = new Date()) {
     if (r == null || Number.isNaN(r)) continue;
     const when = new Date(at(e.date, e.time).getTime() - r * 60000);
     const key = `event:${e.id}`;
-    if (when <= now && now - when < 2 * 3600e3 && !sent.has(key)) out.push({ key, title: e.title, body: `${Number(e.date.slice(5, 7))}/${Number(e.date.slice(8, 10))} ${e.time}${r ? ` · ${r >= 1440 ? '하루' : `${r}분`} 전` : ''}`, when });
+    if (when <= now && now - when < 2 * 3600e3 && !sent.has(key)) out.push({ key, alarm: !!e.routine, title: e.title, body: `${Number(e.date.slice(5, 7))}/${Number(e.date.slice(8, 10))} ${e.time}${r ? ` · ${r >= 1440 ? '하루' : `${r}분`} 전` : ''}`, when });
   }
   if (!N.enabled) return out;
   const pd = Number(N.planDays ?? 1);
@@ -51,7 +51,24 @@ export function dueNotifications(store, now = new Date()) {
 /** 보낸 알림을 기록에 남긴다 */
 export const recordSent = (s, list) => ({ ...s, notifications: [...list.map(n => ({ id: n.key, key: n.key, title: n.title, body: n.body, at: `${iso(n.when)} ${pad(n.when.getHours())}:${pad(n.when.getMinutes())}`, sentAt: new Date().toISOString() })), ...(s.notifications || [])].slice(0, 100) });
 
-/** OS 알림 (허용됐을 때만) */
+/** OS 알림 (허용됐을 때만). 루틴 알람(alarm)은 누를 때까지 화면에 남김 */
 export function showOsNotification(n) {
-  try { if ('Notification' in window && Notification.permission === 'granted') new Notification(n.title, { body: n.body, tag: n.key }); } catch { /* 지원 안 함 */ }
+  try { if ('Notification' in window && Notification.permission === 'granted') new Notification(n.title, { body: n.body, tag: n.key, requireInteraction: !!n.alarm, icon: '/icon-192.png' }); } catch { /* 지원 안 함 */ }
+}
+
+/** 앱 화면이 열려 있을 때 알림음 (Web Audio 로 짧게 — 파일 없음). alarm 이면 세 번 + 휴대폰 진동 */
+let audioCtx = null;
+export function playChime(alarm = false) {
+  try {
+    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const t0 = audioCtx.currentTime, notes = alarm ? [880, 1175, 880, 1175, 880, 1175] : [880, 1175];
+    notes.forEach((f, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain(), t = t0 + i * 0.18 + (alarm ? Math.floor(i / 2) * 0.25 : 0);
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + 0.18);
+    });
+  } catch { /* 소리 못 냄 (브라우저가 막음) */ }
+  try { if (alarm) navigator.vibrate?.([500, 250, 500, 250, 500]); } catch { /* 진동 없음 */ }
 }

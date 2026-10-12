@@ -63,7 +63,7 @@ export function pushModule({ pool, authUser, HttpError, owner }) {
         for (const d of due.slice(0, 10)) {
           const ins = await pool.query('INSERT INTO jcal.push_sent (user_id, key) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING key', [r.user_id, String(d.key).slice(0, 200)]);
           if (!ins.rowCount) continue;                           // 이미 보냄
-          await sendUser(r.user_id, { title: d.title, body: d.body || '', tag: String(d.key).slice(0, 120), url: d.url || '/' });
+          await sendUser(r.user_id, { title: d.title, body: d.body || '', tag: String(d.key).slice(0, 120), url: d.url || '/', alarm: !!d.alarm });   // alarm: 루틴 알람 (긴 진동 · 누를 때까지 표시)
           n++;
         }
       }
@@ -107,7 +107,7 @@ export function pushModule({ pool, authUser, HttpError, owner }) {
       const { rows } = await pool.query(`SELECT * FROM jcal.push_subs WHERE user_id = $1${one ? ' AND endpoint = $2' : ''}`, one ? [u.id, one] : [u.id]);
       if (!rows.length) throw new HttpError(404, '푸시를 받을 기기가 없습니다. 먼저 "이 기기에서 푸시 받기"를 눌러 주세요');
       const res = [];
-      for (const r of rows) res.push(await sendOne(r, { title: 'Jcalender 시험 알림', body: '푸시 알림이 잘 옵니다. 앱을 닫아도 이렇게 알려 드려요', tag: `test:${Date.now()}`, url: '/#/settings' }));
+      for (const r of rows) res.push(await sendOne(r, { title: 'Jcalender 시험 알림', body: '푸시 알림이 잘 옵니다. 루틴 알람은 이렇게 길게 진동하고, 누를 때까지 남아 있어요', tag: `test:${Date.now()}`, url: '/#/settings', alarm: true }));
       return { sent: res.filter(x => x === 'ok').length, total: rows.length };
     },
   };
