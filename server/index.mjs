@@ -36,7 +36,7 @@ import { goalAiRoutes } from './goalAi.mjs';
 import { pushModule } from './push.mjs';
 import { ideaRoutes } from './ideas.mjs';
 
-const VERSION = '1.13.0';
+const VERSION = '1.14.0';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
 const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐
@@ -96,9 +96,11 @@ async function authUser(req) {
   const m = String(req.headers.authorization || '').match(/^Bearer\s+(\S+)$/i);
   if (!m) throw new HttpError(401, '로그인이 필요합니다');
   const { rows } = await pool.query(
-    `SELECT u.id, u.email, u.name, u.role, u.areas, u.shorts, s.id AS sid FROM jcal.sessions s JOIN jcal.users u ON u.id = s.user_id
-     WHERE s.token_hash = $1 AND s.expires_at > now()`, [tokenHash(m[1])]);
+    `SELECT u.id, u.email, u.name, u.role, u.areas, u.shorts, s.id AS sid, s.expires_at < now() + interval '80 days' AS stale FROM jcal.sessions s JOIN jcal.users u ON u.id = s.user_id
+     WHERE s.token_hash = $1 AND s.expires_at > now() AND s.kind = 'app'`, [tokenHash(m[1])]);
   if (!rows[0]) throw new HttpError(401, '로그인이 만료되었습니다. 다시 로그인하세요');
+  // 쓰는 동안은 로그인 유지: 남은 기간이 80일 아래로 내려가면 다시 90일로 (열흘에 한 번꼴로만 고침)
+  if (rows[0].stale) await pool.query('UPDATE jcal.sessions SET expires_at = now() + make_interval(days => $2) WHERE id = $1', [rows[0].sid, config.sessionDays]);
   const u = { ...rows[0], role: roleOf(rows[0]), areas: areasOf(rows[0]), shorts: shortsOf(rows[0]) };
   if (u.role === 'suspended') throw new HttpError(401, SUSPENDED);
   return u;
@@ -134,6 +136,26 @@ async function newSession(c, req, userId, device) {
   await c.query('DELETE FROM jcal.sessions WHERE user_id = $1 AND expires_at < now()', [userId]);
   return { token, expiresAt: s.rows[0].expires_at };
 }
+/* 자동 로그인: 로그인할 때 "자동 로그인"이면 따로 열쇠(remember 세션, 1년)를 만들어 HttpOnly 쿠키로만 둔다 (화면 코드는 못 읽음)
+   → 이 기기의 로그인 정보가 지워지거나 만료돼도 POST /api/auto-login 이 쿠키로 새 로그인을 만들어 줌 (쓸 때마다 열쇠도 새로 바꿈) */
+const AUTO_COOKIE = 'jcal_auto', AUTO_DAYS = Number(process.env.AUTO_LOGIN_DAYS || 365);
+const cookieOf = (req, name) => { const c = String(req.headers.cookie || '').split(/;\s*/).find(x => x.startsWith(`${name}=`)); return c ? decodeURIComponent(c.slice(name.length + 1)) : ''; };
+const isHttps = req => String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+const autoCookie = (req, res, token) => res.setHeader('Set-Cookie', `${AUTO_COOKIE}=${token}; Path=/api; HttpOnly; SameSite=Lax; Max-Age=${token ? AUTO_DAYS * 86400 : 0}${isHttps(req) ? '; Secure' : ''}`);
+async function newRemember(c, req, userId, device) {
+  const token = newToken();
+  await c.query(`INSERT INTO jcal.sessions (user_id, token_hash, user_agent, expires_at, kind) VALUES ($1, $2, $3, now() + make_interval(days => $4), 'remember')`,
+    [userId, tokenHash(token), cleanDevice(device || req.headers['user-agent']), AUTO_DAYS]);
+  return token;
+}
+/** 로그인 · 가입 뒤: 자동 로그인을 켰으면 열쇠 쿠키, 껐으면 이 기기의 열쇠를 지움 */
+async function rememberAfterLogin(c, req, res, userId, body) {
+  const old = cookieOf(req, AUTO_COOKIE);
+  if (old) await c.query("DELETE FROM jcal.sessions WHERE token_hash = $1 AND kind = 'remember'", [tokenHash(old)]);
+  if (body.remember === false) { if (old) autoCookie(req, res, ''); return; }
+  autoCookie(req, res, await newRemember(c, req, userId, body.device));
+}
+
 async function signupSettings() {
   const { rows } = await pool.query("SELECT key, value FROM jcal.server_settings WHERE key IN ('signup_mode', 'signup_code')");
   const m = Object.fromEntries(rows.map(r => [r.key, r.value]));
@@ -152,7 +174,7 @@ const routes = {
 
   'GET /api/config': async () => ({ signup: (await signupSettings()).mode }),
 
-  'POST /api/signup': async (req, body) => {
+  'POST /api/signup': async (req, body, res) => {
     const email = String(body.email || '').trim().toLowerCase(), pw = String(body.password || ''), name = String(body.name || '').trim().slice(0, 100);
     const key = `${clientIp(req)}|signup`;
     checkFails(key);
@@ -167,6 +189,7 @@ const routes = {
       const u = await c.query(`INSERT INTO jcal.users (email, name, password_hash) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING RETURNING id, email, name`, [email, name, hash]);
       if (!u.rows[0]) throw new HttpError(409, '이미 가입된 이메일입니다. 로그인하세요');
       const ses = await newSession(c, req, u.rows[0].id, body.device);
+      await rememberAfterLogin(c, req, res, u.rows[0].id, body);
       addFail(key);                                                 // 같은 곳에서 15분에 10명까지만 가입
       return { token: ses.token, user: { email: u.rows[0].email, name: u.rows[0].name, role: roleOf({ ...u.rows[0], role: 'member' }), areas: AREA_ORDER, shorts: isOwner(u.rows[0].email) }, expiresAt: ses.expiresAt, created: true };
     });
@@ -185,7 +208,7 @@ const routes = {
     return { ok: true };
   },
 
-  'POST /api/login': async (req, body) => {
+  'POST /api/login': async (req, body, res) => {
     const email = String(body.email || '').trim().toLowerCase(), pw = String(body.password || '');
     if (!email || !pw) throw new HttpError(400, '이메일과 비밀번호를 입력하세요');
     const key = `${clientIp(req)}|${email}`;
@@ -195,13 +218,33 @@ const routes = {
     if (!u || !(await verifyPassword(pw, u.password_hash))) { addFail(key); throw new HttpError(401, '이메일 또는 비밀번호가 맞지 않습니다'); }
     fails.delete(key);
     if (roleOf(u) === 'suspended') throw new HttpError(403, SUSPENDED);
-    const ses = await tx(c => newSession(c, req, u.id, body.device));
+    const ses = await tx(async c => { const x = await newSession(c, req, u.id, body.device); await rememberAfterLogin(c, req, res, u.id, body); return x; });
     return { token: ses.token, user: { email: u.email, name: u.name, role: roleOf(u), areas: areasOf(u), shorts: shortsOf(u), screen: await screenFor(u) }, expiresAt: ses.expiresAt };
   },
 
-  'POST /api/logout': async req => {
+  /** 자동 로그인: 열쇠 쿠키로 새 로그인 (열쇠도 새로 바꿈). 없거나 만료면 401 */
+  'POST /api/auto-login': async (req, body, res) => {
+    const old = cookieOf(req, AUTO_COOKIE);
+    if (!old) throw new HttpError(401, '자동 로그인 정보가 없습니다');
+    const { rows } = await pool.query(`SELECT s.id AS sid, u.id, u.email, u.name, u.role, u.areas, u.shorts FROM jcal.sessions s JOIN jcal.users u ON u.id = s.user_id
+      WHERE s.token_hash = $1 AND s.kind = 'remember' AND s.expires_at > now()`, [tokenHash(old)]);
+    const u = rows[0];
+    if (!u) { autoCookie(req, res, ''); throw new HttpError(401, '자동 로그인이 만료되었습니다. 다시 로그인하세요'); }
+    if (roleOf(u) === 'suspended') { autoCookie(req, res, ''); throw new HttpError(403, SUSPENDED); }
+    const ses = await tx(async c => {
+      await c.query('DELETE FROM jcal.sessions WHERE id = $1', [u.sid]);
+      const x = await newSession(c, req, u.id, body.device);
+      autoCookie(req, res, await newRemember(c, req, u.id, body.device));
+      return x;
+    });
+    return { token: ses.token, user: { email: u.email, name: u.name, role: roleOf(u), areas: areasOf(u), shorts: shortsOf(u), screen: await screenFor(u) }, expiresAt: ses.expiresAt, auto: true };
+  },
+
+  'POST /api/logout': async (req, body, res) => {
     const u = await authUser(req);
     await pool.query('DELETE FROM jcal.sessions WHERE id = $1', [u.sid]);
+    const old = cookieOf(req, AUTO_COOKIE);                       // 이 기기의 자동 로그인 열쇠도
+    if (old) { await pool.query("DELETE FROM jcal.sessions WHERE token_hash = $1 AND kind = 'remember'", [tokenHash(old)]); autoCookie(req, res, ''); }
     return { ok: true };
   },
 
@@ -217,7 +260,7 @@ const routes = {
     await adminUser(req);
     const { rows } = await pool.query(
       `SELECT u.email, u.name, u.role, u.areas, u.shorts, u.created_at, u.last_login_at, u.role_updated_at,
-              (SELECT count(*) FROM jcal.sessions s WHERE s.user_id = u.id AND s.expires_at > now())::int AS sessions,
+              (SELECT count(*) FROM jcal.sessions s WHERE s.user_id = u.id AND s.expires_at > now() AND s.kind = 'app')::int AS sessions,
               ss.updated_at AS synced_at, ss.size_bytes
        FROM jcal.users u LEFT JOIN jcal.store_snapshots ss ON ss.user_id = u.id
        WHERE u.password_hash <> '!not-set' ORDER BY u.created_at`);

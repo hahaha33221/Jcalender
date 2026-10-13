@@ -145,6 +145,33 @@ try {
   check('토큰 원문은 DB 에 없음', n === 0);
   check('토큰 없이 401', (await call('GET', '/api/sync')).status === 401);
 
+  console.log('자동 로그인');
+  {
+    const raw = async (path, body, { token, cookie } = {}) => { const r = await fetch(BASE + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: ORIGIN, ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(body || {}) }); return { status: r.status, json: await r.json().catch(() => null), set: r.headers.get('set-cookie') || '' }; };
+    const ck = set => (set.match(/jcal_auto=([^;]*)/) || [])[1] || '';
+    const a1 = await raw('/api/login', { email: EMAIL, password: PW, device: '자동 로그인 시험' });
+    const k1 = ck(a1.set);
+    check('로그인하면 자동 로그인 열쇠 쿠키 (HttpOnly · 1년)', a1.status === 200 && k1.length > 20 && /HttpOnly/.test(a1.set) && /Max-Age=31536000/.test(a1.set) && /Path=\/api/.test(a1.set), a1.set);
+    check('열쇠로는 API 를 못 씀 (화면 토큰만)', (await call('GET', '/api/me', null, k1)).status === 401);
+    const a2 = await raw('/api/auto-login', { device: '자동 로그인 시험' }, { cookie: `jcal_auto=${k1}` });
+    const k2 = ck(a2.set);
+    check('자동 로그인: 쿠키로 새 로그인 · 열쇠 새로 바꿈', a2.status === 200 && a2.json.token && a2.json.user.email === EMAIL && k2 && k2 !== k1 && (await call('GET', '/api/me', null, a2.json.token)).status === 200, JSON.stringify(a2.json));
+    check('쓴 열쇠는 다시 못 씀', (await raw('/api/auto-login', {}, { cookie: `jcal_auto=${k1}` })).status === 401);
+    check('쿠키 없으면 401', (await raw('/api/auto-login', {})).status === 401);
+    const a3 = await raw('/api/login', { email: EMAIL, password: PW, remember: false }, { cookie: `jcal_auto=${k2}` });
+    check('자동 로그인 끄고 로그인 → 이 기기 열쇠 지움', a3.status === 200 && /jcal_auto=;/.test(a3.set) && /Max-Age=0/.test(a3.set) && (await raw('/api/auto-login', {}, { cookie: `jcal_auto=${k2}` })).status === 401);
+    const a4 = await raw('/api/login', { email: EMAIL, password: PW });
+    const lo = await raw('/api/logout', {}, { token: a4.json.token, cookie: `jcal_auto=${ck(a4.set)}` });
+    check('로그아웃하면 열쇠도 지움', lo.status === 200 && /Max-Age=0/.test(lo.set) && (await raw('/api/auto-login', {}, { cookie: `jcal_auto=${ck(a4.set)}` })).status === 401);
+    // 쓰는 동안 로그인 유지: 남은 기간이 짧은 세션을 쓰면 90일로 늘어남
+    const a5 = await raw('/api/login', { email: EMAIL, password: PW, remember: false });
+    const th = crypto.createHash('sha256').update(a5.json.token).digest();
+    await pool.query("UPDATE jcal.sessions SET expires_at = now() + interval '5 days' WHERE token_hash = $1", [th]);
+    await call('GET', '/api/me', null, a5.json.token);
+    const [{ d }] = (await pool.query("SELECT extract(day FROM expires_at - now())::int AS d FROM jcal.sessions WHERE token_hash = $1", [th])).rows;
+    check('쓰는 동안 로그인 유지 (5일 남음 → 다시 90일)', d >= 88, String(d));
+  }
+
   console.log('동기화');
   const g0 = await call('GET', '/api/sync', null, T);
   check('처음엔 버전 0 · 데이터 없음', g0.json.version === 0 && g0.json.data === null);

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { API_BASE, LOGOUT_KEY, api } from './serverSync.js';
+import { API_BASE, LOGOUT_KEY, api, autoPref } from './serverSync.js';
 
 /* 처음 화면: 로그인 / 회원가입 (사용자마다 서버에 자기 데이터)
    - 회원가입 방식은 서버가 정한다 (GET /api/config): 초대 코드 · 누구나 · 막힘
@@ -35,6 +35,7 @@ export function AuthForm({ sync, compact = false }) {
   const [tab, setTab] = useState('login');
   const [f, setF] = useState(() => ({ email: sync.conf.email || readId(), password: '', password2: '', name: '', code: '' }));
   const [saveId, setSaveId] = useState(() => !!readId());
+  const [auto, setAuto] = useState(autoPref);                 // 자동 로그인 (기본 켬)
   const [mode, setMode] = useState(null);            // 서버의 회원가입 방식
   const [err, setErr] = useState(null);
   const set = k => e => setF(p => ({ ...p, [k]: e.target.value }));
@@ -48,10 +49,10 @@ export function AuthForm({ sync, compact = false }) {
 
   const submit = async e => {
     e.preventDefault(); setErr(null);
-    if (tab === 'login') { if (await sync.login(f.email, f.password)) { writeId(saveId ? f.email.trim() : ''); setF(p => ({ ...p, password: '' })); } return; }
+    if (tab === 'login') { if (await sync.login(f.email, f.password, auto)) { writeId(saveId ? f.email.trim() : ''); setF(p => ({ ...p, password: '' })); } return; }
     if (f.password.length < 8) return setErr('비밀번호는 8자 이상이어야 합니다');
     if (f.password !== f.password2) return setErr('두 비밀번호가 다릅니다');
-    if (await sync.signup({ email: f.email, password: f.password, name: f.name, code: f.code })) writeId(saveId ? f.email.trim() : '');
+    if (await sync.signup({ email: f.email, password: f.password, name: f.name, code: f.code, remember: auto })) writeId(saveId ? f.email.trim() : '');
   };
   const msg = err || (sync.err && sync.msg);
   return (
@@ -67,13 +68,18 @@ export function AuthForm({ sync, compact = false }) {
         {tab === 'signup' && <label>비밀번호 확인<input type="password" value={f.password2} onChange={set('password2')} autoComplete="new-password" required /></label>}
         {tab === 'signup' && mode === 'code' && <label>초대 코드<input value={f.code} onChange={set('code')} placeholder="관리자에게 받은 코드 (예: AB12-CD34)" required autoCapitalize="characters" /></label>}
         {tab === 'signup' && mode === 'closed' && <p className="auth-note">지금은 회원가입을 받지 않습니다. 관리자에게 계정을 요청하세요.</p>}
-        <label className="auth-save"><input type="checkbox" checked={saveId} onChange={e => { setSaveId(e.target.checked); if (!e.target.checked) writeId(''); }} />아이디 저장</label>
+        <div className="auth-opts">
+          <label className="auth-save"><input type="checkbox" checked={auto} onChange={e => setAuto(e.target.checked)} />자동 로그인</label>
+          <label className="auth-save"><input type="checkbox" checked={saveId} onChange={e => { setSaveId(e.target.checked); if (!e.target.checked) writeId(''); }} />아이디 저장</label>
+        </div>
+        <p className="auth-note">{auto ? '이 기기에서 계속 로그인 상태로 둡니다 (로그인이 풀려도 자동으로 다시 로그인). 여러 사람이 쓰는 기기에서는 끄세요' : '브라우저 · 앱을 닫으면 로그아웃됩니다'}</p>
         {msg && <p className="sh-msg err" role="alert">{msg}</p>}
         <button className="btn primary" disabled={sync.busy || (tab === 'signup' && mode === 'closed')}>
           {sync.busy ? '연결 중…' : tab === 'login' ? '로그인' : '가입하고 시작하기'}
         </button>
         {tab === 'signup' && <p className="auth-note">가입하면 빈 화면에서 시작합니다. 내 데이터는 내 계정에만 저장되고 다른 사람과 섞이지 않습니다.</p>}
       </form>
+      {sync.auto && <p className="auth-note">자동 로그인 중…</p>}
       {mode === 'unknown' && <p className="auth-note">서버에 연결하지 못했습니다. 잠시 뒤 다시 시도해 주세요.</p>}
     </div>
   );

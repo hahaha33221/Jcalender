@@ -21,10 +21,19 @@ const readConf = () => {
     // 처음 쓰는 브라우저(저장된 앱 데이터 없음): 지금 데이터는 예시뿐 → 로그인하면 서버 데이터를 바로 받는다
     if (c.owner === undefined && !localStorage.getItem('lifeboard.react.v1')) c.owner = '-';
     delete c.url; delete c.guest;                           // 예전에 저장한 서버 주소 · "로그인 없이 둘러보기"는 더 쓰지 않음
+    if (c.remember === false) c.token = sessionStorage.getItem(SERVER_KEY) || '';   // 자동 로그인을 끈 로그인: 브라우저 · 앱을 닫으면 풀림
     return c;
   } catch { return {}; }
 };
-const writeConf = c => { try { localStorage.setItem(SERVER_KEY, JSON.stringify(c)); } catch { /* 저장 불가 */ } };
+const writeConf = c => {
+  try {
+    if (c.remember === false) { sessionStorage.setItem(SERVER_KEY, c.token || ''); localStorage.setItem(SERVER_KEY, JSON.stringify({ ...c, token: '' })); }
+    else { localStorage.setItem(SERVER_KEY, JSON.stringify(c)); sessionStorage.removeItem(SERVER_KEY); }
+  } catch { /* 저장 불가 */ }
+};
+/** 자동 로그인을 쓸지 (이 기기 · 로그인 화면의 체크) */
+export const AUTO_KEY = 'jcalender.autoLogin';
+export const autoPref = () => { try { return localStorage.getItem(AUTO_KEY) !== '0'; } catch { return true; } };
 
 export function deviceName() {
   const ua = navigator.userAgent || '';
@@ -77,7 +86,11 @@ export function useServerSync(store, setStore, blank) {
     checking.current = true;
     api(API_BASE, '/api/me', { token: tok })
       .then(() => {})                                                 // 아직 유효 → 그대로 둠
-      .catch(x => { if (x.status === 401 && x.server && confRef.current.token === tok) { noteLogout('expired', x.message); setConf({ token: '' }); say('로그인이 만료되었습니다. 다시 로그인하세요', true); } })
+      .catch(async x => {
+        if (!(x.status === 401 && x.server && confRef.current.token === tok)) return;
+        if (confRef.current.remember !== false && await autoLogin(true)) return;   // 자동 로그인 열쇠로 다시 로그인
+        noteLogout('expired', x.message); setConf({ token: '' }); say('로그인이 만료되었습니다. 다시 로그인하세요', true);
+      })
       .finally(() => { checking.current = false; });
     return true;
   };
@@ -162,23 +175,43 @@ export function useServerSync(store, setStore, blank) {
   }, [conf.token]);
 
   /** 로그인 · 회원가입 공통: 토큰을 받으면 연결 정보를 저장하고, check() 가 받기 / 올리기를 정한다 */
+  /** 로그인 결과를 이 기기에 넣기 (로그인 · 가입 · 자동 로그인 공통) */
+  const accept = (r, remember) => {
+    const c = confRef.current;
+    const same = c.email === r.user.email;
+    if (r.created) { replaceStore(blank()); }                  // 새 사용자는 빈 데이터로 시작 (이 기기에 있던 데이터는 올리지 않음)
+    setConf({ token: r.token, email: r.user.email, name: r.user.name, role: r.user.role || '', areas: r.user.areas || '', shorts: !!r.user.shorts, screen: r.user.screen ?? null, remember,
+      ...(same ? {} : { version: 0, dirty: false, lastSync: null }), ...(r.created ? { owner: r.user.email } : {}) });
+    keepStorage(); try { localStorage.removeItem(LOGOUT_KEY); localStorage.setItem(AUTO_KEY, remember ? '1' : '0'); } catch { /* 무시 */ }
+  };
   const enter = async (kind, body) => {
     setSt(s => ({ ...s, busy: true, msg: null }));
     try {
-      const r = await api(API_BASE, kind === 'signup' ? '/api/signup' : '/api/login', { method: 'POST', body: { ...body, device: deviceName() } });
-      const c = confRef.current;
-      const same = c.email === r.user.email;
-      if (r.created) { replaceStore(blank()); }                  // 새 사용자는 빈 데이터로 시작 (이 기기에 있던 데이터는 올리지 않음)
-      setConf({ token: r.token, email: r.user.email, name: r.user.name, role: r.user.role || '', areas: r.user.areas || '', shorts: !!r.user.shorts, screen: r.user.screen ?? null,
-        ...(same ? {} : { version: 0, dirty: false, lastSync: null }), ...(r.created ? { owner: r.user.email } : {}) });
+      const remember = body.remember !== false;
+      const r = await api(API_BASE, kind === 'signup' ? '/api/signup' : '/api/login', { method: 'POST', body: { ...body, remember, device: deviceName() } });
+      accept(r, remember);
       say(r.created ? `${r.user.name}님, 가입을 환영합니다` : `${r.user.name || r.user.email}님으로 로그인했습니다`);
-      keepStorage(); try { localStorage.removeItem(LOGOUT_KEY); } catch { /* 무시 */ }
       return true;
     } catch (e) { say(e.message, true); return false; }
     finally { setSt(s => ({ ...s, busy: false })); }
   };
-  const login = (email, password) => enter('login', { email, password });
+  const login = (email, password, remember = true) => enter('login', { email, password, remember });
   const signup = f => enter('signup', f);
+  /** 자동 로그인: 이 기기의 열쇠 쿠키로 새 로그인 (조용히 — 실패해도 안내 없음) */
+  const autoBusy = useRef(false);
+  const autoLogin = async (quiet = false) => {
+    if (autoBusy.current) return false;
+    autoBusy.current = true;
+    if (!quiet) setSt(s => ({ ...s, auto: true }));
+    try {
+      const r = await api(API_BASE, '/api/auto-login', { method: 'POST', body: { device: deviceName() } });
+      accept(r, true);
+      return true;
+    } catch { return false; }
+    finally { autoBusy.current = false; setSt(s => ({ ...s, auto: false })); }
+  };
+  // 앱을 열었는데 로그인 정보가 없으면 자동 로그인부터 (켜 둔 기기만)
+  useEffect(() => { if (!confRef.current.token && autoPref()) autoLogin(); }, []);
 
   /** 로그아웃: 안 올린 변경이 있으면 먼저 올리고, 이 브라우저의 데이터를 지운다. force 면 못 올려도 지움 */
   const logout = async (force = false) => {
@@ -212,7 +245,7 @@ export function useServerSync(store, setStore, blank) {
   const keepMine = () => { setSt(s => ({ ...s, conflict: null })); push(true); };
 
   return {
-    connected: !!conf.token, conf, ...st, login, signup, logout, changePassword,
+    connected: !!conf.token, conf, ...st, login, signup, logout, changePassword, autoLogin,
     /** 로그인한 계정으로 서버 API 부르기 (회원 관리 등) */
     request: (path, opts = {}) => api(API_BASE, path, { ...opts, token: confRef.current.token }).catch(e => { authFail(e); throw e; }),
     syncNow: () => (conf.dirty ? push() : check()), takeServer, keepMine,

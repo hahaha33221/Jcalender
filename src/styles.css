@@ -2373,3 +2373,4 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
   .am-row .am-act { grid-column: 1 / -1; }
 }
 .am-row .am-k { justify-self: start; }
+.auth-opts { display: flex; gap: 16px; flex-wrap: wrap; }
