@@ -42,9 +42,15 @@ export async function api(base, path, { method = 'GET', body, token, conflictOk 
   }
   const j = await r.json().catch(() => ({}));
   if (r.status === 409 && conflictOk) return { conflict: true, ...j };
-  if (!r.ok) throw Object.assign(new Error(j.error || `서버 오류 (${r.status})`), { status: r.status });
+  if (!r.ok) throw Object.assign(new Error(j.error || `서버 오류 (${r.status})`), { status: r.status, server: typeof j.error === 'string' });   // server: Jcalender 서버가 직접 답함 (중간 프록시 오류와 구분)
   return j;
 }
+
+/** 로그인이 풀린 이유 기록 (다음 로그인 화면에 보여 줌 — 원인 찾기용) */
+export const LOGOUT_KEY = 'jcalender.lastLogout';
+export const noteLogout = (reason, detail = '') => { try { localStorage.setItem(LOGOUT_KEY, JSON.stringify({ at: new Date().toISOString(), reason, detail: String(detail).slice(0, 200) })); } catch { /* 무시 */ } };
+/** 이 사이트 저장 데이터를 브라우저가 저절로 지우지 않게 요청 (안드로이드 크롬 · 설치 앱) */
+export const keepStorage = () => { try { navigator.storage?.persist?.(); } catch { /* 지원 안 함 */ } };
 
 const fmt = d => (d ? new Date(d).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
 const APP_KEYS = ['lifeboard.react.v1', 'jcalender.secrets', 'jcalender.migrateError'];
@@ -61,7 +67,20 @@ export function useServerSync(store, setStore, blank) {
 
   const setConf = useCallback(p => { const c = { ...confRef.current, ...p }; confRef.current = c; writeConf(c); setConfState(c); return c; }, []);
   const say = (msg, err = false) => setSt(s => ({ ...s, msg, err }));
-  const authFail = e => { if (e.status === 401) { setConf({ token: '' }); say('로그인이 만료되었습니다. 다시 로그인하세요', true); return true; } return false; };
+  /** 401: 서버가 직접 "로그인 만료"라고 답했을 때만, 한 번 더 확인한 뒤 로그아웃 (중간 오류 · 잠깐의 문제로 로그인이 풀리지 않게) */
+  const checking = useRef(false);
+  const authFail = e => {
+    if (e.status !== 401) return false;
+    if (!e.server || checking.current) return true;
+    const tok = confRef.current.token;
+    if (!tok) return true;
+    checking.current = true;
+    api(API_BASE, '/api/me', { token: tok })
+      .then(() => {})                                                 // 아직 유효 → 그대로 둠
+      .catch(x => { if (x.status === 401 && x.server && confRef.current.token === tok) { noteLogout('expired', x.message); setConf({ token: '' }); say('로그인이 만료되었습니다. 다시 로그인하세요', true); } })
+      .finally(() => { checking.current = false; });
+    return true;
+  };
 
   /** 데이터를 통째로 바꾸기 (API 키 · 토큰은 이 기기 것을 유지) */
   const replaceStore = useCallback(data => {
@@ -132,6 +151,7 @@ export function useServerSync(store, setStore, blank) {
     timer.current = setTimeout(() => { if (!conflictRef.current) push(); }, PUSH_DELAY);   // 충돌을 고르기 전에는 올리지 않음
   }, [store]);
 
+  useEffect(() => { if (conf.token) keepStorage(); }, []);   // 로그인한 기기: 저장 데이터를 지우지 않게 요청
   // 앱을 열 때 · 창으로 돌아올 때 · 5분마다 확인
   useEffect(() => {
     check();
@@ -152,6 +172,7 @@ export function useServerSync(store, setStore, blank) {
       setConf({ token: r.token, email: r.user.email, name: r.user.name, role: r.user.role || '', areas: r.user.areas || '', shorts: !!r.user.shorts, screen: r.user.screen ?? null,
         ...(same ? {} : { version: 0, dirty: false, lastSync: null }), ...(r.created ? { owner: r.user.email } : {}) });
       say(r.created ? `${r.user.name}님, 가입을 환영합니다` : `${r.user.name || r.user.email}님으로 로그인했습니다`);
+      keepStorage(); try { localStorage.removeItem(LOGOUT_KEY); } catch { /* 무시 */ }
       return true;
     } catch (e) { say(e.message, true); return false; }
     finally { setSt(s => ({ ...s, busy: false })); }
@@ -172,6 +193,7 @@ export function useServerSync(store, setStore, blank) {
       await api(API_BASE, '/api/logout', { method: 'POST', token: c.token }).catch(() => {});
     }
     clearTimeout(timer.current);
+    noteLogout('manual');
     try { APP_KEYS.forEach(k => localStorage.removeItem(k)); } catch { /* 무시 */ }
     writeConf({ owner: '-' });
     window.location.hash = '#/';

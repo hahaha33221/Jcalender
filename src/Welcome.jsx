@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { API_BASE, api } from './serverSync.js';
+import { API_BASE, LOGOUT_KEY, api } from './serverSync.js';
 
 /* 처음 화면: 로그인 / 회원가입 (사용자마다 서버에 자기 데이터)
    - 회원가입 방식은 서버가 정한다 (GET /api/config): 초대 코드 · 누구나 · 막힘
@@ -10,9 +10,19 @@ export default function Welcome({ sync }) {
       <div className="wl-box">
         <div className="wl-brand"><b>Jcalender</b><span>일정 · 체크리스트 · 기록을 한곳에서</span></div>
         <AuthForm sync={sync} />
+        <LastLogout />
       </div>
     </div>
   );
+}
+
+/** 지난번에 로그인이 풀린 이유 (원인 찾기용, 다시 로그인하면 지워짐) */
+function LastLogout() {
+  let x = null;
+  try { x = JSON.parse(localStorage.getItem(LOGOUT_KEY) || 'null'); } catch { /* 무시 */ }
+  if (!x?.at) return null;
+  const d = new Date(x.at), when = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return <p className="auth-note wl-last">지난 로그아웃: {when} · {x.reason === 'manual' ? '직접 로그아웃' : `서버가 로그인 만료로 응답${x.detail ? ` (${x.detail})` : ''}`}</p>;
 }
 
 /** 아이디 저장: 로그아웃해도 이 브라우저에 이메일만 남겨 다음 로그인에 채움 (비밀번호는 저장 안 함) */
