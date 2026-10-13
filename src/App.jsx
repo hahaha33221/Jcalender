@@ -31,6 +31,7 @@ import { dueNotifications, playChime, recordSent, showOsNotification } from './n
 import { pushOnHere } from './push.js';
 import IdeaBank, { IdeaFab } from './IdeaBank.jsx';
 import AlarmManager from './AlarmManager.jsx';
+import { initNative, isNative, onResume, scheduleAlarms } from './native.js';
 import DataSettings, { AccountPanel } from './DataSettings.jsx';
 import { AttachList, ProjectSelect, TagChips, TagPicker } from './common.jsx';
 import { DdayStrip } from './categories/DdayPanel.jsx';
@@ -144,6 +145,19 @@ export default function App() {
 
   // 알림: 앱이 열려 있는 동안 1분마다 확인 (notify.js)
   const storeRef = useRef(store); storeRef.current = store;
+  // 안드로이드 앱: 앞으로 7일 알람을 휴대폰에 예약 (데이터가 바뀌면 2초 뒤 · 앱으로 돌아올 때 다시) — native.js
+  useEffect(() => {
+    if (!isNative()) return undefined;
+    initNative();
+    let off = () => {};
+    onResume(() => scheduleAlarms(storeRef.current).catch(() => {})).then(f => { off = f; });
+    return () => off();
+  }, []);
+  useEffect(() => {
+    if (!isNative()) return undefined;
+    const t = setTimeout(() => { scheduleAlarms(storeRef.current).catch(() => {}); }, 2000);
+    return () => clearTimeout(t);
+  }, [store.events, store.notify, store.goals, store.plan, store.journal]);
   // 푸시가 왔을 때 화면이 열려 있으면 알림음 (public/sw.js 가 알려 줌)
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return undefined;
@@ -155,8 +169,9 @@ export default function App() {
     const tick = () => {
       const due = dueNotifications(storeRef.current);
       if (!due.length) return;
-      due.forEach(n => { if (!pushOnHere()) showOsNotification(n); pushToast(n.title, n.body); });   // 이 기기가 푸시를 받으면 OS 알림은 푸시로만 (두 번 방지)
-      if (!pushOnHere() && storeRef.current.notify?.sound !== false) playChime(due.some(n => n.alarm));   // 화면 알림음 (푸시 받는 기기는 푸시가 올 때 냄)
+      const quiet = pushOnHere() || isNative();                // 푸시 · 앱 알람이 따로 울리는 기기는 화면 안 알림만 (두 번 방지)
+      due.forEach(n => { if (!quiet) showOsNotification(n); pushToast(n.title, n.body); });
+      if (!quiet && storeRef.current.notify?.sound !== false) playChime(due.some(n => n.alarm));   // 화면 알림음
       setStore(s => recordSent(s, due));
     };
     tick();

@@ -1,0 +1,20 @@
+{
+  "name": "jcalender-android",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Jcalender 안드로이드 앱 (Capacitor) — 사이트를 그대로 띄우고 휴대폰 알람(로컬 알림)을 더함. 빌드는 .github/workflows/android.yml",
+  "scripts": {
+    "add": "cap add android",
+    "patch": "node scripts/patch-android.mjs",
+    "sync": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/local-notifications": "8.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
+}

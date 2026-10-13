@@ -1,0 +1,76 @@
+# Jcalender 안드로이드 앱 (APK) 만들기 — android-app/ (Capacitor)
+# - 앱은 사이트(https://jcalender-amber.vercel.app)를 그대로 띄우고, 휴대폰 알람(로컬 알림)을 더한다 → 사이트를 고치면 앱도 바로 바뀜
+# - android/ 폴더는 저장소에 두지 않고 매번 새로 만든 뒤 scripts/patch-android.mjs 로 권한 · 아이콘 · 서명 · 버전을 넣는다
+# - 서명 키는 저장소(공개)에 넣지 않고 처음 한 번 만들어 GitHub Actions 캐시에 보관 → 같은 키로 서명해야 새 버전을 덮어 설치할 수 있음
+# - 결과: 릴리스 "android-latest" 의 jcalender.apk (휴대폰에서 바로 내려받기)
+name: Android 앱
+
+on:
+  push:
+    paths: ['android-app/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: android-app/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: 서명 키 (캐시)
+        uses: actions/cache@v4
+        with:
+          path: ~/jcal-signing
+          key: jcal-signing-v1
+      - name: 서명 키 준비 (처음 한 번만 만듦) · 버전
+        run: |
+          mkdir -p ~/jcal-signing
+          if [ ! -f ~/jcal-signing/jcal.keystore ]; then
+            openssl rand -hex 16 > ~/jcal-signing/pw
+            keytool -genkeypair -keystore ~/jcal-signing/jcal.keystore -alias jcal -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$(cat ~/jcal-signing/pw)" -keypass "$(cat ~/jcal-signing/pw)" -dname "CN=Jcalender" >/dev/null
+            echo "새 서명 키를 만들었습니다"
+          fi
+          echo "::add-mask::$(cat ~/jcal-signing/pw)"
+          echo "JCAL_KEYSTORE=$HOME/jcal-signing/jcal.keystore" >> "$GITHUB_ENV"
+          echo "JCAL_KEYSTORE_PASSWORD=$(cat ~/jcal-signing/pw)" >> "$GITHUB_ENV"
+          echo "JCAL_VERSION_CODE=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+      - run: npm ci --no-audit --no-fund
+      - run: npx cap add android
+      - run: node scripts/patch-android.mjs
+      - run: npx cap sync android
+      - name: APK 빌드
+        working-directory: android-app/android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: APK 이름
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk jcalender.apk && ls -la jcalender.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jcalender-apk
+          path: android-app/jcalender.apk
+      - name: 내려받기 링크 (릴리스 android-latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android-latest -y --cleanup-tag || true
+          gh release create android-latest jcalender.apk --prerelease --target "$GITHUB_SHA" \
+            --title "Jcalender 안드로이드 앱 (최신 · 1.0.$GITHUB_RUN_NUMBER)" \
+            --notes "휴대폰에서 jcalender.apk 를 내려받아 설치하세요 (처음 한 번 '출처를 알 수 없는 앱' 허용). 앱은 사이트를 그대로 띄우므로 사이트를 고치면 앱도 바로 바뀝니다. 새 버전은 지우지 않고 덮어 설치하면 됩니다."

@@ -7,6 +7,7 @@ import { TAG_COLORS } from './common.jsx';
 import { AuthForm } from './Welcome.jsx';
 import { currentSub, disablePush, enablePush, isIos, isStandalone, pushSupported } from './push.js';
 import { playChime } from './notify.js';
+import { askNativePermission, isNative, nativeStatus, scheduleAlarms, testNativeAlarm } from './native.js';
 
 /* 설정 › 데이터 관리 (schema.js v2 의 새 테이블 화면)
    백업(내보내기·가져오기) · 카테고리(표시·목표 보드·순서) · 프로젝트 · 태그 · 휴지통 · 알림 */
@@ -173,10 +174,41 @@ export function Notify() {
         <button className="btn sm" onClick={() => playChime(true)}>루틴 알람 듣기</button>
         <span className="muted">루틴 알람은 세 번 울리고 휴대폰은 길게 진동 · 앱이 꺼져 있을 때 소리 · 진동은 기기의 알림 설정을 따릅니다</span>
       </div>
-      <PushPanel enabled={N.enabled} />
+      {isNative() ? <NativePanel /> : <PushPanel enabled={N.enabled} />}
+      {!isNative() && /Android/i.test(navigator.userAgent) && <div className="push-box app-dl">
+        <div className="ds-row"><b>안드로이드 앱 (휴대폰 알람)</b><span className="muted">앱으로 설치하면 휴대폰 자체 알람으로 울려 더 확실합니다</span></div>
+        <div className="ds-row"><a className="btn primary" href={APK_URL}>앱 내려받기 (jcalender.apk)</a>
+          <span className="muted">내려받은 파일을 열고 처음 한 번 "출처를 알 수 없는 앱 설치"를 허용 → 설치 · 같은 계정으로 로그인 · 새 버전은 지우지 않고 덮어 설치</span></div>
+      </div>}
       {sent.length > 0 && <ul className="ds-list">{sent.map(n => <li key={n.id}><span className="muted">{n.at}</span> <b>{n.title}</b> {n.body}</li>)}</ul>}
       <p className="note">일정마다 알림 시간을 따로 정하려면 캘린더에서 일정을 눌러 "알림"을 고르세요. 푸시는 서버가 1분마다 확인해 보냅니다 (바꾼 내용이 서버에 저장된 뒤부터 반영).</p>
     </section>
+  );
+}
+
+const APK_URL = 'https://github.com/hahaha33221/Jcalender/releases/download/android-latest/jcalender.apk';
+
+/** 안드로이드 앱: 휴대폰 알람(로컬 알림) 상태 · 허용 · 시험 (native.js) */
+function NativePanel() {
+  const { store } = useCtx();
+  const [st, setSt] = useState(null);
+  const [msg, setMsg] = useState('');
+  const load = async () => setSt(await nativeStatus().catch(() => null));
+  useEffect(() => { load(); }, []);
+  const ok = st?.display === 'granted';
+  return (
+    <div className="push-box">
+      <div className="ds-row"><b>휴대폰 알람 (앱)</b>
+        <span className={`tag ${ok ? 'sh-ok' : ''}`}>{ok ? '알림 허용됨' : '알림 꺼짐'}</span>
+        {st && <span className="muted">예약된 알람 {st.pending}개 (앞으로 7일){st.exact !== 'granted' ? ' · 정확한 시각 알람이 꺼져 있어 몇 분 늦을 수 있음' : ''}</span>}</div>
+      <p className="note">앱이 꺼져 있어도 · 인터넷이 없어도 정해진 시각에 울립니다. 소리 · 진동은 휴대폰 설정 › 애플리케이션 › Jcalender › 알림에서 "루틴 · 알람" · "일정 · 마감 알림" 채널별로 바꿀 수 있습니다. 다른 기기에서 바꾼 일정은 이 앱을 열 때 다시 예약됩니다.</p>
+      <div className="ds-row">
+        {(!ok || st?.exact !== 'granted') && <button className="btn primary" onClick={async () => { setSt(await askNativePermission()); await scheduleAlarms(store).catch(() => {}); load(); }}>알림 · 정확한 알람 허용</button>}
+        <button className="btn" disabled={!ok} onClick={async () => { await testNativeAlarm(); setMsg('5초 뒤 시험 알람이 울립니다 (앱을 닫아 봐도 됩니다)'); }}>시험 알람 (5초 뒤)</button>
+        <button className="btn" disabled={!ok} onClick={async () => { const n = await scheduleAlarms(store); setMsg(`알람 ${n}개를 다시 예약했습니다`); load(); }}>지금 다시 예약</button>
+      </div>
+      {msg && <p className="banner ok" role="status">{msg}</p>}
+    </div>
   );
 }
 

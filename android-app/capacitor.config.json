@@ -1,0 +1,19 @@
+{
+  "appId": "com.jcalender.app",
+  "appName": "Jcalender",
+  "webDir": "www",
+  "server": {
+    "url": "https://jcalender-amber.vercel.app",
+    "androidScheme": "https",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_jcal",
+      "iconColor": "#14212b"
+    }
+  }
+}
