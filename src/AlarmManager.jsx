@@ -13,19 +13,19 @@ import { Notify } from './DataSettings.jsx';
    - 기본 알림 설정 · 알림음 · 푸시 · 보낸 기록 (DataSettings.jsx 의 Notify) */
 const uid = () => Math.random().toString(36).slice(2, 10);
 const REMINDS = [['off', '끄기'], ['0', '정각'], ['5', '5분 전'], ['10', '10분 전'], ['30', '30분 전'], ['60', '1시간 전'], ['1440', '하루 전']];
-const KIND = { routine: '루틴', alarm: '알람', event: '일정', goal: '목표 마감', plan: '기획 마감', journal: '저널링' };
+const KIND = { routine: '루틴', alarm: '알람', event: '일정', goal: '목표 마감', plan: '기획 마감', journal: '저널링', idea: '아이디어 정리' };
 const REP = [['once', '한 번'], ['D', '매일'], ['wd', '평일'], ['we', '주말'], ['days', '특정 요일']];
 const hm = d => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
 export default function AlarmManager() {
-  const { store, setStore, now, openCat } = useCtx();
+  const { store, setStore, now, openCat, go } = useCtx();
   const today = iso(now);
   const N = store.notify || {};
   const [f, setF] = useState('all');
   const [form, setForm] = useState({ title: '', time: '07:00', rep: 'D', date: today, days: [1, 3, 5], remind: '0' });
   const [msg, setMsg] = useState('');
 
-  const up = useMemo(() => upcomingAlarms(store, new Date(), 7), [store.events, store.notify, store.goals, store.plan, store.journal]);
+  const up = useMemo(() => upcomingAlarms(store, new Date(), 7), [store.events, store.notify, store.goals, store.plan, store.journal, store.ideas]);
   const groups = [];
   up.forEach(a => { const k = iso(a.when); let g = groups.find(x => x.k === k); if (!g) groups.push(g = { k, list: [] }); g.list.push(a); });
   const dayName = k => { const d = new Date(`${k}T00:00:00`), diff = Math.round((d - new Date(`${today}T00:00:00`)) / 864e5); return `${diff === 0 ? '오늘' : diff === 1 ? '내일' : `${d.getMonth() + 1}/${d.getDate()}`} (${WEEK[d.getDay()]})`; };
@@ -105,7 +105,7 @@ export default function AlarmManager() {
               <span className="am-act">{e.alarm ? <button className="tl-del" onClick={() => remove(e)}>삭제</button> : <small className="muted">{e.routine ? '체크리스트에서 삭제' : '캘린더에서 삭제'}</small>}</span>
             </div>);
         })}</div> : <p className="muted">{f === 'all' ? '아직 알람이 없습니다. 위에서 알람을 추가하거나, 루틴 입력에서 "시작 5분 전 알림"을 켜 보세요.' : '여기에 해당하는 알람이 없습니다.'}</p>}
-        <p className="note">저널링 알림(매일 일기 · 주간 회고)은 <button className="linkish" onClick={() => openCat('P', '저널링')}>저널링 화면</button>에서 켜고 끕니다.</p>
+        <p className="note">저널링 알림(매일 일기 · 주간 회고)은 <button className="linkish" onClick={() => openCat('P', '저널링')}>저널링 화면</button>에서, 아이디어 정리 알림(정리할 스침이 있을 때 밤 11시)은 <button className="linkish" onClick={() => go('ideas')}>아이디어 뱅크</button>에서 켜고 끕니다.</p>
       </section>
 
       <Notify />

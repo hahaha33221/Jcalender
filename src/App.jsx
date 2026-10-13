@@ -29,7 +29,8 @@ import Welcome from './Welcome.jsx';
 import { sourcesOn } from './calendarSources.js';
 import { dueNotifications, playChime, recordSent, showOsNotification } from './notify.js';
 import { pushOnHere } from './push.js';
-import IdeaBank, { IdeaFab } from './IdeaBank.jsx';
+import IdeaBank, { IdeaFab, IdeaHome } from './IdeaBank.jsx';
+import { stageOf } from './ideaRemind.js';
 import AlarmManager from './AlarmManager.jsx';
 import { initNative, isNative, onResume, scheduleAlarms } from './native.js';
 import DataSettings, { AccountPanel } from './DataSettings.jsx';
@@ -157,7 +158,7 @@ export default function App() {
     if (!isNative()) return undefined;
     const t = setTimeout(() => { scheduleAlarms(storeRef.current).catch(() => {}); }, 2000);
     return () => clearTimeout(t);
-  }, [store.events, store.notify, store.goals, store.plan, store.journal]);
+  }, [store.events, store.notify, store.goals, store.plan, store.journal, (store.ideas || []).filter(i => stageOf(i) === 'inbox').length]);
   // 푸시가 왔을 때 화면이 열려 있으면 알림음 (public/sw.js 가 알려 줌)
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return undefined;
@@ -338,6 +339,7 @@ function Home() {
         <div><h2>체크리스트부터 만들어 볼까요?</h2><p className="muted">관리하고 싶은 것과 체크 리듬을 클릭으로 고르면 나에게 맞는 체크리스트를 추천해 드려요. 1분이면 됩니다.</p></div>
         <button className="btn primary" onClick={() => go('check')}>추천받아 시작하기</button></section>}
       <GoalOnboardCard />
+      <IdeaHome />
       <div className="dash-top">
         <Remain />
         <DueCards />

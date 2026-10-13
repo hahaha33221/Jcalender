@@ -1,6 +1,6 @@
 /* 알림 (store.notify 설정, store.notifications 보낸 기록)
    - 앱이 열려 있는 동안 1분마다 확인해 때가 된 알림을 보낸다 (브라우저 알림 허용 시 OS 알림, 아니면 화면 오른쪽 위 알림)
-   - 대상: 저널링 알림(journal.remind, reminders.js), 시간이 있는 일정(반복 회차 · 루틴 포함, 일정마다 remind 로 바꿀 수 있음), 기획 마감(planDays 일 전 오전 9시),
+   - 대상: 저널링 알림(journal.remind, reminders.js), 아이디어 정리 알림(notify.idea, ideaRemind.js), 시간이 있는 일정(반복 회차 · 루틴 포함, 일정마다 remind 로 바꿀 수 있음), 기획 마감(planDays 일 전 오전 9시),
      목표 마감(notify.goals: all = D-7 · D-1 · 당일 / day = 당일만 / off, 오전 9시, 완료한 목표는 빼고)
    - 서버(server/push.mjs)도 같은 규칙으로 1분마다 계산해 웹 푸시로 보낸다 (앱이 꺼져 있어도)
    - 같은 알림은 key 로 한 번만 보낸다. 기록은 최근 100개
@@ -8,6 +8,7 @@
 import { iso, pad } from './data.js';
 import { expandEvents } from './recur.js';
 import { dueJournal, upcomingJournal } from './reminders.js';
+import { dueIdea, upcomingIdea } from './ideaRemind.js';
 
 const at = (date, hm) => new Date(`${date}T${hm}:00`);
 /** 직접 켠 알람: 루틴 · 알람 관리에서 만든 알람(alarm)에 알림 시점을 정해 두면 "알림 켜기"를 꺼 두어도 울린다 */
@@ -21,6 +22,7 @@ export function dueNotifications(store, now = new Date()) {
   const N = store.notify || {};
   const sent = new Set((store.notifications || []).map(n => n.key));
   const out = dueJournal(store, now, sent);                 // 저널링 알림은 저널링 화면에서 따로 켠다 (reminders.js)
+  out.push(...dueIdea(store, now, sent));                   // 아이디어 정리 알림 (정리할 스침이 있을 때, 아이디어 뱅크에서 켜고 끔)
   // 루틴 · 알람에 직접 켠 알림(예: 시작 5분 전)은 "알림 켜기"를 꺼 두어도 울린다
   const t0 = iso(now), t1 = iso(new Date(now.getTime() + 2 * 864e5));
   for (const e of expandEvents(store.events || [], t0, t1)) {
@@ -54,7 +56,7 @@ export function dueNotifications(store, now = new Date()) {
 }
 
 /** 앞으로 울릴 알람 (알람 관리 화면): 지금부터 days 일 안, 시간순
-    kind: routine(루틴) · alarm(알람) · event(일정) · goal(목표 마감) · plan(기획 마감) · journal(저널링) */
+    kind: routine(루틴) · alarm(알람) · event(일정) · goal(목표 마감) · plan(기획 마감) · journal(저널링) · idea(아이디어 정리) */
 export function upcomingAlarms(store, now = new Date(), days = 7) {
   const N = store.notify || {}, out = [], end = new Date(now.getTime() + days * 864e5);
   for (const e of expandEvents(store.events || [], iso(now), iso(new Date(end.getTime() + 864e5)))) {
@@ -79,6 +81,7 @@ export function upcomingAlarms(store, now = new Date(), days = 7) {
     }
   }
   upcomingJournal(store, now, days).filter(n => n.when >= now && n.when <= end).forEach(n => out.push({ key: n.key, kind: 'journal', title: n.title, body: n.body, when: n.when }));
+  upcomingIdea(store, now, days).filter(n => n.when <= end).forEach(n => out.push(n));
   return out.sort((a, b) => a.when - b.when);
 }
 

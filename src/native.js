@@ -65,7 +65,7 @@ export async function scheduleAlarms(store) {
   await L.schedule({ notifications: list.map(a => ({
     id: idOf(`${a.key}@${+a.when}`), title: a.title, body: a.body || '', channelId: a.alarm ? CH.alarm : CH.normal,
     schedule: { at: a.when, allowWhileIdle: true }, smallIcon: 'ic_stat_jcal', iconColor: '#14212b', autoCancel: true,
-    extra: { url: a.kind === 'goal' ? '#/P' : '#/alarms' },
+    extra: { url: a.kind === 'goal' ? '#/P' : a.kind === 'idea' ? '#/ideas' : '#/alarms' },
   })) });
   return list.length;
 }

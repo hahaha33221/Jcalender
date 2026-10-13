@@ -2324,15 +2324,57 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 }
 .modal .ib-dl { flex-direction: row; }
 
-/* 아이디어 뱅크 › 회의록 */
-.ib-mbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.ib-min { font-size: 14px; line-height: 1.6; }
-.ib-min h4 { margin: 10px 0 4px; font-size: 14px; color: var(--ink); }
-.ib-min p { margin: 0; }
-.ib-min ol, .ib-min ul { margin: 2px 0; padding-left: 22px; }
-.ib-ag { margin: 4px 0 6px; }
-.ib-ag b { font-weight: 600; }
-.ib-acts.in-min .ib-ah b { font-size: 14px; }
+/* 아이디어 뱅크 › 스침 · 정리 · 중요 (핵심 3줄 + 할 일) */
+.ib-quick { display: flex; gap: 8px; align-items: center; }
+.ib-quick input { flex: 1; min-width: 0; font-size: 15px; padding: 10px 12px; }
+.ib-mic.sm { width: 42px; height: 42px; flex: 0 0 42px; }
+.ib-cap.compact .ib-mic.sm { width: 42px; height: 42px; flex-basis: 42px; }
+.ib-keyopt { font-size: 13px; color: var(--ink2); display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ib-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+.ib-stats button { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; cursor: pointer; color: var(--ink); }
+.ib-stats b { font-size: 22px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.ib-stats span { font-size: 12px; color: var(--ink3); }
+.ib-guide ol { margin: 6px 0 12px; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.ib-guide li b { display: block; }
+.ib-guide li span { font-size: 13.5px; }
+.ib-rem { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.ib-rem input[type=time] { width: 110px; padding: 3px 6px; }
+.ib-rows { display: flex; flex-direction: column; }
+.ib-row { display: grid; grid-template-columns: 82px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line2); }
+.ib-row:last-of-type { border-bottom: 0; }
+.ib-row.s-dropped .ib-rx { color: var(--ink3); text-decoration: line-through; }
+.ib-rt { color: var(--ink3); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ib-rx { font-size: 14px; overflow-wrap: anywhere; white-space: pre-wrap; max-height: 4.8em; overflow: hidden; }
+.ib-rb { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.btn.ok { border-color: var(--ok); color: var(--ok); }
+.btn.star { border-color: var(--a2); color: var(--a2); }
+.ib-st.key { background: var(--warnsoft); color: var(--warn); }
+.ib-st.seen, .ib-st.inbox { background: var(--apisoft); color: var(--a3); }
+.ib-st.dropped { background: var(--nonesoft); color: var(--ink3); }
+.ib-lb { font-size: 12.5px; color: var(--ink3); letter-spacing: .04em; }
+.ib-pts ul { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; font-size: 14.5px; line-height: 1.55; }
+.ib-pts p { margin: 4px 0 0; }
+.ib-err { color: var(--over); }
+.ib-todos { list-style: none; margin: 0; padding: 0; }
+.ib-todos li { display: flex; gap: 8px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--line2); }
+.ib-todos li:last-child { border-bottom: 0; }
+.ib-todos .grow { flex: 1; min-width: 0; }
+.ib-tri { display: flex; flex-direction: column; gap: 12px; }
+.ib-tri-h { display: flex; gap: 10px; align-items: center; }
+.ib-tri-h .pbar { flex: 1; }
+.ib-tri-card { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-height: 110px; }
+.ib-tri-card p { margin: 6px 0 0; font-size: 17px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow: auto; }
+.ib-tri-b { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ib-tri-b .btn { padding: 12px 6px; font-size: 15px; }
+.ib-tri-done { display: flex; flex-direction: column; gap: 8px; }
+.ib-tri-s { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.ib-tri-s li { display: flex; gap: 6px; align-items: center; }
+.ib-home .ib-cap { gap: 6px; }
+@media (max-width: 700px) {
+  .ib-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .ib-rb { justify-content: flex-start; }
+  .ib-stats b { font-size: 19px; }
+}
 
 /* 체크리스트 편집 › 루틴 시작 시각 · 5분 전 알림 */
 .cle-tm { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
@@ -2374,3 +2416,5 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 }
 .am-row .am-k { justify-self: start; }
 .auth-opts { display: flex; gap: 16px; flex-wrap: wrap; }
+.am-k.idea { background: var(--warnsoft); color: var(--warn); }
+.ib-hb { display: inline-flex; gap: 6px; }

@@ -115,7 +115,7 @@ const fake = http.createServer((req, res) => {
       if (JSON.parse(b).response_format?.json_schema?.name === 'goal_todos') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ goals: [{ index: 0, guide: '주간 거리를 천천히 늘리세요.', tips: ['무리하지 않기', ''],
         milestones: [{ name: '5km 완주', date: '2026-11-15' }, { name: '범위 밖', date: '2030-01-01' }], todos: [{ name: '러닝화 사기', start: '2026-10-08', end: '2026-10-10', how: '매장에서 신어 보기' }, { name: '주 3회 3km', start: '2026-10-01', end: '2026-12-31', how: '' }] }] }) } }] }));
       if (JSON.parse(b).response_format?.json_schema?.name === 'idea_card') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ title: '주말 동네 러닝 모임', summary: '주말마다 함께 달리면 꾸준해진다.', area: 'P', cat: '건강 관리', tags: ['#러닝', '모임'],
-        minutes: { overview: '동네 러닝 모임을 만드는 아이디어.', agenda: [{ title: '모임 만들기', points: ['주말 아침', ''] }, { title: '', points: ['빈 안건'] }], conclusion: '다음 주 토요일 첫 모임', etc: [] },
+        points: ['- 주말 아침 7시에 모인다', '', '처음엔 3km', '동네 공원', '음료는 각자', '비 오면 쉼', '여섯 번째는 뺌'],
         actions: [{ type: 'event', title: '첫 러닝 모임', who: '나', date: '2026-10-17', time: '07:00', cycle: '', goal: '', detail: '' }, { type: 'todo', title: '모임 공지 올리기', date: 'bad', time: '25:00', cycle: 'X', goal: 'no-such-goal', detail: '' }, { type: 'zzz', title: '', date: '', time: '', cycle: '', goal: '', detail: '' }] }) } }] }));
       if (JSON.parse(b).response_format?.json_schema?.name === 'asset_keywords') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ keywords: ['office desk', 'meeting room'], mood: '긴장' }) } }] }));
       res.end(JSON.stringify({ id: 'chatcmpl-test', object: 'chat.completion', model: 'gpt-5-mini', choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', refusal: null,
@@ -433,8 +433,8 @@ try {
     check('AI 정리: 행동 검사 (잘못된 날짜 · 시각 · 주기 · 없는 목표 · 빈 제목 뺌)', st.json.actions?.length === 2 && st.json.actions[0].date === '2026-10-17' && st.json.actions[0].time === '07:00'
       && st.json.actions[1].date === '' && st.json.actions[1].time === '' && st.json.actions[1].cycle === '' && st.json.actions[1].goal === '', JSON.stringify(st.json.actions));
     check('AI 에게 오늘 · 카테고리 · 목표 전달', req2?.response_format.json_schema.name === 'idea_card' && req2.messages[1].content.includes('2026-10-12 (월요일)') && req2.messages[1].content.includes('g1 · 체력 키우기') && req2.messages[1].content.includes('건강 관리, 여가 관리'));
-    check('회의록: 개요 · 안건(빈 안건 · 빈 줄 뺌) · 결론 · 기타 · 담당자', st.json.minutes?.overview === '동네 러닝 모임을 만드는 아이디어.' && st.json.minutes.agenda.length === 1 && JSON.stringify(st.json.minutes.agenda[0].points) === '["주말 아침"]'
-      && st.json.minutes.conclusion === '다음 주 토요일 첫 모임' && Array.isArray(st.json.minutes.etc) && st.json.actions[0].who === '나' && req2.response_format.json_schema.schema.required.includes('minutes'), JSON.stringify(st.json.minutes));
+    check('핵심 줄: 빈 줄 · 앞 기호 빼고 5개까지 · 담당자', JSON.stringify(st.json.points) === '["주말 아침 7시에 모인다","처음엔 3km","동네 공원","음료는 각자","비 오면 쉼"]'
+      && !('minutes' in st.json) && st.json.actions[0].who === '나' && req2.response_format.json_schema.schema.required.includes('points'), JSON.stringify(st.json.points));
     check('긴 회의 글(3만 자)도 받음', (await call('POST', '/api/ideas/structure', { text: '회의 내용 '.repeat(5000) }, T)).status === 200);
     check('너무 짧은 글 400', (await call('POST', '/api/ideas/structure', { text: '음' }, T)).status === 400);
     const cf = await call('GET', '/api/ideas/config', null, T);
