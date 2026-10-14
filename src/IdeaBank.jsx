@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AREAS, CATS, iso } from './data.js';
 import { Popup, useCtx } from './shared.jsx';
 import { API_BASE } from './serverSync.js';
-import { CYC, STAGES, TYPES, applyAction, contextOf, findGoal, ideaStats, ideaText, newIdea, pointsOf, purgeDropped, stageOf, toTriage, uid, withAi } from './ideas.js';
+import { CYC, STAGES, TYPES, applyAction, contextOf, findGoal, ideaStats, ideaText, mergeIdea, newIdea, pointsOf, purgeDropped, stageOf, tagCounts, toTriage, uid, withAi } from './ideas.js';
 import { ideaRemindOf } from './ideaRemind.js';
 
 /* 아이디어 뱅크: 스친 생각은 빠르게 남기고(스침), 하루 한 번 카드 넘기기로 정리하고, 중요한 것만 AI 로 정리해 실행한다 (src/ideas.js)
@@ -143,7 +143,7 @@ function Capture({ onSaved, compact, auto }) {
         <div><b className="ib-time">{fmtSec(st.sec)}</b><small className="muted"> / 최대 90분 · 끝나면 누르세요{st.done ? ` · 받아 적은 구간 ${st.done}` : ''}</small>
           <div><button className="linkish" onClick={() => stop(true)}>취소</button><small className="muted"> · 2분 넘게 녹음하면 중요로 저장하고 AI 가 정리합니다</small></div></div>
       </div> : <form className="ib-quick" onSubmit={submit}>
-        <input ref={inp} value={text} onChange={e => setText(e.target.value)} placeholder={busy ? (st.phase === 'stt' ? `받아 적는 중… (${st.done}/${st.segs} 구간)` : 'AI 가 정리하는 중…') : '스친 생각 한 줄 (Enter 로 저장)'} aria-label="스친 생각 적기" disabled={busy} enterKeyHint="done" />
+        <input ref={inp} value={text} onChange={e => setText(e.target.value)} placeholder={busy ? (st.phase === 'stt' ? `받아 적는 중… (${st.done}/${st.segs} 구간)` : 'AI 가 정리하는 중…') : '스친 생각 한 줄 (Enter 로 저장 · #태그 가능)'} aria-label="스친 생각 적기" disabled={busy} enterKeyHint="done" />
         <button type="button" className="ib-mic sm" onClick={start} disabled={busy} aria-label="녹음 시작" title="녹음 (짧으면 스침, 2분 넘으면 중요로 정리)">{MIC(20)}</button>
         <button className="btn primary" disabled={busy || text.trim().length < 2}>저장</button>
       </form>}
@@ -180,7 +180,11 @@ export function IdeaCard({ idea }) {
   const { store, setStore, now, go, openCat, areasAllowed } = useCtx();
   const organize = useOrganize();
   const [copied, setCopied] = useState(false);
+  const [edit, setEdit] = useState(false);
+  const [tagIn, setTagIn] = useState('');
   const stage = stageOf(idea), P = pointsOf(idea);
+  const setPts = pts => upd({ points: pts, minutes: undefined });
+  const addTag = () => { const t = tagIn.trim().replace(/^#/, '').replace(/\s+/g, ''); if (t && !idea.tags.includes(t)) upd({ tags: [...idea.tags, t].slice(0, 8) }); setTagIn(''); };
   const asText = () => ideaText(idea, t => TYPES[t] || t);
   const copy = async () => { try { await navigator.clipboard.writeText(asText()); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { window.prompt('복사할 내용', asText()); } };
   const upd = p => setStore(s => ({ ...s, ideas: (s.ideas || []).map(i => (i.id === idea.id ? { ...i, ...p } : i)) }));
@@ -204,11 +208,16 @@ export function IdeaCard({ idea }) {
         <small className="muted">{fmtAt(idea.at)} · {idea.src === 'voice' ? `녹음${idea.sec ? ` ${Math.max(1, Math.round(idea.sec / 60))}분` : ''}` : '글'}</small>
         <select value={idea.area} onChange={e => upd({ area: e.target.value, cat: '' })} aria-label="영역">{[...(areasAllowed || 'P')].map(a => <option key={a} value={a}>{AREAS[a].n}</option>)}</select>
         <select value={idea.cat} onChange={e => upd({ cat: e.target.value })} aria-label="카테고리"><option value="">카테고리 없음</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select>
-        {idea.tags.map(t => <span key={t} className="ib-tag">#{t}</span>)}
+        {idea.tags.map(t => <span key={t} className="ib-tag">#{t}<button className="ib-tx" onClick={() => upd({ tags: idea.tags.filter(x => x !== t) })} aria-label={`${t} 태그 빼기`}>×</button></span>)}
+        <input className="ib-tagin" value={tagIn} onChange={e => setTagIn(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }} onBlur={addTag} placeholder="+ 태그" aria-label="태그 추가" />
       </div>
-      <div className="ib-pts"><b className="ib-lb">핵심</b>
+      <div className="ib-pts"><div className="ib-ah"><b className="ib-lb">핵심</b>{!idea.aiBusy && <button className="linkish" onClick={() => { if (!edit && !idea.points?.length && P.length) setPts(P); if (edit) setPts((idea.points || []).map(x => x.trim()).filter(Boolean)); setEdit(v => !v); }}>{edit ? '다 고쳤어요' : '고치기'}</button>}</div>
         {idea.aiBusy ? <p className="muted">AI 가 핵심 3줄 · 할 일로 정리하는 중…</p>
-          : P.length ? <ul>{P.map((p, i) => <li key={i}>{p}</li>)}</ul>
+          : edit ? <div className="ib-pe">{(idea.points || []).map((p, i) => (
+              <div key={i} className="ib-pe-r"><input value={p} onChange={e => setPts(idea.points.map((x, j) => (j === i ? e.target.value : x)))} aria-label={`핵심 ${i + 1}`} />
+                <button className="tl-del" onClick={() => setPts(idea.points.filter((_, j) => j !== i))} aria-label="이 줄 빼기">×</button></div>))}
+              <button className="btn sm" onClick={() => setPts([...(idea.points || []), ''])}>+ 줄 추가</button></div>
+          : P.filter(Boolean).length ? <ul>{P.filter(Boolean).map((p, i) => <li key={i}>{p}</li>)}</ul>
           : <p className="muted ib-sum">{idea.text.length > 300 ? `${idea.text.slice(0, 300)}…` : idea.text}</p>}
         {idea.aiErr && !idea.aiBusy && <small className="ib-err">AI 정리를 못 했어요: {idea.aiErr}</small>}
       </div>
@@ -231,6 +240,17 @@ export function IdeaCard({ idea }) {
 }
 
 /** 스침 한 줄 (정리 대기 · 확인함 · 버림) */
+function MergePick({ idea, onDone }) {
+  const { store, setStore } = useCtx();
+  const keys = (store.ideas || []).filter(i => stageOf(i) === 'key' && i.id !== idea.id);
+  if (!keys.length) return null;
+  return (
+    <select className="ib-merge" value="" onChange={e => { if (e.target.value) { setStore(s => mergeIdea(s, idea.id, e.target.value)); onDone?.(); } }} aria-label="중요 카드에 합치기">
+      <option value="">합치기…</option>{keys.map(k => <option key={k.id} value={k.id}>{k.title}</option>)}
+    </select>
+  );
+}
+
 function InboxRow({ idea }) {
   const { setStore } = useCtx();
   const organize = useOrganize();
@@ -243,8 +263,8 @@ function InboxRow({ idea }) {
       <small className="ib-rt">{fmtAt(idea.at)}{idea.src === 'voice' ? ' · 음성' : ''}</small>
       <span className="ib-rx">{idea.text}</span>
       <span className="ib-rb">
-        {stage === 'inbox' && <><button className="btn sm ok" onClick={() => upd({ status: 'seen' })}>체크</button><button className="btn sm star" onClick={() => organize(idea)}>중요</button><button className="btn sm" onClick={() => upd({ status: 'dropped', droppedAt: new Date().toISOString() })}>버리기</button></>}
-        {stage === 'seen' && <><button className="btn sm star" onClick={() => organize(idea)}>중요로 올리기</button><button className="linkish" onClick={() => upd({ status: 'inbox' })}>정리 대기로</button><button className="btn sm" onClick={() => upd({ status: 'dropped', droppedAt: new Date().toISOString() })}>버리기</button></>}
+        {stage === 'inbox' && <><button className="btn sm ok" onClick={() => upd({ status: 'seen' })}>체크</button><button className="btn sm star" onClick={() => organize(idea)}>중요</button><MergePick idea={idea} /><button className="btn sm" onClick={() => upd({ status: 'dropped', droppedAt: new Date().toISOString() })}>버리기</button></>}
+        {stage === 'seen' && <><button className="btn sm star" onClick={() => organize(idea)}>중요로 올리기</button><MergePick idea={idea} /><button className="linkish" onClick={() => upd({ status: 'inbox' })}>정리 대기로</button><button className="btn sm" onClick={() => upd({ status: 'dropped', droppedAt: new Date().toISOString() })}>버리기</button></>}
         {stage === 'dropped' && <><small className="muted">{left} 일 뒤 삭제</small><button className="btn sm" onClick={() => upd({ status: 'inbox', droppedAt: undefined })}>되살리기</button><button className="tl-del" onClick={del}>지금 삭제</button></>}
       </span>
     </div>
@@ -258,23 +278,27 @@ export function Triage({ onClose }) {
   const today = iso(now);
   const [ids] = useState(() => toTriage(store, today).map(i => i.id));
   const [n, setN] = useState(0);
-  const [res, setRes] = useState({ ok: 0, star: 0, later: 0, drop: 0 });
+  const [res, setRes] = useState({ ok: 0, star: 0, merge: 0, later: 0, drop: 0 });
   const [starred, setStarred] = useState([]);
+  const [pick, setPick] = useState(false);
+  const keys = (store.ideas || []).filter(i => stageOf(i) === 'key');
   const cur = n < ids.length ? (store.ideas || []).find(i => i.id === ids[n]) : null;
   const upd = (id, p) => setStore(s => ({ ...s, ideas: (s.ideas || []).map(i => (i.id === id ? { ...i, ...p } : i)) }));
-  const act = k => {
+  let act = k => {
     if (!cur) return;
     if (k === 'ok') upd(cur.id, { status: 'seen' });
     if (k === 'later') upd(cur.id, { later: today });
     if (k === 'drop') upd(cur.id, { status: 'dropped', droppedAt: new Date().toISOString() });
     if (k === 'star') { setStarred(v => [...v, cur.id]); organize(cur); }
-    setRes(v => ({ ...v, [k]: v[k] + 1 }));
+    if (k.startsWith('merge:')) { setStore(s => mergeIdea(s, cur.id, k.slice(6))); k = 'merge'; }
+    setPick(false);
+    setRes(v => ({ ...v, [k]: (v[k] || 0) + 1 }));
     setN(v => v + 1);
   };
   useEffect(() => { if (n < ids.length && !cur) setN(v => v + 1); }, [n, cur, ids.length]);   // 그사이 지운 것은 건너뜀
   useEffect(() => {
     if (!cur) return undefined;
-    const k = e => { if (e.target.closest('input, textarea, select')) return; const m = { 1: 'ok', 2: 'star', 3: 'later', 4: 'drop' }[e.key]; if (m) act(m); };
+    const k = e => { if (pick || e.target.closest('input, textarea, select')) return; const m = { 1: 'ok', 2: 'star', 3: 'later', 4: 'drop' }[e.key]; if (m) act(m); else if (e.key === '5' && keys.length) setPick(true); };
     window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
   });
   const stars = starred.map(id => (store.ideas || []).find(i => i.id === id)).filter(Boolean);
@@ -289,11 +313,13 @@ export function Triage({ onClose }) {
             <button className="btn star" onClick={() => act('star')}>중요로 올리기</button>
             <button className="btn" onClick={() => act('later')}>나중에</button>
             <button className="btn" onClick={() => act('drop')}>버리기</button>
+            {keys.length > 0 && <button className={`btn ib-tri-m ${pick ? 'on' : ''}`} onClick={() => setPick(v => !v)}>중요 카드에 합치기</button>}
           </div>
-          <small className="muted">체크: 본 것으로 남김 · 중요: AI 가 핵심 3줄 · 할 일로 정리 · 나중에: 내일 다시 · 버리기: 30일 뒤 삭제</small>
+          {pick && <ul className="ib-tri-pick">{keys.map(k => <li key={k.id}><button className="btn sm" onClick={() => act(`merge:${k.id}`)}>{k.title}</button><small className="muted">{(k.tags || []).map(t => `#${t}`).join(' ')}</small></li>)}</ul>}
+          <small className="muted">체크: 본 것으로 남김 · 중요: AI 가 핵심 3줄 · 할 일로 정리 · 나중에: 내일 다시 · 버리기: 30일 뒤 삭제 · 합치기: 이미 있는 중요 카드의 핵심에 한 줄로 · 키보드 1~5</small>
         </> : <div className="ib-tri-done">
           <b>{ids.length ? '정리 끝' : '정리할 스침이 없습니다'}</b>
-          {ids.length > 0 && <span>{[['ok', '체크'], ['star', '중요'], ['later', '나중에'], ['drop', '버리기']].filter(([k]) => res[k]).map(([k, t]) => `${t} ${res[k]}`).join(' · ') || '처리한 것 없음'}</span>}
+          {ids.length > 0 && <span>{[['ok', '체크'], ['star', '중요'], ['merge', '합침'], ['later', '나중에'], ['drop', '버리기']].filter(([k]) => res[k]).map(([k, t]) => `${t} ${res[k]}`).join(' · ') || '처리한 것 없음'}</span>}
           {stars.length > 0 && <ul className="ib-tri-s">{stars.map(i => <li key={i.id}><span className="tag ib-st key">중요</span>{i.title}<small className="muted">{i.aiBusy ? ' · AI 정리 중…' : i.aiErr ? ' · AI 정리 못 함' : i.ai ? ' · 정리됨' : ''}</small></li>)}</ul>}
           <div className="ib-tri-b">{stars.length > 0 && <button className="btn primary" onClick={() => { onClose(); go('ideas'); }}>중요 카드에서 할 일 적용하기</button>}<button className="btn" onClick={onClose}>닫기</button></div>
         </div>}
@@ -328,6 +354,7 @@ export default function IdeaBank() {
   const [f, setF] = useState('seen');
   const [q, setQ] = useState('');
   const [moreIn, setMoreIn] = useState(false);
+  const [tag, setTag] = useState('');
   const all = store.ideas || [];
   const S = ideaStats(store, today);
   useEffect(() => { const k = purgeDropped(all); if (k.length !== all.length) setStore(s => ({ ...s, ideas: purgeDropped(s.ideas || []) })); }, []);   // 버린 지 30일 지난 것 정리
@@ -338,6 +365,8 @@ export default function IdeaBank() {
   const qq = q.trim().toLowerCase();
   const past = qq ? all.filter(i => `${i.title} ${i.summary} ${i.text} ${i.tags.join(' ')} ${(i.points || []).join(' ')}`.toLowerCase().includes(qq)) : by(f);
   const N = { seen: by('seen').length, applied: by('applied').length, archived: by('archived').length, dropped: by('dropped').length };
+  const tags = tagCounts(store);
+  const tagged = tag ? all.filter(i => stageOf(i) !== 'dropped' && (i.tags || []).includes(tag)) : [];
   const jump = id => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   return (
     <div className="catv ib">
@@ -352,6 +381,12 @@ export default function IdeaBank() {
         {[['오늘 스침', S.today, 'ib-in'], ['정리 대기', S.inbox, 'ib-in'], ['중요', S.key, 'ib-key'], ['할 일 대기', S.todo, 'ib-todo']].map(([t, v, id]) => (
           <button key={t} onClick={() => jump(id)}><b>{v}</b><span>{t}</span></button>))}
       </div>
+      {tags.length > 0 && <div className="ib-tags" role="group" aria-label="태그로 모아 보기"><small className="muted">태그</small>
+        {tags.slice(0, 20).map(([t, c]) => <button key={t} aria-pressed={tag === t} onClick={() => setTag(tag === t ? '' : t)}>#{t} <small>{c}</small></button>)}</div>}
+      {tag && <section className="panel ib-tagv">
+        <div className="csum-h"><h2>#{tag} {tagged.length}</h2><span className="muted">이 태그가 붙은 아이디어 모두 (단계 상관없이)</span><button className="btn sm grow-r" onClick={() => setTag('')}>닫기</button></div>
+        <div className="ib-list">{tagged.map(i => (['inbox', 'seen'].includes(stageOf(i)) ? <InboxRow key={i.id} idea={i} /> : <IdeaCard key={i.id} idea={i} />))}</div>
+      </section>}
 
       <section className="panel" id="ib-in">
         <div className="csum-h"><h2>정리할 스침 {S.inbox}</h2><RemindSet /><button className="btn primary grow-r" disabled={!toTriage(store, today).length} onClick={() => setTri(true)}>정리 시작</button></div>

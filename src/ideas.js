@@ -17,8 +17,22 @@ export const uid = () => Math.random().toString(36).slice(2, 10);
 export const TYPES = { event: '캘린더 일정', todo: '목표 To do', check: '반복 체크', goal: '새 목표', note: '기록만' };
 export const CYC = { D: '매일', W: '매주', M: '매월' };
 
-/** 새 아이디어 = 스침 (받아 적은 글만, AI 정리는 중요로 올릴 때) */
-export const newIdea = (text, src, area = 'P', sec = 0, status = 'inbox') => ({ id: uid(), at: new Date().toISOString(), src, sec, text, title: text.replace(/\s+/g, ' ').slice(0, 30), summary: '', area, cat: '', tags: [], ai: false, status, points: [], actions: [] });
+/** 글 속 #태그 (한글 · 영문 · 숫자, 20자까지) */
+export const tagsIn = text => [...new Set([...String(text).matchAll(/(?:^|\s)#([^\s#.,!?]{1,20})/g)].map(m => m[1]))].slice(0, 6);
+/** 새 아이디어 = 스침 (받아 적은 글만, AI 정리는 중요로 올릴 때). 글에 #태그 를 쓰면 태그로 */
+export const newIdea = (text, src, area = 'P', sec = 0, status = 'inbox') => ({ id: uid(), at: new Date().toISOString(), src, sec, text, title: text.replace(/(?:^|\s)#[^\s#]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30) || text.slice(0, 30), summary: '', area, cat: '', tags: tagsIn(text), ai: false, status, points: [], actions: [] });
+
+/** 스침(from)을 다른 아이디어(to)에 합치기: 글은 덧붙이고, 핵심에 한 줄 추가, 태그 합침 → 스침은 지움 */
+export function mergeIdea(s, fromId, toId) {
+  const f = (s.ideas || []).find(i => i.id === fromId), t = (s.ideas || []).find(i => i.id === toId);
+  if (!f || !t || f.id === t.id) return s;
+  const d = new Date(f.at), line = f.text.replace(/(?:^|\s)#[^\s#]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return { ...s, ideas: s.ideas.filter(i => i.id !== fromId).map(i => (i.id !== toId ? i : { ...i,
+    text: `${i.text}\n\n[덧붙임 ${d.getMonth() + 1}/${d.getDate()}] ${f.text}`, points: [...pointsOf(i), line.length > 120 ? `${line.slice(0, 120)}…` : line].filter(Boolean),
+    tags: [...new Set([...(i.tags || []), ...(f.tags || [])])].slice(0, 8), minutes: undefined, merged: [...(i.merged || []), f.id] })) };
+}
+/** 태그별 개수 (버린 것 빼고), 많은 순 */
+export const tagCounts = store => { const m = new Map(); (store.ideas || []).filter(i => stageOf(i) !== 'dropped').forEach(i => (i.tags || []).forEach(t => m.set(t, (m.get(t) || 0) + 1))); return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])); };
 
 export { stageOf };
 export const STAGES = { inbox: '정리 대기', seen: '확인함', key: '중요', applied: '적용함', archived: '보관', dropped: '버림' };

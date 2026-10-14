@@ -2418,3 +2418,20 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .auth-opts { display: flex; gap: 16px; flex-wrap: wrap; }
 .am-k.idea { background: var(--warnsoft); color: var(--warn); }
 .ib-hb { display: inline-flex; gap: 6px; }
+.ib-tag { display: inline-flex; align-items: center; gap: 2px; }
+.ib-tx { border: 0; background: none; color: var(--ink3); cursor: pointer; padding: 0 2px; font-size: 13px; line-height: 1; }
+.ib-tx:hover { color: var(--over); }
+.ib-meta .ib-tagin { width: 84px; font-size: 12.5px; padding: 3px 6px; flex: 0 0 auto; }
+.ib-pe { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; align-items: flex-start; }
+.ib-pe-r { display: flex; gap: 6px; align-items: center; width: 100%; }
+.ib-pe-r input { flex: 1; min-width: 0; }
+.ib-merge { width: auto; max-width: 160px; font-size: 12.5px; padding: 4px 6px; }
+.ib-tri-m { grid-column: 1 / -1; }
+.ib-tri-m.on { border-color: var(--a3); color: var(--a3); }
+.ib-tri-pick { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 30vh; overflow: auto; }
+.ib-tri-pick li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ib-tri-pick .btn { text-align: left; }
+.ib-tags { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: -4px 0 12px; }
+.ib-tags button { border: 1px solid var(--line); background: var(--card); color: var(--a3); border-radius: 99px; padding: 3px 10px; font-size: 13px; cursor: pointer; }
+.ib-tags button[aria-pressed="true"] { background: var(--a3); border-color: var(--a3); color: var(--invert); }
+.ib-tags button small { color: inherit; opacity: .7; }
