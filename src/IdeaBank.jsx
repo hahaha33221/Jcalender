@@ -4,6 +4,8 @@ import { Popup, useCtx } from './shared.jsx';
 import { API_BASE } from './serverSync.js';
 import { CYC, STAGES, TYPES, applyAction, contextOf, findGoal, ideaStats, ideaText, mergeIdea, newIdea, pointsOf, purgeDropped, stageOf, tagCounts, toTriage, uid, withAi } from './ideas.js';
 import { ideaRemindOf } from './ideaRemind.js';
+import { WishPick } from './Wishes.jsx';
+import { ideaToWish } from './wishes.js';
 
 /* 아이디어 뱅크: 스친 생각은 빠르게 남기고(스침), 하루 한 번 카드 넘기기로 정리하고, 중요한 것만 AI 로 정리해 실행한다 (src/ideas.js)
    - 스침: 한 줄 글 · 짧은 녹음 → AI 없이 바로 저장 (어느 화면에서든 오른쪽 아래 버튼 IdeaFab, 대시보드의 IdeaHome)
@@ -231,6 +233,7 @@ export function IdeaCard({ idea }) {
         <button className="btn sm" onClick={() => upd({ actions: [...idea.actions, { id: uid(), type: 'event', title: '', date: iso(now), time: '', cycle: '', goal: '', detail: '', done: null }] })}>+ 할 일</button>
         <button className="btn sm" disabled={!!idea.aiBusy} onClick={() => organize(idea)}>{idea.aiBusy ? '정리 중…' : idea.ai ? 'AI 로 다시 정리' : 'AI 로 정리'}</button>
         <button className="btn sm" onClick={copy}>{copied ? '복사했습니다' : '복사'}</button>
+        <WishPick idea={idea} />
         <span className="grow-r" />
         <button className="linkish" onClick={() => upd({ status: stage === 'archived' ? (idea.actions.some(a => a.done) ? 'applied' : 'key') : 'archived' })}>{stage === 'archived' ? '꺼내기' : '보관'}</button>
         <button className="tl-del" onClick={del}>삭제</button>
@@ -263,8 +266,8 @@ function InboxRow({ idea }) {
       <small className="ib-rt">{fmtAt(idea.at)}{idea.src === 'voice' ? ' · 음성' : ''}</small>
       <span className="ib-rx">{idea.text}</span>
       <span className="ib-rb">
-        {stage === 'inbox' && <><button className="btn sm ok" onClick={() => upd({ status: 'seen' })}>체크</button><button className="btn sm star" onClick={() => organize(idea)}>중요</button><MergePick idea={idea} /><button className="btn sm" onClick={() => upd({ status: 'dropped', droppedAt: new Date().toISOString() })}>버리기</button></>}
-        {stage === 'seen' && <><button className="btn sm star" onClick={() => organize(idea)}>중요로 올리기</button><MergePick idea={idea} /><button className="linkish" onClick={() => upd({ status: 'inbox' })}>정리 대기로</button><button className="btn sm" onClick={() => upd({ status: 'dropped', droppedAt: new Date().toISOString() })}>버리기</button></>}
+        {stage === 'inbox' && <><button className="btn sm ok" onClick={() => upd({ status: 'seen' })}>체크</button><button className="btn sm star" onClick={() => organize(idea)}>중요</button><MergePick idea={idea} /><WishPick idea={idea} /><button className="btn sm" onClick={() => upd({ status: 'dropped', droppedAt: new Date().toISOString() })}>버리기</button></>}
+        {stage === 'seen' && <><button className="btn sm star" onClick={() => organize(idea)}>중요로 올리기</button><MergePick idea={idea} /><WishPick idea={idea} /><button className="linkish" onClick={() => upd({ status: 'inbox' })}>정리 대기로</button><button className="btn sm" onClick={() => upd({ status: 'dropped', droppedAt: new Date().toISOString() })}>버리기</button></>}
         {stage === 'dropped' && <><small className="muted">{left} 일 뒤 삭제</small><button className="btn sm" onClick={() => upd({ status: 'inbox', droppedAt: undefined })}>되살리기</button><button className="tl-del" onClick={del}>지금 삭제</button></>}
       </span>
     </div>
@@ -278,9 +281,12 @@ export function Triage({ onClose }) {
   const today = iso(now);
   const [ids] = useState(() => toTriage(store, today).map(i => i.id));
   const [n, setN] = useState(0);
-  const [res, setRes] = useState({ ok: 0, star: 0, merge: 0, later: 0, drop: 0 });
+  const [res, setRes] = useState({ ok: 0, star: 0, merge: 0, wish: 0, later: 0, drop: 0 });
   const [starred, setStarred] = useState([]);
   const [pick, setPick] = useState(false);
+  const [wpick, setWpick] = useState(false);
+  const { areasAllowed } = useCtx();
+  const wishes = (store.wishes || []).filter(w => w.stage < 5);
   const keys = (store.ideas || []).filter(i => stageOf(i) === 'key');
   const cur = n < ids.length ? (store.ideas || []).find(i => i.id === ids[n]) : null;
   const upd = (id, p) => setStore(s => ({ ...s, ideas: (s.ideas || []).map(i => (i.id === id ? { ...i, ...p } : i)) }));
@@ -291,14 +297,15 @@ export function Triage({ onClose }) {
     if (k === 'drop') upd(cur.id, { status: 'dropped', droppedAt: new Date().toISOString() });
     if (k === 'star') { setStarred(v => [...v, cur.id]); organize(cur); }
     if (k.startsWith('merge:')) { setStore(s => mergeIdea(s, cur.id, k.slice(6))); k = 'merge'; }
-    setPick(false);
+    if (k.startsWith('wish:')) { const wid = k.slice(5); setStore(s => ideaToWish(s, cur, wid === 'new' ? '' : wid, (areasAllowed || 'P')[0])); k = 'wish'; }
+    setPick(false); setWpick(false);
     setRes(v => ({ ...v, [k]: (v[k] || 0) + 1 }));
     setN(v => v + 1);
   };
   useEffect(() => { if (n < ids.length && !cur) setN(v => v + 1); }, [n, cur, ids.length]);   // 그사이 지운 것은 건너뜀
   useEffect(() => {
     if (!cur) return undefined;
-    const k = e => { if (pick || e.target.closest('input, textarea, select')) return; const m = { 1: 'ok', 2: 'star', 3: 'later', 4: 'drop' }[e.key]; if (m) act(m); else if (e.key === '5' && keys.length) setPick(true); };
+    const k = e => { if (pick || wpick || e.target.closest('input, textarea, select')) return; const m = { 1: 'ok', 2: 'star', 3: 'later', 4: 'drop' }[e.key]; if (m) act(m); else if (e.key === '5' && keys.length) setPick(true); };
     window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
   });
   const stars = starred.map(id => (store.ideas || []).find(i => i.id === id)).filter(Boolean);
@@ -313,13 +320,16 @@ export function Triage({ onClose }) {
             <button className="btn star" onClick={() => act('star')}>중요로 올리기</button>
             <button className="btn" onClick={() => act('later')}>나중에</button>
             <button className="btn" onClick={() => act('drop')}>버리기</button>
-            {keys.length > 0 && <button className={`btn ib-tri-m ${pick ? 'on' : ''}`} onClick={() => setPick(v => !v)}>중요 카드에 합치기</button>}
+            {keys.length > 0 && <button className={`btn ib-tri-m ${pick ? 'on' : ''}`} onClick={() => { setPick(v => !v); setWpick(false); }}>중요 카드에 합치기</button>}
+            <button className={`btn ib-tri-m ws-tri ${wpick ? 'on' : ''}`} onClick={() => { setWpick(v => !v); setPick(false); }}>숙원으로 보내기</button>
           </div>
+          {wpick && <ul className="ib-tri-pick"><li><button className="btn sm primary" onClick={() => act('wish:new')}>+ 새 숙원으로 만들기</button></li>
+            {wishes.map(w => <li key={w.id}><button className="btn sm" onClick={() => act(`wish:${w.id}`)}>{w.title}</button><small className="muted">{['', '씨앗', '탐색', '구체화', '준비'][w.stage]} · 자료로 붙임</small></li>)}</ul>}
           {pick && <ul className="ib-tri-pick">{keys.map(k => <li key={k.id}><button className="btn sm" onClick={() => act(`merge:${k.id}`)}>{k.title}</button><small className="muted">{(k.tags || []).map(t => `#${t}`).join(' ')}</small></li>)}</ul>}
-          <small className="muted">체크: 본 것으로 남김 · 중요: AI 가 핵심 3줄 · 할 일로 정리 · 나중에: 내일 다시 · 버리기: 30일 뒤 삭제 · 합치기: 이미 있는 중요 카드의 핵심에 한 줄로 · 키보드 1~5</small>
+          <small className="muted">체크: 본 것으로 남김 · 중요: AI 가 핵심 3줄 · 할 일로 정리 · 나중에: 내일 다시 · 버리기: 30일 뒤 삭제 · 합치기: 이미 있는 중요 카드의 핵심에 한 줄로 · 숙원으로: 언젠가 할 일로 모아 두기 · 키보드 1~5</small>
         </> : <div className="ib-tri-done">
           <b>{ids.length ? '정리 끝' : '정리할 스침이 없습니다'}</b>
-          {ids.length > 0 && <span>{[['ok', '체크'], ['star', '중요'], ['merge', '합침'], ['later', '나중에'], ['drop', '버리기']].filter(([k]) => res[k]).map(([k, t]) => `${t} ${res[k]}`).join(' · ') || '처리한 것 없음'}</span>}
+          {ids.length > 0 && <span>{[['ok', '체크'], ['star', '중요'], ['merge', '합침'], ['wish', '숙원으로'], ['later', '나중에'], ['drop', '버리기']].filter(([k]) => res[k]).map(([k, t]) => `${t} ${res[k]}`).join(' · ') || '처리한 것 없음'}</span>}
           {stars.length > 0 && <ul className="ib-tri-s">{stars.map(i => <li key={i.id}><span className="tag ib-st key">중요</span>{i.title}<small className="muted">{i.aiBusy ? ' · AI 정리 중…' : i.aiErr ? ' · AI 정리 못 함' : i.ai ? ' · 정리됨' : ''}</small></li>)}</ul>}
           <div className="ib-tri-b">{stars.length > 0 && <button className="btn primary" onClick={() => { onClose(); go('ideas'); }}>중요 카드에서 할 일 적용하기</button>}<button className="btn" onClick={onClose}>닫기</button></div>
         </div>}

@@ -117,6 +117,8 @@ const fake = http.createServer((req, res) => {
       if (JSON.parse(b).response_format?.json_schema?.name === 'idea_card') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ title: '주말 동네 러닝 모임', summary: '주말마다 함께 달리면 꾸준해진다.', area: 'P', cat: '건강 관리', tags: ['#러닝', '모임'],
         points: ['- 주말 아침 7시에 모인다', '', '처음엔 3km', '동네 공원', '음료는 각자', '비 오면 쉼', '여섯 번째는 뺌'],
         actions: [{ type: 'event', title: '첫 러닝 모임', who: '나', date: '2026-10-17', time: '07:00', cycle: '', goal: '', detail: '' }, { type: 'todo', title: '모임 공지 올리기', date: 'bad', time: '25:00', cycle: 'X', goal: 'no-such-goal', detail: '' }, { type: 'zzz', title: '', date: '', time: '', cycle: '', goal: '', detail: '' }] }) } }] }));
+      if (JSON.parse(b).response_format?.json_schema?.name === 'wish_shape') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ fill: { what: '덮어쓰면 안 됨', why: '', who: '동네 이웃', need: '보증금 1~2천만 원', first: '플리마켓에서 책 팔아 보기', block: '', when: '' },
+        next: ['상가 임대료 3곳 알아보기', '좋아하는 북카페 2곳 다녀오기', '', '네 번째는 뺌'], cases: ['처음엔 주말만 여는 방식이 많다'] }) } }] }));
       if (JSON.parse(b).response_format?.json_schema?.name === 'asset_keywords') return res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', refusal: null, content: JSON.stringify({ keywords: ['office desk', 'meeting room'], mood: '긴장' }) } }] }));
       res.end(JSON.stringify({ id: 'chatcmpl-test', object: 'chat.completion', model: 'gpt-5-mini', choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', refusal: null,
         content: JSON.stringify({ candidates: [{ title: '회사에서 생긴 반전', script: '여러분 이거 실화입니다. 어떻게 생각하세요?', hashtags: ['#회사', '썰'] }, { title: '두 번째 후보', script: '스크립트 둘', hashtags: [] }] }) } }] }));
@@ -437,6 +439,11 @@ try {
       && !('minutes' in st.json) && st.json.actions[0].who === '나' && req2.response_format.json_schema.schema.required.includes('points'), JSON.stringify(st.json.points));
     check('긴 회의 글(3만 자)도 받음', (await call('POST', '/api/ideas/structure', { text: '회의 내용 '.repeat(5000) }, T)).status === 200);
     check('너무 짧은 글 400', (await call('POST', '/api/ideas/structure', { text: '음' }, T)).status === 400);
+    const ws = await call('POST', '/api/wishes/shape', { title: '작은 북카페 열기', stage: 3, q: { what: '동네 북카페', why: '책이 좋아서' }, refs: ['임대료 메모'], today: '2026-10-15' }, T);
+    const wreq = aiCalls.at(-1)?.body;
+    check('숙원 AI 로 구체화: 이미 답한 칸은 비움 · 다음 일 3개(빈 줄 뺌) · 사례', ws.status === 200 && ws.json.fill.what === '' && ws.json.fill.who === '동네 이웃' && ws.json.next.length === 3 && !ws.json.next.includes('') && ws.json.cases.length === 1
+      && wreq?.response_format.json_schema.name === 'wish_shape' && wreq.messages[1].content.includes('구체화') && wreq.messages[1].content.includes('임대료 메모'), JSON.stringify(ws.json));
+    check('숙원: 이름 짧으면 400 · 로그인 안 하면 401', (await call('POST', '/api/wishes/shape', { title: 'a' }, T)).status === 400 && (await call('POST', '/api/wishes/shape', { title: '북카페' })).status === 401);
     const cf = await call('GET', '/api/ideas/config', null, T);
     check('설정: 받아쓰기 · AI 준비', cf.json.stt === true && cf.json.ai === true);
   }

@@ -31,6 +31,7 @@ import { dueNotifications, playChime, recordSent, showOsNotification } from './n
 import { pushOnHere } from './push.js';
 import IdeaBank, { IdeaFab, IdeaHome } from './IdeaBank.jsx';
 import { stageOf } from './ideaRemind.js';
+import Wishes, { WishHome } from './Wishes.jsx';
 import AlarmManager from './AlarmManager.jsx';
 import { initNative, isNative, onResume, scheduleAlarms } from './native.js';
 import DataSettings, { AccountPanel } from './DataSettings.jsx';
@@ -55,7 +56,7 @@ const seedEvents = () => {
 };
 /** 관리자 계정: 회원 관리 · 진행 현황은 이 계정으로 로그인했을 때만 보인다 (서버 OWNER_EMAILS 와 같게) */
 export const ADMIN_EMAILS = ['koreamate2026@gmail.com'];
-const PAGES = ['home', 'members', 'check', 'ideas', 'P', 'B', 'W', 'progress', 'alarms', 'settings'];
+const PAGES = ['home', 'members', 'check', 'ideas', 'wishes', 'P', 'B', 'W', 'progress', 'alarms', 'settings'];
 const readHash = () => {
   let [p, c] = window.location.hash.replace(/^#\/?/, '').split('/');
   try { p = decodeURIComponent(p || ''); c = c ? decodeURIComponent(c) : null; } catch (e) { p = ''; c = null; }
@@ -158,7 +159,7 @@ export default function App() {
     if (!isNative()) return undefined;
     const t = setTimeout(() => { scheduleAlarms(storeRef.current).catch(() => {}); }, 2000);
     return () => clearTimeout(t);
-  }, [store.events, store.notify, store.goals, store.plan, store.journal, (store.ideas || []).filter(i => stageOf(i) === 'inbox').length]);
+  }, [store.events, store.notify, store.goals, store.plan, store.journal, (store.ideas || []).filter(i => stageOf(i) === 'inbox').length, (store.wishes || []).length]);
   // 푸시가 왔을 때 화면이 열려 있으면 알림음 (public/sw.js 가 알려 줌)
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return undefined;
@@ -270,6 +271,7 @@ export default function App() {
     ...(isAdmin ? [{ id: 'members', label: '회원 관리', icon: 'users' }, { id: 'progress', label: '진행 현황', icon: 'progress' }] : []),   // 관리자만
     { id: 'check', label: '체크리스트', icon: 'check' },
     { id: 'ideas', label: '아이디어 뱅크', icon: 'idea' },
+    { id: 'wishes', label: '숙원 사업', icon: 'wish' },
     { sec: '상세 내용' },
     ...['P', 'W', 'B'].filter(a => areasAllowed.includes(a) && (!screenOnly || CATS.some(c => c.a === a))).map(a => ({ id: a, label: AREAS[a].n, color: areaVar(a) })),
     { sec: '관리' },
@@ -314,6 +316,7 @@ export default function App() {
           {page === 'progress' && (isAdmin ? <Progress /> : <div className="empty">진행 현황은 관리자 계정에서만 볼 수 있습니다. <button className="btn sm" onClick={() => go('home')}>대시보드로</button></div>)}
           {page === 'settings' && <Settings />}
           {page === 'ideas' && <IdeaBank />}
+          {page === 'wishes' && <Wishes />}
           {page === 'alarms' && <AlarmManager />}
         </main>
         {page !== 'ideas' && <IdeaFab />}
@@ -340,6 +343,7 @@ function Home() {
         <button className="btn primary" onClick={() => go('check')}>추천받아 시작하기</button></section>}
       <GoalOnboardCard />
       <IdeaHome />
+      <WishHome />
       <div className="dash-top">
         <Remain />
         <DueCards />
@@ -1153,6 +1157,7 @@ const NAV_ICONS = {
   check: 'M4 5.5l1.5 1.5L8 4.5M4 11l1.5 1.5L8 10M4 16.5l1.5 1.5L8 15.5M10.5 6h6M10.5 11.5h6M10.5 17h6',
   bell: 'M10 3a4.5 4.5 0 0 0-4.5 4.5v3L4 13h12l-1.5-2.5v-3A4.5 4.5 0 0 0 10 3zM8.3 15.5a1.8 1.8 0 0 0 3.4 0',
   idea: 'M10 2.5a5 5 0 0 0-3 9c.6.5 1 1.2 1 2V14h4v-.5c0-.8.4-1.5 1-2a5 5 0 0 0-3-9zM8 16.5h4M8.8 18.5h2.4',
+  wish: 'M10 17.5V9M10 9c0-3 2-5 5.5-5.5C15.5 7 13.5 9 10 9zM10 11.5c0-2.5-1.8-4-4.8-4.3C5.2 10 7 11.5 10 11.5zM6 17.5h8',
   settings: 'M10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4',
 };
 function NavIcon({ name }) {

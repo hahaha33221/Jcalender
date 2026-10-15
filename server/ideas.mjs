@@ -1,4 +1,4 @@
-/* 아이디어 뱅크 — 녹음(아이디어 · 회의)을 글로 받아 적고(STT), "중요"로 올린 것을 AI 가 핵심 3줄 + 할 일로 정리한다
+/* 아이디어 뱅크 · 숙원 사업 — 녹음(아이디어 · 회의)을 글로 받아 적고(STT), "중요"로 올린 것을 AI 가 핵심 3줄 + 할 일로 정리한다
    - POST /api/ideas/voice (본문 = 녹음 파일 audio/webm · mp4 · ogg · mpeg · wav, 최대 15MB) → { text }
      긴 녹음은 화면이 3분 단위 구간으로 나눠 녹음하는 동안 차례로 보냄 (구간마다 한 번)
      OpenAI 받아쓰기 (STT_MODEL 기본 gpt-4o-mini-transcribe, 키는 OPENAI_API_KEY — AI 공급자가 Claude 여도 받아쓰기는 OpenAI)
@@ -43,6 +43,25 @@ const SYSTEM = `당신은 녹음(혼자 말한 아이디어 또는 여러 사람
   note  = 기록만 해 둘 것
 - 날짜는 오늘을 기준으로 "내일 · 다음 주 화요일 · 이달 말"을 YYYY-MM-DD 로 바꿉니다. 정해지지 않았으면 빈 칸.
 - 쓰지 않는 칸은 빈 문자열. 정해진 JSON 형식으로만 답합니다.`;
+
+/* 숙원 사업 "AI 로 구체화": POST /api/wishes/shape { title, stage, q: { what, why, who, need, first, block, when }, refs: [글], today }
+   → { fill: { 비어 있는 질문에 넣을 제안 }, next: [다음 작은 일 3개], cases: [비슷한 사례 · 참고할 점 2~3개] } */
+const QK = ['what', 'why', 'who', 'need', 'first', 'block', 'when'];
+const WISH_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['fill', 'next', 'cases'],
+  properties: {
+    fill: { type: 'object', additionalProperties: false, required: QK, properties: Object.fromEntries(QK.map(k => [k, { type: 'string' }])) },
+    next: { type: 'array', items: { type: 'string' } }, cases: { type: 'array', items: { type: 'string' } },
+  },
+};
+const WISH_SYSTEM = `당신은 "언젠가 꼭 하고 싶은 일(숙원 사업)"을 아직 아이디어 단계에서 조금씩 구체화하도록 돕는 한국어 코치입니다.
+- 사용자가 적은 숙원 이름 · 단계 · 이미 답한 질문 · 모은 자료를 보고 돕습니다. 사용자가 말하지 않은 개인 사정은 지어내지 않습니다.
+- fill: 7가지 질문(what 무엇을 · why 왜 · who 누구를 위해 · need 필요한 것(돈 · 시간 · 사람) · first 첫 작은 실험 · block 걸림돌 · when 언제쯤) 중
+  이미 답한 칸은 빈 문자열, 비어 있는 칸만 한두 문장 제안 (사용자가 고쳐 쓸 초안. 금액 · 기간은 대략적인 범위로).
+- next: 지금 단계에서 30분~2시간이면 할 수 있는 다음 작은 일 3개 (구체적인 행동, 한 줄씩).
+- cases: 비슷한 일을 해 본 사람들의 일반적인 방식이나 참고할 점 2~3개 (특정인 · 가게 이름을 지어내지 않음).
+- 정해진 JSON 형식으로만 답합니다.`;
+const WISH_STAGE = ['', '씨앗(마음만 있음)', '탐색(자료 모으는 중)', '구체화(질문에 답하는 중)', '준비(첫 실험 · 필요한 것 정하는 중)', '착수'];
 
 const okDate = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s)) && !Number.isNaN(new Date(`${s}T00:00:00`).getTime());
 const clean = (s, n) => String(s || '').replace(/[\u0000-\u0008\u000b-\u001f]/g, '').trim().slice(0, n);
@@ -95,6 +114,34 @@ export function ideaRoutes({ authUser, HttpError }) {
     raw: { 'POST /api/ideas/voice': voice },
     json: {
       'GET /api/ideas/config': async req => { await authUser(req); return { stt: sttReady(), ai: aiReady() }; },
+      'POST /api/wishes/shape': async (req, body) => {
+        const u = await authUser(req);
+        if (!aiReady()) throw new HttpError(503, 'AI 키가 서버에 없어 구체화 제안은 못 합니다');
+        const title = clean(body.title, 100);
+        if (title.length < 2) throw new HttpError(400, '숙원 이름이 너무 짧습니다');
+        const stage = Math.min(5, Math.max(1, Number(body.stage) || 1)), q = body.q && typeof body.q === 'object' ? body.q : {};
+        const refs = (Array.isArray(body.refs) ? body.refs : []).slice(0, 20).map(r => clean(r, 300)).filter(Boolean);
+        const today = okDate(body.today) ? body.today : new Date().toISOString().slice(0, 10);
+        const done = take(u, 'ai');
+        const L = { what: '무엇을', why: '왜', who: '누구를 위해', need: '필요한 것', first: '첫 작은 실험', block: '걸림돌', when: '언제쯤' };
+        const prompt = `[오늘] ${today}
+[숙원] ${title}
+[지금 단계] ${WISH_STAGE[stage]}
+[질문과 답]
+${QK.map(k => `- ${k} ${L[k]}: ${clean(q[k], 500) || '(비어 있음)'}`).join('\n')}
+[모은 자료]
+${refs.map(r => `- ${r}`).join('\n') || '- 없음'}`;
+        let out;
+        try { out = await askJson(prompt, { system: WISH_SYSTEM, schema: WISH_SCHEMA, name: 'wish_shape' }); }
+        catch (e) { if (e instanceof AiError) throw new HttpError(e.status, e.message); console.error('[숙원 AI]', e); throw new HttpError(502, 'AI 제안을 받지 못했습니다. 다시 시도해 주세요'); }
+        done();
+        return {
+          fill: Object.fromEntries(QK.map(k => [k, clean(q[k], 10) ? '' : clean(out.fill?.[k], 400)])),
+          next: (out.next || []).map(x => clean(x, 120)).filter(Boolean).slice(0, 3),
+          cases: (out.cases || []).map(x => clean(x, 300)).filter(Boolean).slice(0, 3),
+          model: `${aiProvider() === 'openai' ? 'ChatGPT' : 'Claude'} · ${aiModel()}`,
+        };
+      },
       /** 글 → 정리 · 다음 행동 */
       'POST /api/ideas/structure': async (req, body) => {
         const u = await authUser(req);
