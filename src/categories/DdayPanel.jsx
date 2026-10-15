@@ -39,7 +39,7 @@ export default function DdayPanel() {
   const cnt = k => rows.filter(({ x, i }) => (k === 'past' ? i.past : x.mode === k && !i.past)).length;
 
   return (
-    <section className="panel dd" aria-label="D-day 관리">
+    <section className="panel dd-panel" aria-label="D-day 관리">
       <div className="csum-h"><h2>D-day 관리</h2><span className="muted">{list.length}개 · 카드를 누르면 수정</span>
         <span className="grow" />
         <span className="chips">{[['all', `전체 ${list.length}`], ['until', `다가오는 ${cnt('until')}`], ['since', `지난 날 세기 ${cnt('since')}`], ['past', `지남 ${cnt('past')}`]].map(([k, n]) =>

@@ -145,7 +145,7 @@ function Capture({ onSaved, compact, auto }) {
         <div><b className="ib-time">{fmtSec(st.sec)}</b><small className="muted"> / 최대 90분 · 끝나면 누르세요{st.done ? ` · 받아 적은 구간 ${st.done}` : ''}</small>
           <div><button className="linkish" onClick={() => stop(true)}>취소</button><small className="muted"> · 2분 넘게 녹음하면 중요로 저장하고 AI 가 정리합니다</small></div></div>
       </div> : <form className="ib-quick" onSubmit={submit}>
-        <input ref={inp} value={text} onChange={e => setText(e.target.value)} placeholder={busy ? (st.phase === 'stt' ? `받아 적는 중… (${st.done}/${st.segs} 구간)` : 'AI 가 정리하는 중…') : '스친 생각 한 줄 (Enter 로 저장 · #태그 가능)'} aria-label="스친 생각 적기" disabled={busy} enterKeyHint="done" />
+        <input ref={inp} value={text} onChange={e => setText(e.target.value)} placeholder={busy ? (st.phase === 'stt' ? `받아 적는 중… (${st.done}/${st.segs} 구간)` : 'AI 가 정리하는 중…') : '스친 생각 한 줄 · #태그'} aria-label="스친 생각 적기" disabled={busy} enterKeyHint="done" />
         <button type="button" className="ib-mic sm" onClick={start} disabled={busy} aria-label="녹음 시작" title="녹음 (짧으면 스침, 2분 넘으면 중요로 정리)">{MIC(20)}</button>
         <button className="btn primary" disabled={busy || text.trim().length < 2}>저장</button>
       </form>}

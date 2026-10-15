@@ -238,6 +238,10 @@ export default function App() {
   };
 
   /** 페이지 이동. 체크리스트는 { area, cyc } 필터를 받아 열 수 있다 */
+  useEffect(() => {                                            // 휴대폰 위쪽 가로 메뉴: 지금 화면 버튼이 보이게
+    const b = document.querySelector('.nav nav button.on');
+    try { b?.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch { /* 무시 */ }
+  }, [page]);
   useEffect(() => { const f = () => { setRoute(readHash()); setPanel(null); }; window.addEventListener('hashchange', f); return () => window.removeEventListener('hashchange', f); }, []);   // 페이지를 옮기면 결과 패널은 닫는다
   const nav = (p, c = null) => {
     const h = `#/${[p, c].filter(Boolean).map(encodeURIComponent).join('/')}`;
