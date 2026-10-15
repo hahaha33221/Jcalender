@@ -7,7 +7,7 @@ import { TAG_COLORS } from './common.jsx';
 import { AuthForm } from './Welcome.jsx';
 import { currentSub, disablePush, enablePush, isIos, isStandalone, pushSupported } from './push.js';
 import { playChime } from './notify.js';
-import { askNativePermission, isNative, nativeStatus, scheduleAlarms, testNativeAlarm } from './native.js';
+import { askNativePermission, fcmRegister, fcmStatus, fcmToken, initFcm, isNative, nativeStatus, scheduleAlarms, testNativeAlarm } from './native.js';
 
 /* 설정 › 데이터 관리 (schema.js v2 의 새 테이블 화면)
    백업(내보내기·가져오기) · 카테고리(표시·목표 보드·순서) · 프로젝트 · 태그 · 휴지통 · 알림 */
@@ -201,13 +201,39 @@ function NativePanel() {
       <div className="ds-row"><b>휴대폰 알람 (앱)</b>
         <span className={`tag ${ok ? 'sh-ok' : ''}`}>{ok ? '알림 허용됨' : '알림 꺼짐'}</span>
         {st && <span className="muted">예약된 알람 {st.pending}개 (앞으로 7일){st.exact !== 'granted' ? ' · 정확한 시각 알람이 꺼져 있어 몇 분 늦을 수 있음' : ''}</span>}</div>
-      <p className="note">앱이 꺼져 있어도 · 인터넷이 없어도 정해진 시각에 울립니다. 소리 · 진동은 휴대폰 설정 › 애플리케이션 › Jcalender › 알림에서 "루틴 · 알람" · "일정 · 마감 알림" 채널별로 바꿀 수 있습니다. 다른 기기에서 바꾼 일정은 이 앱을 열 때 다시 예약됩니다.</p>
+      <p className="note">앱이 꺼져 있어도 · 인터넷이 없어도 정해진 시각에 울립니다. 소리 · 진동은 휴대폰 설정 › 애플리케이션 › Jcalender › 알림에서 "루틴 · 알람" · "일정 · 마감 알림" 채널별로 바꿀 수 있습니다. 서버 푸시가 켜져 있으면 다른 기기에서 바꾼 일정도 바로 오고, 꺼져 있으면 이 앱을 열 때 다시 예약됩니다.</p>
       <div className="ds-row">
         {(!ok || st?.exact !== 'granted') && <button className="btn primary" onClick={async () => { setSt(await askNativePermission()); await scheduleAlarms(store).catch(() => {}); load(); }}>알림 · 정확한 알람 허용</button>}
         <button className="btn" disabled={!ok} onClick={async () => { await testNativeAlarm(); setMsg('5초 뒤 시험 알람이 울립니다 (앱을 닫아 봐도 됩니다)'); }}>시험 알람 (5초 뒤)</button>
         <button className="btn" disabled={!ok} onClick={async () => { const n = await scheduleAlarms(store); setMsg(`알람 ${n}개를 다시 예약했습니다`); load(); }}>지금 다시 예약</button>
       </div>
       {msg && <p className="banner ok" role="status">{msg}</p>}
+      <FcmRow />
+    </div>
+  );
+}
+
+/** 안드로이드 앱 서버 푸시 (FCM): 다른 기기에서 바꾼 일정 · 루틴도 앱을 열지 않아도 바로 */
+function FcmRow() {
+  const { sync } = useCtx();
+  const [st, setSt] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const load = async () => setSt(await fcmStatus().catch(() => null));
+  useEffect(() => { load(); }, []);
+  if (!st) return null;
+  const on = st.capable && st.perm === 'granted' && st.ready && st.registered;
+  const why = !st.capable ? '이 앱은 서버 푸시 없이 만든 버전입니다. 새 버전(jcalender.apk)을 받아 덮어 설치하면 켜집니다'
+    : st.perm !== 'granted' ? '알림 권한이 꺼져 있습니다' : !st.srvKnown ? '서버 업데이트가 필요합니다 (VPS 에서 update.sh)'
+    : !st.ready ? '서버에 Firebase 키가 아직 없습니다 (맥북에서 fcm-key.sh)' : !st.token || !st.registered ? '이 앱을 서버에 등록하는 중입니다' : '';
+  return (
+    <div className="fcm-row">
+      <div className="ds-row"><b>서버 푸시 (앱)</b><span className={`tag ${on ? 'sh-ok' : ''}`}>{on ? '켜짐' : '꺼짐'}</span>
+        <span className="muted">{on ? '맥 · 웹 등 다른 기기에서 새로 만들거나 바꾼 일정 · 루틴도 이 앱을 열지 않아도 바로 옵니다 (이미 예약된 알람은 두 번 울리지 않음)' : why}</span></div>
+      {st.capable && <div className="ds-row">
+        {(!st.token || !st.registered || st.perm !== 'granted') && <button className="btn" onClick={async () => { await initFcm(); await fcmRegister(); setTimeout(load, 1500); }}>다시 연결</button>}
+        <button className="btn" disabled={!on} onClick={async () => { try { await sync.request('/api/push/test', { method: 'POST', body: { fcm: fcmToken() } }); setMsg({ ok: true, t: '서버에서 시험 푸시를 보냈습니다. 앱을 닫아 두면 알림 줄에 옵니다' }); } catch (e) { setMsg({ ok: false, t: e.message }); } }}>서버 푸시 시험</button>
+      </div>}
+      {msg && <p className={`banner ${msg.ok ? 'ok' : ''}`} role="status">{msg.t}</p>}
     </div>
   );
 }

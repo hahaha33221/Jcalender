@@ -3,10 +3,14 @@
    - 기기 등록: POST /api/push/subscribe { sub: { endpoint, keys: { p256dh, auth } }, device } → push_subs (같은 기기는 덮어씀)
    - 1분마다: 기기를 등록한 사용자마다 서버에 동기화된 데이터로 "지금 보낼 알림"을 계산(src/notify.js, 화면과 같은 규칙) → 등록 기기 전부에 보냄
      같은 알림은 push_sent 로 한 번만, 만료된 기기(404 · 410)는 지움, 시간은 한국 시간(TZ=Asia/Seoul)
-   - 시험: PUSH_SEND_LOG=파일 이면 실제로 보내지 않고 암호화까지만 한 뒤 내용을 파일에 한 줄씩 적음 */
+   - 시험: PUSH_SEND_LOG=파일 이면 실제로 보내지 않고 암호화까지만 한 뒤 내용을 파일에 한 줄씩 적음
+   - 안드로이드 앱(FCM, server/fcm.mjs): 앱이 기기 토큰을 등록(POST /api/push/fcm/register) → 같은 알림을 FCM 으로도 보낸다
+     앱은 앞으로 7일 알람을 기기에 직접 예약해 두므로, 그 목록(제목|시각)을 서버에 알려 주면(POST /api/push/fcm/scheduled) 그 알람은 FCM 으로 다시 보내지 않는다 (두 번 울림 방지)
+     → 다른 기기(맥 · 웹)에서 새로 만들거나 바꾼 일정 · 루틴만 서버가 보냄 */
 import fs from 'fs';
 import webpush from 'web-push';
 import { dueNotifications } from '../src/notify.js';
+import { fcmReady, fcmSend } from './fcm.mjs';
 
 process.env.TZ = process.env.TZ || 'Asia/Seoul';                // 일정 · 루틴 시각은 한국 시간
 const env = process.env;
@@ -18,12 +22,16 @@ const vapid = owner => {
   return vapidSet;
 };
 const cleanDevice = s => String(s || '').replace(/[\u0000-\u001f]/g, '').slice(0, 100);
+const okFcm = t => typeof t === 'string' && /^[\w:.-]{20,4096}$/.test(t);
+/** 알람 서명: 제목 | 울릴 시각(ms) — 앱이 예약한 알람과 서버가 보낼 알림을 맞춰 보는 데 씀 (src/native.js 와 같게) */
+export const alarmSig = (title, when) => `${String(title).slice(0, 150)}|${+new Date(when)}`;
 const okSub = s => s && typeof s.endpoint === 'string' && /^https:\/\/[^\s]{10,1000}$/.test(s.endpoint) && typeof s.keys?.p256dh === 'string' && typeof s.keys?.auth === 'string'
   && s.keys.p256dh.length < 200 && s.keys.auth.length < 100;
 
 export function pushModule({ pool, authUser, HttpError, owner }) {
   /** 기기 하나에 보내기 → 'ok' | 'gone'(지움) | 'fail' */
   const sendOne = async (row, payload) => {
+    if (!vapidSet) return 'fail';
     const sub = { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } };
     const body = JSON.stringify(payload);
     try {
@@ -41,29 +49,43 @@ export function pushModule({ pool, authUser, HttpError, owner }) {
       return 'fail';
     }
   };
-  const sendUser = async (userId, payload) => {
+  /** 안드로이드 앱 하나에 (FCM) */
+  const sendFcm = async (row, payload) => {
+    const r = await fcmSend(row.token, payload);
+    if (r === 'ok') await pool.query('UPDATE jcal.fcm_tokens SET last_ok = now(), fails = 0 WHERE id = $1', [row.id]);
+    else if (r === 'gone') await pool.query('DELETE FROM jcal.fcm_tokens WHERE id = $1', [row.id]);
+    else { await pool.query('UPDATE jcal.fcm_tokens SET fails = fails + 1 WHERE id = $1', [row.id]); await pool.query('DELETE FROM jcal.fcm_tokens WHERE id = $1 AND fails >= 20', [row.id]); }
+    return r;
+  };
+  /** 사용자의 모든 기기에: 웹 푸시 + 안드로이드 앱(FCM, 그 앱이 이미 예약해 둔 알람이면 건너뜀) */
+  const sendUser = async (userId, payload, sig = '') => {
     const { rows } = await pool.query('SELECT * FROM jcal.push_subs WHERE user_id = $1', [userId]);
     const res = [];
     for (const r of rows) res.push(await sendOne(r, payload));
+    if (fcmReady()) {
+      const { rows: fs2 } = await pool.query('SELECT * FROM jcal.fcm_tokens WHERE user_id = $1', [userId]);
+      for (const r of fs2) { if (sig && Array.isArray(r.scheduled) && r.scheduled.includes(sig)) { res.push('local'); continue; } res.push(await sendFcm(r, payload)); }
+    }
     return res;
   };
 
   /** 1분마다: 보낼 알림 계산 → 보내기 */
   let running = false;
   const tick = async (now = new Date()) => {
-    if (running || !vapid(owner)) return 0;
+    vapid(owner);
+    if (running || (!vapidSet && !fcmReady())) return 0;
     running = true;
     let n = 0;
     try {
       const { rows } = await pool.query(`SELECT s.user_id, s.data FROM jcal.store_snapshots s
-        WHERE s.user_id IN (SELECT DISTINCT user_id FROM jcal.push_subs)`);
+        WHERE s.user_id IN (SELECT user_id FROM jcal.push_subs UNION SELECT user_id FROM jcal.fcm_tokens)`);
       for (const r of rows) {
         let due = [];
         try { due = dueNotifications({ ...r.data, notifications: [] }, now); } catch (e) { console.error('[푸시] 계산', e.message); continue; }
         for (const d of due.slice(0, 10)) {
           const ins = await pool.query('INSERT INTO jcal.push_sent (user_id, key) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING key', [r.user_id, String(d.key).slice(0, 200)]);
           if (!ins.rowCount) continue;                           // 이미 보냄
-          await sendUser(r.user_id, { title: d.title, body: d.body || '', tag: String(d.key).slice(0, 120), url: d.url || '/', alarm: !!d.alarm });   // alarm: 루틴 알람 (긴 진동 · 누를 때까지 표시)
+          await sendUser(r.user_id, { title: d.title, body: d.body || '', tag: String(d.key).slice(0, 120), url: d.url || '/', alarm: !!d.alarm }, d.when ? alarmSig(d.title, d.when) : '');   // alarm: 루틴 알람 (긴 진동 · 누를 때까지 표시)
           n++;
         }
       }
@@ -100,8 +122,44 @@ export function pushModule({ pool, authUser, HttpError, owner }) {
       await pool.query('DELETE FROM jcal.push_subs WHERE user_id = $1 AND endpoint = $2', [u.id, String(body.endpoint || '')]);
       return { ok: true };
     },
+    /** 안드로이드 앱: 서버 푸시 상태 · 이 계정의 앱 기기 */
+    'GET /api/push/fcm': async req => {
+      const u = await authUser(req);
+      const { rows } = await pool.query('SELECT token, device, created_at, last_ok, jsonb_array_length(scheduled) AS n FROM jcal.fcm_tokens WHERE user_id = $1 ORDER BY created_at', [u.id]);
+      return { ready: fcmReady(), devices: rows.map(r => ({ id: r.token.slice(-12), device: r.device, createdAt: r.created_at, lastOk: r.last_ok, scheduled: r.n })) };
+    },
+    'POST /api/push/fcm/register': async (req, body) => {
+      const u = await authUser(req);
+      if (!okFcm(body.token)) throw new HttpError(400, '앱 푸시 토큰이 올바르지 않습니다');
+      const { rows: [c] } = await pool.query('SELECT count(*)::int n FROM jcal.fcm_tokens WHERE user_id = $1', [u.id]);
+      if (c.n >= 10) await pool.query('DELETE FROM jcal.fcm_tokens WHERE id = (SELECT id FROM jcal.fcm_tokens WHERE user_id = $1 ORDER BY created_at LIMIT 1)', [u.id]);
+      await pool.query(`INSERT INTO jcal.fcm_tokens (user_id, token, device) VALUES ($1, $2, $3)
+        ON CONFLICT (token) DO UPDATE SET user_id = EXCLUDED.user_id, device = EXCLUDED.device, fails = 0`, [u.id, body.token, cleanDevice(body.device)]);
+      return { ok: true, ready: fcmReady() };
+    },
+    'POST /api/push/fcm/unregister': async (req, body) => {
+      const u = await authUser(req);
+      await pool.query('DELETE FROM jcal.fcm_tokens WHERE user_id = $1 AND token = $2', [u.id, String(body.token || '')]);
+      return { ok: true };
+    },
+    /** 앱이 기기에 직접 예약한 알람 목록 (제목|시각) → 그 알람은 FCM 으로 다시 보내지 않음 */
+    'POST /api/push/fcm/scheduled': async (req, body) => {
+      const u = await authUser(req);
+      const sigs = (Array.isArray(body.sigs) ? body.sigs : []).filter(x => typeof x === 'string' && x.length <= 220).slice(0, 100);
+      const r = await pool.query('UPDATE jcal.fcm_tokens SET scheduled = $3 WHERE user_id = $1 AND token = $2', [u.id, String(body.token || ''), JSON.stringify(sigs)]);
+      if (!r.rowCount) throw new HttpError(404, '등록되지 않은 앱입니다');
+      return { ok: true, n: sigs.length };
+    },
     'POST /api/push/test': async (req, body) => {
       const u = await authUser(req);
+      if (body.fcm) {                                            // 안드로이드 앱 하나에 시험 (FCM)
+        if (!fcmReady()) throw new HttpError(503, '서버에 앱 푸시(FCM) 키가 아직 없습니다. 맥북에서 fcm-key.sh 로 넣어 주세요');
+        const { rows } = await pool.query('SELECT * FROM jcal.fcm_tokens WHERE user_id = $1 AND token = $2', [u.id, String(body.fcm)]);
+        if (!rows.length) throw new HttpError(404, '이 앱이 아직 서버에 등록되지 않았습니다');
+        const r = await sendFcm(rows[0], { title: 'Jcalender 서버 푸시 시험', body: '다른 기기에서 바꾼 일정도 이렇게 바로 옵니다', tag: `test:${Date.now()}`, url: '/#/alarms', alarm: true });
+        if (r !== 'ok') throw new HttpError(502, r === 'gone' ? '이 앱의 푸시 토큰이 만료됐습니다. 앱을 다시 열어 주세요' : '앱 푸시를 보내지 못했습니다 (서버 기록 확인)');
+        return { sent: 1, total: 1 };
+      }
       if (!vapid(owner)) throw new HttpError(503, '서버에 푸시 키가 아직 없습니다. VPS 에서 업데이트(update.sh)를 실행해 주세요');
       const one = body.endpoint ? String(body.endpoint) : '';
       const { rows } = await pool.query(`SELECT * FROM jcal.push_subs WHERE user_id = $1${one ? ' AND endpoint = $2' : ''}`, one ? [u.id, one] : [u.id]);

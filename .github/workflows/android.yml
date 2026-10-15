@@ -2,6 +2,7 @@
 # - 앱은 사이트(https://jcalender-amber.vercel.app)를 그대로 띄우고, 휴대폰 알람(로컬 알림)을 더한다 → 사이트를 고치면 앱도 바로 바뀜
 # - android/ 폴더는 저장소에 두지 않고 매번 새로 만든 뒤 scripts/patch-android.mjs 로 권한 · 아이콘 · 서명 · 버전을 넣는다
 # - 서명 키는 저장소(공개)에 넣지 않고 처음 한 번 만들어 GitHub Actions 캐시에 보관 → 같은 키로 서명해야 새 버전을 덮어 설치할 수 있음
+# - 서버 푸시(FCM): 저장소 Settings › Secrets and variables › Actions 에 GOOGLE_SERVICES_JSON(Firebase 앱 설정 파일 내용)을 넣으면 켜짐
 # - 결과: 릴리스 "android-latest" 의 jcalender.apk (휴대폰에서 바로 내려받기)
 name: Android 앱
 
@@ -55,6 +56,12 @@ jobs:
           echo "JCAL_VERSION_CODE=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
       - run: npm ci --no-audit --no-fund
       - run: npx cap add android
+      - name: Firebase 앱 설정 (있으면 서버 푸시 켜짐)
+        env:
+          GS: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GS" ]; then printf '%s' "$GS" > android/app/google-services.json; echo "google-services.json 넣음 → 서버 푸시 켬"
+          else echo "GOOGLE_SERVICES_JSON 비밀이 없어 서버 푸시 없이 빌드합니다"; fi
       - run: node scripts/patch-android.mjs
       - run: npx cap sync android
       - name: APK 빌드

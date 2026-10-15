@@ -36,7 +36,7 @@ import { goalAiRoutes } from './goalAi.mjs';
 import { pushModule } from './push.mjs';
 import { ideaRoutes } from './ideas.mjs';
 
-const VERSION = '1.16.0';
+const VERSION = '1.17.0';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
 const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐

@@ -11,6 +11,8 @@
    node admin.mjs pexels-key                    숏폼 무료 소재(Pexels) API 키 넣기 · 바꾸기
    node admin.mjs youtube-key                   유튜브 업로드용 Google OAuth 클라이언트 ID · 보안 비밀번호 넣기 · 바꾸기
    node admin.mjs instagram-key                 인스타그램 업로드용 Meta 앱(Instagram 로그인) 앱 ID · 시크릿 넣기 · 바꾸기
+   node admin.mjs fcm-key [파일 | -]            안드로이드 앱 서버 푸시(Firebase) 서비스 계정 JSON 넣기 (- 이면 표준 입력, off 면 지우기)
+                                                맥북에서: bash server/deploy/fcm-key.sh ~/Downloads/서비스계정.json
    node admin.mjs signup                        회원가입 방식 · 초대 코드 보기
    node admin.mjs signup code                   초대 코드 방식 + 새 초대 코드 만들기 (예전 코드는 못 씀)
    node admin.mjs signup open | closed          누구나 가입 / 가입 막기
@@ -113,6 +115,23 @@ try {
     const what = yt ? '유튜브 연결 키' : '인스타그램 앱 키';
     try { execSync('systemctl restart jcal-api', { stdio: 'ignore' }); console.log(id ? `${what}를 저장하고 서버를 다시 시작했습니다. 앱 › 숏폼 제작 › ⑥ 업로드 에서 "연결하기"를 누르세요` : `${what}를 지웠습니다`); }
     catch { console.log('저장했습니다. 서버 재시작: systemctl restart jcal-api'); }
+  } else if (cmd === 'fcm-key') {
+    // Firebase 콘솔 › 프로젝트 설정 › 서비스 계정 › "새 비공개 키 생성" 으로 받은 JSON. 환경 파일에 base64 한 줄로 저장 (root 만 읽음)
+    const file = process.env.JCAL_ENV_FILE || '/etc/jcalender.env';
+    const src = emailRaw || '-';
+    let raw = '';
+    if (src !== 'off') raw = src === '-' ? fs.readFileSync(0, 'utf8') : fs.readFileSync(src, 'utf8');
+    let j = null;
+    if (src !== 'off') {
+      try { j = JSON.parse(raw); } catch { throw new Error('JSON 파일이 아닙니다 (Firebase 서비스 계정 키 파일을 그대로 넣어 주세요)'); }
+      if (j.type !== 'service_account' || !j.project_id || !j.client_email || !/BEGIN PRIVATE KEY/.test(j.private_key || '')) throw new Error('Firebase 서비스 계정 키가 아닙니다 (type: service_account · private_key 가 있어야 함. google-services.json 은 앱용이라 여기 넣지 않습니다)');
+    }
+    const lines = fs.readFileSync(file, 'utf8').split('\n').filter(l => l !== '' && !l.startsWith('FCM_SERVICE_ACCOUNT='));
+    if (j) lines.push(`FCM_SERVICE_ACCOUNT=${Buffer.from(JSON.stringify(j)).toString('base64')}`);
+    fs.writeFileSync(file, `${lines.join('\n')}\n`, { mode: 0o600 }); fs.chmodSync(file, 0o600);
+    if (src !== '-' && src !== 'off' && /^\/(root|tmp)\//.test(src)) { try { fs.rmSync(src); console.log(`올려 둔 키 파일을 지웠습니다: ${src}`); } catch { /* 무시 */ } }
+    try { execSync('systemctl restart jcal-api', { stdio: 'ignore' }); console.log(j ? `앱 서버 푸시 키를 저장하고 서버를 다시 시작했습니다 (Firebase 프로젝트: ${j.project_id})` : '앱 서버 푸시 키를 지웠습니다'); }
+    catch { console.log('저장했습니다. 서버 재시작: systemctl restart jcal-api'); }
   } else if (cmd === 'signup') {
     const arg = emailRaw;                                         // code | open | closed | (없음)
     if (arg === 'code') { await setSetting('signup_code', newCode()); await setSetting('signup_mode', 'code'); }
@@ -129,7 +148,7 @@ try {
       FROM jcal.users u LEFT JOIN jcal.store_snapshots s ON s.user_id = u.id ORDER BY u.created_at`);
     console.table(rows.map(r => ({ 이메일: r.email, 이름: r.name, 권한: r.role, 로그인기기: Number(r.sessions), 동기화버전: r.version ?? '-', 마지막동기화: r.updated_at?.toISOString() ?? '-', 기기: r.device || '-', 크기KB: r.size_bytes ? Math.round(r.size_bytes / 1024) : '-' })));
   } else {
-    console.log('사용법: add-user <이메일> [이름] | set-password <이메일> | rename <이메일> <이름> | logout-all <이메일> | delete-user <이메일> | role <이메일> member|suspended | ai-key | pexels-key | youtube-key | instagram-key | signup [code|open|closed] | list');
+    console.log('사용법: add-user <이메일> [이름] | set-password <이메일> | rename <이메일> <이름> | logout-all <이메일> | delete-user <이메일> | role <이메일> member|suspended | ai-key | pexels-key | youtube-key | instagram-key | fcm-key [파일|-|off] | signup [code|open|closed] | list');
     process.exitCode = 1;
   }
 } catch (e) {

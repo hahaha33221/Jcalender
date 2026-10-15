@@ -2505,3 +2505,4 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .btn.ws-tri.on { border-color: var(--ws3); color: var(--ws3); }
 .am-k.wish { background: var(--aisoft); color: var(--ai); }
 @media (max-width: 700px) { .main { padding-bottom: 96px; } }
+.fcm-row { border-top: 1px dashed var(--line2); margin-top: 10px; padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }

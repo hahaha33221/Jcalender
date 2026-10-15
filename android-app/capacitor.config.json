@@ -14,6 +14,12 @@
     "LocalNotifications": {
       "smallIcon": "ic_stat_jcal",
       "iconColor": "#14212b"
+    },
+    "PushNotifications": {
+      "presentationOptions": [
+        "sound",
+        "alert"
+      ]
     }
   }
 }

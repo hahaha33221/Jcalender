@@ -50,7 +50,24 @@ const soc = { gToken: [], ytMeta: null, ytBytes: 0, ytAuth: '', ytQuota: false, 
 const fakeWav = text => { const rate = 24000, on = Math.round(String(text).replace(/\s/g, '').length * 0.08 * rate), pre = 0.3 * rate, post = 0.4 * rate;
   const pcm = Buffer.alloc((pre + on + post) * 2); for (let i = 0; i < on; i++) pcm.writeInt16LE(Math.round(8000 * Math.sin(i / 8)), (pre + i) * 2); return wavFile(pcm, rate, 1); };
 const eucKr = Buffer.from('3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d226575632d6b72223f3e3c7273733e3c6368616e6e656c3e3c6974656d3e3c7469746c653ec7d1b1dbc1a6b8f13c2f7469746c653e3c6c696e6b3e687474703a2f2f3132372e302e302e313a31383738382f706f73742f6b723c2f6c696e6b3e3c6465736372697074696f6e3ebabbb9ae3c2f6465736372697074696f6e3e3c2f6974656d3e3c2f6368616e6e656c3e3c2f7273733e', 'hex');   // EUC-KR: 한글제목 / 본문
+// 안드로이드 앱 서버 푸시(FCM) 시험: 서비스 계정 키를 만들어 가짜 Google 토큰 · FCM 서버로
+const FCM_KEYS = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 }), fcmCalls = [], fcmAuth = [];
 const fake = http.createServer((req, res) => {
+  if (req.url === '/fcm/token' && req.method === 'POST') {
+    let b = ''; req.on('data', c => { b += c; }); req.on('end', () => {
+      const jwt = new URLSearchParams(b).get('assertion') || '', [h, p, sg] = jwt.split('.');
+      const okSig = crypto.createVerify('RSA-SHA256').update(`${h}.${p}`).verify(FCM_KEYS.publicKey, Buffer.from(sg || '', 'base64url'));
+      fcmAuth.push({ okSig, claims: JSON.parse(Buffer.from(p || '', 'base64url').toString() || '{}') });
+      res.writeHead(okSig ? 200 : 400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(okSig ? { access_token: 'fake-access', expires_in: 3600 } : { error: 'invalid_grant' }));
+    }); return;
+  }
+  if (req.url === '/fcm/v1/projects/jcal-test/messages:send' && req.method === 'POST') {
+    let b = ''; req.on('data', c => { b += c; }); req.on('end', () => {
+      const m = JSON.parse(b).message; fcmCalls.push({ auth: req.headers.authorization, m });
+      if (m.token.startsWith('gone-')) { res.writeHead(404, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: { status: 'NOT_FOUND', details: [{ errorCode: 'UNREGISTERED' }] } })); }
+      res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ name: 'projects/jcal-test/messages/1' }));
+    }); return;
+  }
   if (req.url === '/feed.xml') { res.writeHead(200, { 'Content-Type': 'application/rss+xml; charset=utf-8' }); return res.end(`<?xml version="1.0"?><rss version="2.0"><channel><title>시험 게시판</title>
     <item><title><![CDATA[회사에서 생긴 일 &amp; 반전]]></title><link>${F}/post/1</link><pubDate>Sat, 03 Oct 2026 10:00:00 +0900</pubDate><description><![CDATA[<p>짧은 요약</p>]]></description></item>
     <item><title>두 번째 글</title><link>${F}/post/2</link><description>&lt;b&gt;굵게&lt;/b&gt; 본문 둘</description></item></channel></rss>`); }
@@ -128,7 +145,8 @@ const fake = http.createServer((req, res) => {
 });
 await new Promise(r => fake.listen(FAKE, '127.0.0.1', r));
 const VAPID = (await import('web-push')).default.generateVAPIDKeys(), PUSH_LOG = path.join(TMP, 'push.log');
-const srv = spawn(process.execPath, ['index.mjs'], { env: { ...process.env, VAPID_PUBLIC_KEY: VAPID.publicKey, VAPID_PRIVATE_KEY: VAPID.privateKey, PUSH_SEND_LOG: PUSH_LOG, PUSH_TICK_MS: '700', PORT: String(PORT), ALLOWED_ORIGINS: 'https://*.vercel.app', OWNER_EMAILS: OWNER,
+const FCM_SA = Buffer.from(JSON.stringify({ type: 'service_account', project_id: 'jcal-test', client_email: 'push@jcal-test.iam.gserviceaccount.com', private_key: FCM_KEYS.privateKey.export({ type: 'pkcs8', format: 'pem' }), token_uri: `${F}/fcm/token` })).toString('base64');
+const srv = spawn(process.execPath, ['index.mjs'], { env: { ...process.env, FCM_SERVICE_ACCOUNT: FCM_SA, FCM_BASE: `${F}/fcm`, VAPID_PUBLIC_KEY: VAPID.publicKey, VAPID_PRIVATE_KEY: VAPID.privateKey, PUSH_SEND_LOG: PUSH_LOG, PUSH_TICK_MS: '700', PORT: String(PORT), ALLOWED_ORIGINS: 'https://*.vercel.app', OWNER_EMAILS: OWNER,
   SHORTS_ALLOW_PRIVATE: '1', SHORTS_CRON: '0', OPENAI_API_KEY: 'sk-test-key', OPENAI_BASE_URL: `${F}/v1`, ANTHROPIC_API_KEY: '', AI_PROVIDER: '',
   PEXELS_API_KEY: 'test-pexels-key', YOUTUBE_CLIENT_ID: 'test.apps.googleusercontent.com', YOUTUBE_CLIENT_SECRET: 'gsecret', INSTAGRAM_APP_ID: '123456', INSTAGRAM_APP_SECRET: 'igsecret', SOCIAL_TEST_BASE: F, SHORTS_PRESETS: JSON.stringify([{ id: 'pa', name: '시험 추천 A', desc: 'd', fullText: false, urls: [`${F}/nofeed-404`, `${F}/euc.xml`] }, { id: 'pb', name: '시험 추천 B', desc: 'd', urls: [`${F}/nofeed`] }, { id: 'pc', name: '시험 추천 C', desc: 'd', urls: [`${F}/feed.xml`] }]), PUBLIC_URL: BASE, IG_POLL_MS: '200', PEXELS_BASE_URL: `${F}/pexels`, SHORTS_DIR: path.join(TMP, 'store'), SHORTS_MAX_UPLOAD_MB: '1' }, stdio: ['ignore', 'pipe', 'inherit'] });
 await new Promise(r => srv.stdout.once('data', r));
@@ -458,6 +476,18 @@ try {
     check('푸시 설정: 키 준비 · 공개키만 보임', cf.status === 200 && cf.json.ready === true && cf.json.publicKey === VAPID.publicKey && !JSON.stringify(cf.json).includes(VAPID.privateKey));
     check('잘못된 구독 400 · 로그인 안 하면 401', (await call('POST', '/api/push/subscribe', { sub: { endpoint: 'http://x' } }, T)).status === 400 && (await call('POST', '/api/push/subscribe', { sub })).status === 401);
     check('기기 등록', (await call('POST', '/api/push/subscribe', { sub, device: '안드로이드 크롬' }, T)).status === 200);
+    // 안드로이드 앱 (FCM): 등록 · 예약해 둔 알람 알리기 · 시험
+    const FT = 'fcm-token-abcdefghijklmnopqrstuvwxyz:0123456789';
+    check('앱 토큰: 잘못되면 400 · 로그인 안 하면 401', (await call('POST', '/api/push/fcm/register', { token: 'x' }, T)).status === 400 && (await call('POST', '/api/push/fcm/register', { token: FT })).status === 401);
+    check('앱 등록 · 상태', (await call('POST', '/api/push/fcm/register', { token: FT, device: 'Android 앱' }, T)).json?.ready === true && (await call('GET', '/api/push/fcm', null, T)).json.devices.length === 1);
+    check('예약 목록: 모르는 토큰 404', (await call('POST', '/api/push/fcm/scheduled', { token: 'nope-token-xxxxxxxxxxxxxxxxxxxx', sigs: [] }, T)).status === 404);
+    const ft = await call('POST', '/api/push/test', { fcm: FT }, T);
+    const fm = fcmCalls.at(-1);
+    check('앱 시험 푸시 → FCM (서명한 JWT 로 토큰 받음 · 알람 채널)', ft.status === 200 && fm?.auth === 'Bearer fake-access' && fm.m.token === FT && fm.m.android.notification.channel_id === 'jcal-alarm' && fm.m.android.priority === 'HIGH'
+      && fcmAuth.at(-1)?.okSig === true && fcmAuth.at(-1).claims.scope.includes('firebase.messaging'), JSON.stringify({ ft, fm, a: fcmAuth.at(-1) }));
+    const GT = 'gone-token-abcdefghijklmnopqrstuvwxyz';
+    await call('POST', '/api/push/fcm/register', { token: GT }, T);
+    check('앱을 지운 기기(UNREGISTERED)는 시험 실패 · 목록에서 빠짐', (await call('POST', '/api/push/test', { fcm: GT }, T)).status === 502 && (await call('GET', '/api/push/fcm', null, T)).json.devices.length === 1);
     const dv = await call('GET', '/api/push/devices', null, T);
     check('내 기기 목록', dv.json.devices.length === 1 && dv.json.devices[0].device === '안드로이드 크롬');
     const tt = await call('POST', '/api/push/test', {}, T);
@@ -467,6 +497,8 @@ try {
     const cur = (await call('GET', '/api/sync', null, T)).json;
     const data = { ...cur.data, notify: { enabled: true, eventMinutes: 10, goals: 'day' }, events: [...(cur.data.events || []), { id: 'push-ev', date: day, time: hm, title: '푸시 시험 회의', area: 'P' }, { id: 'push-rt', date: day, time: hm, title: '푸시 시험 루틴', area: 'P', routine: true, remind: '5' }],
       goals: { v: 2, boards: { 'P|목표 관리': { items: [{ id: 'push-goal', parent: null, name: '푸시 시험 목표', start: day, end: new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10) }], miles: [] } } } };
+    const rtWhen = new Date(`${day}T${hm}:00+09:00`).getTime() - 5 * 60e3;   // 루틴 5분 전 → 앱이 이미 예약해 둔 것으로
+    check('앱이 예약한 알람 알리기', (await call('POST', '/api/push/fcm/scheduled', { token: FT, sigs: [`푸시 시험 루틴|${rtWhen}`] }, T)).json?.n === 1);
     const up = await call('PUT', '/api/sync', { baseVersion: cur.version, data, device: '맥북' }, T);
     for (let i = 0; i < 40 && !pushLog().some(x => x.tag === 'event:push-ev'); i++) await new Promise(r => setTimeout(r, 200));   // 1분 확인(시험은 0.7초) 기다리기
     await new Promise(r => setTimeout(r, 800));
@@ -477,6 +509,9 @@ try {
     await new Promise(r => setTimeout(r, 1500));
     check('루틴 알람은 alarm 표시(긴 진동 · 누를 때까지) · 보통 일정은 아님', got.some(x => x.title === '푸시 시험 루틴' && x.alarm === true) && got.some(x => x.title === '푸시 시험 회의' && x.alarm === false), JSON.stringify(got));
     check('같은 알림은 한 번만', pushLog().filter(x => x.tag === 'event:push-ev').length === 1);
+    const fg = fcmCalls.filter(c => c.m.token === FT).map(c => c.m.notification.title);
+    check('앱(FCM)에도 보냄 · 앱이 이미 예약한 루틴 알람은 다시 안 보냄 (두 번 울림 방지)', fg.includes('푸시 시험 회의') && !fg.includes('푸시 시험 루틴') && fg.filter(t => t === '푸시 시험 회의').length === 1, JSON.stringify(fg));
+    check('앱 빼기', (await call('POST', '/api/push/fcm/unregister', { token: FT }, T)).status === 200 && (await call('GET', '/api/push/fcm', null, T)).json.devices.length === 0);
     await call('POST', '/api/push/unsubscribe', { endpoint: sub.endpoint }, sh_T0);
     check('다른 사람은 내 기기를 못 지움', (await call('GET', '/api/push/devices', null, T)).json.devices.length === 1);
     check('내 기기 빼기', (await call('POST', '/api/push/unsubscribe', { endpoint: sub.endpoint }, T)).status === 200 && (await call('GET', '/api/push/devices', null, T)).json.devices.length === 0);

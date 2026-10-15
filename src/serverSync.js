@@ -223,6 +223,8 @@ export function useServerSync(store, setStore, blank) {
     if (c.token) {
       let ep = null; try { ep = localStorage.getItem('jcalender.push'); localStorage.removeItem('jcalender.push'); } catch { /* 무시 */ }
       if (ep) await api(API_BASE, '/api/push/unsubscribe', { method: 'POST', token: c.token, body: { endpoint: ep } }).catch(() => {});   // 로그아웃한 기기로는 푸시를 보내지 않음
+      let ft = ''; try { ft = localStorage.getItem('jcalender.fcmToken') || ''; } catch { /* 무시 */ }
+      if (ft) await api(API_BASE, '/api/push/fcm/unregister', { method: 'POST', token: c.token, body: { token: ft } }).catch(() => {});   // 안드로이드 앱 서버 푸시도
       await api(API_BASE, '/api/logout', { method: 'POST', token: c.token }).catch(() => {});
     }
     clearTimeout(timer.current);

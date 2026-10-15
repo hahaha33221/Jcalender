@@ -33,7 +33,7 @@ import IdeaBank, { IdeaFab, IdeaHome } from './IdeaBank.jsx';
 import { stageOf } from './ideaRemind.js';
 import Wishes, { WishHome } from './Wishes.jsx';
 import AlarmManager from './AlarmManager.jsx';
-import { initNative, isNative, onResume, scheduleAlarms } from './native.js';
+import { fcmRegister, initFcm, initNative, isNative, onResume, scheduleAlarms, setNativeApi } from './native.js';
 import DataSettings, { AccountPanel } from './DataSettings.jsx';
 import { AttachList, ProjectSelect, TagChips, TagPicker } from './common.jsx';
 import { DdayStrip } from './categories/DdayPanel.jsx';
@@ -155,6 +155,13 @@ export default function App() {
     onResume(() => scheduleAlarms(storeRef.current).catch(() => {})).then(f => { off = f; });
     return () => off();
   }, []);
+  // 안드로이드 앱 서버 푸시 (Firebase 설정으로 만든 앱에서만): 로그인한 뒤 기기 토큰을 서버에 등록
+  const syncRef = useRef(sync); syncRef.current = sync;
+  useEffect(() => {
+    if (!isNative() || !sync.connected) return;
+    setNativeApi((path, opts) => syncRef.current.request(path, opts));
+    initNative().then(() => initFcm()).then(() => fcmRegister()).then(() => scheduleAlarms(storeRef.current)).catch(() => {});
+  }, [sync.connected, sync.conf.email]);
   useEffect(() => {
     if (!isNative()) return undefined;
     const t = setTimeout(() => { scheduleAlarms(storeRef.current).catch(() => {}); }, 2000);

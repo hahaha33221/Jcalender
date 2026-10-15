@@ -3,7 +3,9 @@
      데이터가 바뀌거나 앱으로 돌아올 때마다 다시 예약 (최대 60개)
    - 알림 채널 2개: "루틴 · 알람"(가장 높음 · 소리 · 진동 · 잠금 화면) / "일정 · 마감 알림"(높음) → 휴대폰 설정에서 채널별로 소리 · 진동을 바꿀 수 있음
    - 알림을 누르면 그 화면으로, 뒤로 가기 버튼은 이전 화면 (첫 화면이면 앱을 내림)
-   - 플러그인 코드는 앱 안에서만 불러옴 (import 를 나눠 브라우저에서는 받지 않음) */
+   - 플러그인 코드는 앱 안에서만 불러옴 (import 를 나눠 브라우저에서는 받지 않음)
+   - 서버 푸시(FCM): Firebase 설정을 넣어 만든 앱(User-Agent 에 JcalFCM)에서만 — 기기 토큰을 서버에 등록하고(server/push.mjs),
+     기기에 예약한 알람 목록(제목|시각)을 서버에 알려 같은 알람이 두 번 울리지 않게 한다. 서버는 다른 기기에서 새로 만들거나 바꾼 것만 보냄 */
 import { upcomingAlarms } from './notify.js';
 
 export const isNative = () => !!window.Capacitor?.isNativePlatform?.();
@@ -11,6 +13,60 @@ const CH = { alarm: 'jcal-alarm', normal: 'jcal-normal' };
 let LN = null, ready = null;
 /** 플러그인은 { L } 로 감싸서 돌려줌 — 플러그인 자체를 Promise 로 돌려주면 .then 을 플러그인 기능으로 착각해 오류가 남 */
 const plugin = async () => { if (!LN) LN = (await import('@capacitor/local-notifications')).LocalNotifications; return { L: LN }; };
+const TOKEN_KEY = 'jcalender.fcmToken';
+let api = null;                                                  // 서버 요청 (App.jsx 가 sync.request 로 넣어 줌)
+export const setNativeApi = fn => { api = fn; };
+export const fcmCapable = () => isNative() && /JcalFCM/.test(navigator.userAgent);
+export const fcmToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } };
+/** 알람 서명: 제목 | 울릴 시각(ms) — server/push.mjs alarmSig 와 같게 */
+const sigOf = a => `${String(a.title).slice(0, 150)}|${+new Date(a.when)}`;
+let PN = null, fcmReady = null, lastSigs = '';
+const pushPlugin = async () => { if (!PN) PN = (await import('@capacitor/push-notifications')).PushNotifications; return { P: PN }; };
+const report = async sigs => {                                   // 예약한 알람 목록을 서버에 (바뀌었을 때만)
+  const t = fcmToken(), k = JSON.stringify(sigs);
+  if (!api || !t || k === lastSigs) return;
+  try { await api('/api/push/fcm/scheduled', { method: 'POST', body: { token: t, sigs } }); lastSigs = k; } catch { /* 다음에 다시 */ }
+};
+
+/** 서버 푸시 시작 (앱 시작 때 한 번): 권한 → 등록 → 토큰을 서버에. 알림을 누르면 그 화면으로 */
+export function initFcm() {
+  if (!fcmCapable()) return Promise.resolve(false);
+  return (fcmReady ||= (async () => {
+    const { P } = await pushPlugin();
+    await P.addListener('registration', async t => {
+      try { localStorage.setItem(TOKEN_KEY, t.value); } catch { /* 무시 */ }
+      lastSigs = '';
+      try { await api?.('/api/push/fcm/register', { method: 'POST', body: { token: t.value, device: 'Android 앱' } }); } catch { /* 다음에 다시 */ }
+    });
+    await P.addListener('pushNotificationActionPerformed', a => { const u = a.notification?.data?.url; if (u) window.location.hash = u.replace(/^\/?#?/, '#'); });
+    let st = await P.checkPermissions();
+    if (st.receive === 'prompt') st = await P.requestPermissions();
+    if (st.receive !== 'granted') return false;
+    await P.register();
+    return true;
+  })().catch(e => { console.warn('[서버 푸시]', e); fcmReady = null; return false; }));
+}
+/** 이미 받은 토큰을 지금 로그인한 계정으로 서버에 등록 (로그인 · 계정 바꿈) */
+export async function fcmRegister() {
+  const t = fcmToken(); if (!api || !t) return;
+  lastSigs = '';
+  try { await api('/api/push/fcm/register', { method: 'POST', body: { token: t, device: 'Android 앱' } }); } catch { /* 다음에 다시 */ }
+}
+/** 서버 푸시 상태 (설정 화면) */
+export async function fcmStatus() {
+  if (!fcmCapable()) return { capable: false };
+  const { P } = await pushPlugin();
+  const p = await P.checkPermissions().catch(() => ({ receive: 'denied' }));
+  let srv = null; try { srv = await api?.('/api/push/fcm'); } catch { /* 서버 업데이트 전 */ }
+  const t = fcmToken();
+  return { capable: true, perm: p.receive, token: !!t, ready: !!srv?.ready, srvKnown: !!srv, registered: !!srv?.devices?.some(d => t && t.endsWith(d.id)) };
+}
+/** 로그아웃: 이 앱으로는 서버 푸시를 보내지 않게 */
+export async function fcmUnregister(request) {
+  const t = fcmToken(); if (!t) return;
+  try { await request('/api/push/fcm/unregister', { method: 'POST', body: { token: t } }); } catch { /* 무시 */ }
+}
+
 /** 알림 id: 알람 key + 시각 → 양수 32비트 */
 const idOf = s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h & 0x7fffffff) || 1; };
 
@@ -57,16 +113,17 @@ export async function scheduleAlarms(store) {
   if (!isNative()) return 0;
   await initNative();
   const { L } = await plugin();
-  if ((await L.checkPermissions()).display !== 'granted') return 0;
+  if ((await L.checkPermissions()).display !== 'granted') { await report([]); return 0; }
   const pend = await L.getPending().catch(() => ({ notifications: [] }));
   if (pend.notifications.length) await L.cancel({ notifications: pend.notifications.map(n => ({ id: n.id })) }).catch(() => {});
   const list = upcomingAlarms(store, new Date(Date.now() + 30e3), 7).slice(0, 60);
-  if (!list.length) return 0;
+  if (!list.length) { await report([]); return 0; }
   await L.schedule({ notifications: list.map(a => ({
     id: idOf(`${a.key}@${+a.when}`), title: a.title, body: a.body || '', channelId: a.alarm ? CH.alarm : CH.normal,
     schedule: { at: a.when, allowWhileIdle: true }, smallIcon: 'ic_stat_jcal', iconColor: '#14212b', autoCancel: true,
     extra: { url: a.kind === 'goal' ? '#/P' : a.kind === 'idea' ? '#/ideas' : a.kind === 'wish' ? '#/wishes' : '#/alarms' },
   })) });
+  await report(list.map(sigOf));                                  // 이 알람들은 서버가 FCM 으로 다시 보내지 않음
   return list.length;
 }
 
