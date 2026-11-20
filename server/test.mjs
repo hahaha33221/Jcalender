@@ -512,7 +512,8 @@ try {
     const got = pushLog().filter(x => x.title !== 'Jcalender 시험 알림');
     const nowH = new Date(Date.now() + 9 * 3600e3).getUTCHours();
     check('일정 알림 푸시 (서버가 1분마다 계산)', up.status === 200 && got.some(x => x.title === '푸시 시험 회의' && x.tag === 'event:push-ev'), JSON.stringify(got));
-    check('목표 마감 D-day 푸시 (오전 9시 이후)', nowH < 9 || got.some(x => x.title === '목표 마감 D-day' && x.body === '푸시 시험 목표' && x.url.includes(encodeURIComponent('목표 관리'))), JSON.stringify(got));
+    // src/notify.js: 목표 마감 알림은 마감일 오전 9시부터 12시간 안(밤 9시 전)에만 보낸다
+    check('목표 마감 D-day 푸시 (오전 9시 ~ 밤 9시)', nowH < 9 || nowH >= 21 || got.some(x => x.title === '목표 마감 D-day' && x.body === '푸시 시험 목표' && x.url.includes(encodeURIComponent('목표 관리'))), JSON.stringify(got));
     await new Promise(r => setTimeout(r, 1500));
     check('루틴 알람은 alarm 표시(긴 진동 · 누를 때까지) · 보통 일정은 아님', got.some(x => x.title === '푸시 시험 루틴' && x.alarm === true) && got.some(x => x.title === '푸시 시험 회의' && x.alarm === false), JSON.stringify(got));
     check('같은 알림은 한 번만', pushLog().filter(x => x.tag === 'event:push-ev').length === 1);
