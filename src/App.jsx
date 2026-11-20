@@ -28,7 +28,7 @@ import { useServerSync } from './serverSync.js';
 import Welcome from './Welcome.jsx';
 import { sourcesOn } from './calendarSources.js';
 import { dueNotifications, playChime, recordSent, showOsNotification } from './notify.js';
-import { pushOnHere } from './push.js';
+import { pushOnHere, pushRegister } from './push.js';
 import IdeaBank, { IdeaFab, IdeaHome } from './IdeaBank.jsx';
 import { stageOf } from './ideaRemind.js';
 import Wishes, { WishHome } from './Wishes.jsx';
@@ -54,8 +54,6 @@ const seedEvents = () => {
     { id: uid(), date: d(4), time: '16:00', title: '팀 회의 (예시)', area: 'W' },
   ];
 };
-/** 관리자 계정: 회원 관리 · 진행 현황은 이 계정으로 로그인했을 때만 보인다 (서버 OWNER_EMAILS 와 같게) */
-export const ADMIN_EMAILS = ['koreamate2026@gmail.com'];
 const PAGES = ['home', 'members', 'check', 'ideas', 'wishes', 'P', 'B', 'W', 'progress', 'alarms', 'settings'];
 const readHash = () => {
   let [p, c] = window.location.hash.replace(/^#\/?/, '').split('/');
@@ -116,8 +114,9 @@ export default function App() {
   const [store, setStore, persist] = useStore();
   const sync = useServerSync(store, setStore, blankStore);   // 로그인 · VPS 서버 동기화 (설정 › 서버 연결)
   setRules(store.rules);                           // 도래 규칙을 저장된 설정으로 맞춘다 (렌더 전에)
-  const areasAllowed = !sync.connected || sync.conf.role === 'admin' || ADMIN_EMAILS.includes(String(sync.conf.email || '').trim().toLowerCase()) ? 'PBW' : (sync.conf.areas || 'PBW');   // 회원별로 볼 수 있는 영역
-  const adminNow = sync.conf.role === 'admin' || ADMIN_EMAILS.includes(String(sync.conf.email || '').trim().toLowerCase());
+  // 관리자 여부는 서버 응답(role)으로만 판단한다 (관리자 이메일을 화면 코드에 두지 않음 — 서버 OWNER_EMAILS)
+  const adminNow = sync.conf.role === 'admin';
+  const areasAllowed = !sync.connected || adminNow ? 'PBW' : (sync.conf.areas || 'PBW');   // 회원별로 볼 수 있는 영역
   const screenKey = sync.connected && !adminNow && sync.conf.screen?.on ? JSON.stringify(sync.conf.screen.cats || []) : '';
   const screenOnly = useMemo(() => (screenKey ? new Set(JSON.parse(screenKey)) : null), [screenKey]);   // 회원 화면: 관리자가 검수 완료한 카테고리만
   applyCategories(store.categories, store.checklist, areasAllowed, screenOnly);   // 카테고리 표에서 숨긴 카테고리 · 사용자 체크리스트(추가 · 수정 · 뺀 항목)를 반영
@@ -161,6 +160,11 @@ export default function App() {
     if (!isNative() || !sync.connected) return;
     setNativeApi((path, opts) => syncRef.current.request(path, opts));
     initNative().then(() => initFcm()).then(() => fcmRegister()).then(() => scheduleAlarms(storeRef.current)).catch(() => {});
+  }, [sync.connected, sync.conf.email]);
+  // 웹 푸시: 이 기기가 푸시를 받는 중이면 로그인한 계정으로 다시 등록 (계정이 바뀌면 이전 계정 알림이 오지 않게)
+  useEffect(() => {
+    if (!sync.connected) return;
+    pushRegister((path, opts) => syncRef.current.request(path, opts)).catch(() => {});
   }, [sync.connected, sync.conf.email]);
   useEffect(() => {
     if (!isNative()) return undefined;
@@ -258,7 +262,7 @@ export default function App() {
   const go = (p, init = null) => { setCheckInit(init); nav(p); };
   const openCat = (a, c) => nav(a, c);
 
-  const isAdmin = !!sync.connected && (sync.conf.role === 'admin' || ADMIN_EMAILS.includes(String(sync.conf.email || '').trim().toLowerCase()));   // 서버가 관리자 계정으로 확인(role admin) 또는 관리자 이메일
+  const isAdmin = !!sync.connected && adminNow;   // 서버가 관리자 계정으로 확인(role admin)한 경우만
   // 관리자: 검수 완료 표시가 바뀌면 회원 화면(보이는 카테고리 목록)에 바로 반영 (서버 1.4.1 이상)
   const reviewedKey = isAdmin && sync.connected ? Object.keys(store.reviewed || {}).sort().join('\n') : null;
   const pushedReviewed = useRef(null);

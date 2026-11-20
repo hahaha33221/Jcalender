@@ -233,6 +233,13 @@ try {
   await call('PUT', '/api/sync', { baseVersion: 0, data: { done: {}, events: [{ id: 'mine', date: '2026-10-03', title: '새사람 일정' }] }, device: '폰' }, T2);
   const g1u = (await call('GET', '/api/sync', null, T)).json, g2u = (await call('GET', '/api/sync', null, T2)).json;
   check('사용자끼리 데이터 분리', !JSON.stringify(g1u.data).includes('새사람 일정') && g2u.data.events[0].title === '새사람 일정' && g2u.version === 1);
+  {
+    const uid2 = (await pool.query('SELECT id FROM jcal.users WHERE email = $1', [E2])).rows[0].id;
+    const evOf = async id => (await pool.query('SELECT title FROM jcal.events WHERE user_id = $1 ORDER BY id', [id])).rows.map(r => r.title);
+    const ev1 = await evOf(uid), ev2 = await evOf(uid2);
+    check('표도 사용자끼리 분리 (다른 사람이 올려도 내 표는 그대로)', ev1.length === store.events.filter(e => e.id && e.date).length && !ev1.includes('새사람 일정') && ev2.length === 1 && ev2[0] === '새사람 일정', JSON.stringify({ ev1, ev2 }));
+    check('다른 사람 버전은 내 버전에 영향 없음', g1u.version === 3 && (await call('GET', '/api/me', null, T)).json.snapshot.version === 3);
+  }
   check('비밀번호 바꾸기: 틀린 현재 비밀번호 400', (await call('POST', '/api/password', { current: 'nope', next: 'new-pass-999' }, T2)).status === 400);
   check('비밀번호 바꾸기', (await call('POST', '/api/password', { current: 'pw-12345678', next: 'new-pass-999' }, T2)).status === 200);
   check('새 비밀번호로 로그인', (await call('POST', '/api/login', { email: E2, password: 'new-pass-999' })).status === 200);
@@ -514,6 +521,12 @@ try {
     check('앱 빼기', (await call('POST', '/api/push/fcm/unregister', { token: FT }, T)).status === 200 && (await call('GET', '/api/push/fcm', null, T)).json.devices.length === 0);
     await call('POST', '/api/push/unsubscribe', { endpoint: sub.endpoint }, sh_T0);
     check('다른 사람은 내 기기를 못 지움', (await call('GET', '/api/push/devices', null, T)).json.devices.length === 1);
+    // 같은 기기에서 다른 계정으로 로그인 → 앱이 구독을 다시 등록 (src/push.js pushRegister) → 이전 계정 알림은 더 오지 않음
+    await call('POST', '/api/push/subscribe', { sub, device: '안드로이드 크롬' }, sh_T0);
+    const mv = [(await call('GET', '/api/push/devices', null, T)).json.devices.length, (await call('GET', '/api/push/devices', null, sh_T0)).json.devices.length];
+    check('같은 기기를 다른 계정이 등록하면 구독이 그 계정으로 옮겨감', mv[0] === 0 && mv[1] === 1, JSON.stringify(mv));
+    await call('POST', '/api/push/subscribe', { sub, device: '안드로이드 크롬' }, T);
+    check('다시 내 계정으로 등록', (await call('GET', '/api/push/devices', null, T)).json.devices.length === 1 && (await call('GET', '/api/push/devices', null, sh_T0)).json.devices.length === 0);
     check('내 기기 빼기', (await call('POST', '/api/push/unsubscribe', { endpoint: sub.endpoint }, T)).status === 200 && (await call('GET', '/api/push/devices', null, T)).json.devices.length === 0);
     check('기기가 없으면 시험 알림 404', (await call('POST', '/api/push/test', {}, T)).status === 404);
   }

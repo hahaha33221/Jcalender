@@ -43,6 +43,18 @@ export async function enablePush(request) {
   return sub.endpoint;
 }
 
+/** 이 기기가 푸시를 받는 중이면 지금 로그인한 계정으로 다시 등록 (로그인 · 계정 바꿈)
+    → 서버가 같은 구독을 새 계정으로 옮김 (server/push.mjs ON CONFLICT) = 다른 사람 알림이 이 기기로 오지 않음 */
+export async function pushRegister(request) {
+  let saved = null; try { saved = localStorage.getItem(PUSH_KEY); } catch { /* 무시 */ }
+  if (!saved || !pushSupported() || Notification.permission !== 'granted') return false;
+  const sub = await currentSub();
+  if (!sub) { try { localStorage.removeItem(PUSH_KEY); } catch { /* 무시 */ } return false; }
+  await request('/api/push/subscribe', { method: 'POST', body: { sub: sub.toJSON(), device: `${deviceName()}${isStandalone() ? ' (앱)' : ''}` } });
+  try { localStorage.setItem(PUSH_KEY, sub.endpoint); } catch { /* 저장 불가 */ }
+  return true;
+}
+
 /** 이 기기 푸시 끄기 */
 export async function disablePush(request) {
   const sub = await currentSub();

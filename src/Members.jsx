@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AREAS, BASE_ROWS, iso } from './data.js';
 import { useCtx } from './shared.jsx';
 
-/* 회원 관리 (관리자 계정만 — 서버 OWNER_EMAILS, 기본 koreamate2026@gmail.com)
+/* 회원 관리 (관리자 계정만 — 서버 OWNER_EMAILS)
    회원 목록 · 권한(일반 · 정지) · 모든 기기 로그아웃 · 회원가입 방식 · 초대 코드
    서버 API: GET/POST /api/admin/users, GET/POST /api/admin/signup (server/index.mjs)
    - 관리자는 관리자 계정 하나뿐이고, 다른 회원을 관리자로 만들 수 없다
