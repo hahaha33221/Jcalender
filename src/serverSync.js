@@ -63,6 +63,11 @@ export const keepStorage = () => { try { navigator.storage?.persist?.(); } catch
 
 const fmt = d => (d ? new Date(d).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
 const APP_KEYS = ['lifeboard.react.v1', 'jcalender.secrets', 'jcalender.migrateError'];
+/** 그 사람 계정에 묶인 이 기기 정보 (원드라이브 로그인 등) — 로그아웃하거나 다른 계정으로 바뀌면 지운다 */
+const PERSONAL_KEYS = ['jcalender.onedrive.token', 'jcalender.onedrive.pkce'];
+const clearPersonal = () => { try { PERSONAL_KEYS.forEach(k => localStorage.removeItem(k)); } catch { /* 무시 */ } };
+/** 이 기기 데이터의 주인이 다른 계정인지 ('' = 로그인 전부터 쓰던 데이터 → 주인 없음, 충돌 화면에서 본인이 고름) */
+export const otherOwnerOf = (owner, email) => !!owner && owner !== '-' && owner !== email;
 
 /** @param blank 새 사용자용 빈 데이터를 만드는 함수 (App.jsx) */
 export function useServerSync(store, setStore, blank) {
@@ -95,17 +100,17 @@ export function useServerSync(store, setStore, blank) {
     return true;
   };
 
-  /** 데이터를 통째로 바꾸기 (API 키 · 토큰은 이 기기 것을 유지) */
-  const replaceStore = useCallback(data => {
+  /** 데이터를 통째로 바꾸기 (API 키 · 토큰은 이 기기 것을 유지. keepSecrets=false 면 버림 — 다른 계정 것을 넘겨주지 않게) */
+  const replaceStore = useCallback((data, keepSecrets = true) => {
     applying.current = true;
-    const next = mergeSecrets(migrate(data), splitSecrets(storeRef.current).secrets);
+    const next = keepSecrets ? mergeSecrets(migrate(data), splitSecrets(storeRef.current).secrets) : migrate(data);
     storeRef.current = next;
     setStore(next);
     return next;
   }, [setStore]);
 
   const applyServer = useCallback((data, version) => {
-    replaceStore(data);
+    replaceStore(data, !otherOwnerOf(confRef.current.owner, confRef.current.email));
     setConf({ version, dirty: false, lastSync: new Date().toISOString(), owner: confRef.current.email });
     setSt(s => ({ ...s, conflict: null, msg: `서버 데이터(버전 ${version})를 받았습니다`, err: false }));
   }, [replaceStore, setConf]);
@@ -141,7 +146,7 @@ export function useServerSync(store, setStore, blank) {
       const sv = me.snapshot?.version || 0, mine = c.version || 0;
       const mineOwner = c.owner === c.email, otherOwner = c.owner && c.owner !== c.email;   // '-'(비어 있음) 도 "다른 사람"으로 본다
       if (!sv) {
-        if (otherOwner) { replaceStore(blank()); setConf({ owner: c.email }); }       // 다른 사람 데이터는 올리지 않고 빈 데이터로 시작
+        if (otherOwner) { replaceStore(blank(), false); setConf({ owner: c.email }); }       // 다른 사람 데이터는 올리지 않고 빈 데이터로 시작
         next = 'push';
       } else if (sv !== mine) {
         const r = await api(API_BASE, '/api/sync', { token: c.token });
@@ -179,9 +184,13 @@ export function useServerSync(store, setStore, blank) {
   const accept = (r, remember) => {
     const c = confRef.current;
     const same = c.email === r.user.email;
-    if (r.created) { replaceStore(blank()); }                  // 새 사용자는 빈 데이터로 시작 (이 기기에 있던 데이터는 올리지 않음)
+    // 이 기기에 다른 계정의 데이터가 남아 있으면 (로그인이 만료된 뒤 다른 사람이 로그인 등) 서버에서 받기 전에 바로 비운다
+    // → 받기가 늦거나 실패해도 다른 사람의 기록 · API 키 · 원드라이브 로그인이 보이지 않음
+    const switched = otherOwnerOf(c.owner, r.user.email);
+    if (switched) { replaceStore(blank(), false); clearPersonal(); }
+    if (r.created) { replaceStore(blank()); }   // 새 사용자는 빈 데이터로 시작 (이 기기에 있던 데이터는 올리지 않음)
     setConf({ token: r.token, email: r.user.email, name: r.user.name, role: r.user.role || '', areas: r.user.areas || '', shorts: !!r.user.shorts, screen: r.user.screen ?? null, remember,
-      ...(same ? {} : { version: 0, dirty: false, lastSync: null }), ...(r.created ? { owner: r.user.email } : {}) });
+      ...(same ? {} : { version: 0, dirty: false, lastSync: null }), ...(r.created ? { owner: r.user.email } : switched ? { owner: '-' } : {}) });
     keepStorage(); try { localStorage.removeItem(LOGOUT_KEY); localStorage.setItem(AUTO_KEY, remember ? '1' : '0'); } catch { /* 무시 */ }
   };
   const enter = async (kind, body) => {
@@ -230,6 +239,7 @@ export function useServerSync(store, setStore, blank) {
     clearTimeout(timer.current);
     noteLogout('manual');
     try { APP_KEYS.forEach(k => localStorage.removeItem(k)); } catch { /* 무시 */ }
+    clearPersonal();
     writeConf({ owner: '-' });
     window.location.hash = '#/';
     window.location.reload();
