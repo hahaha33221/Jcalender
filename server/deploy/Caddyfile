@@ -4,7 +4,13 @@ __API_HOST__ {
 	request_body {
 		max_size 320MB
 	}
-	reverse_proxy 127.0.0.1:__API_PORT__
+	# 휴대폰 녹음 올리기 · 받기 (녹음 서버 jcal-rec, /rec 를 떼고 넘김)
+	handle_path /rec/* {
+		reverse_proxy 127.0.0.1:__REC_PORT__
+	}
+	handle {
+		reverse_proxy 127.0.0.1:__API_PORT__
+	}
 	log {
 		output file /var/log/caddy/jcal-api.log {
 			roll_size 10MiB
