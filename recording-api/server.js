@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0'; // VPS에서는 127.0.0.1 (Nginx 뒤)
 const API_TOKEN = process.env.API_TOKEN;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const FILE_DIR = path.join(DATA_DIR, 'files');
@@ -239,4 +240,4 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'server error' });
 });
 
-app.listen(PORT, () => console.log(`recording-api listening on ${PORT}`));
+app.listen(PORT, HOST, () => console.log(`recording-api listening on ${HOST}:${PORT}`));

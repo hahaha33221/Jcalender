@@ -1,0 +1,25 @@
+[Unit]
+Description=Jcalender recording upload API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jcal
+Group=jcal
+WorkingDirectory=/opt/jcalender/recording-api
+EnvironmentFile=/etc/jcal-recording.env
+Environment=NODE_ENV=production DATA_DIR=/var/lib/jcal-recording
+ExecStart=__NODE__ server.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# 녹음 파일 · DB 저장 (/var/lib/jcal-recording, jcal 사용자만 씀)
+StateDirectory=jcal-recording
+StateDirectoryMode=0750
+
+[Install]
+WantedBy=multi-user.target
