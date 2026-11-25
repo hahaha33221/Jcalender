@@ -254,15 +254,21 @@ async function recCheck() {
 
 export function minutesModule({ pool, adminUser, HttpError }) {
   let busy = false, lastSync = 0, timer = null, syncing = null;
+  let recState = { ok: false, total: null, msg: '아직 녹음 서버를 확인하지 않았습니다', at: null };   // 화면 진단용: 마지막 목록 확인 결과
   const ups = new Map();                                        // 올리는 중인 파일: u → { next, size, at }
   setInterval(() => { for (const [u, v] of ups) if (Date.now() - v.at > 3600e3) { ups.delete(u); fsp.rm(path.join(os.tmpdir(), `jcal-up-${u}`), { force: true }).catch(() => {}); } }, 600e3).unref();
 
   const doSync = async () => {
     try {
-      if (!recReady()) return;
+      if (!recReady()) { recState = { ok: false, total: null, msg: '녹음 서버 토큰이 없습니다 (설정 창에서 넣기)', at: new Date() }; return; }
       const j = await recJson('/api/recordings?limit=200');
+      recState = { ok: true, total: Number(j.total) || 0, msg: '', at: new Date() };
+      const items = [...(j.items || [])];
+      // 녹음 서버에 200건이 넘게 있고 아직 다 받지 않았으면 나머지도 (예전 녹음을 한꺼번에 보낸 경우)
+      const known = (await pool.query('SELECT count(*)::int AS n FROM jcal.recording_minutes WHERE rec_id > 0')).rows[0].n;
+      for (let off = 200; off < recState.total && known < recState.total && off < 20000; off += 500) items.push(...((await recJson(`/api/recordings?limit=500&offset=${off}`)).items || []));
       const fresh = Date.now() - BACKFILL_H() * 3600e3;
-      for (const it of j.items || []) {
+      for (const it of items) {
         const up = sqliteTime(it.uploaded_at), rec = it.recorded_at ? new Date(it.recorded_at) : null;
         const auto = AUTO() && up && up.getTime() >= fresh;
         // 같은 id 인데 파일 내용(sha256)이 다르면 녹음 서버를 새로 만든 것 → 새 녹음으로 본다
@@ -277,7 +283,10 @@ export function minutesModule({ pool, adminUser, HttpError }) {
         [it.id, String(it.sha256 || ''), String(it.device || '').slice(0, 60), String(it.filename || ''), Number(it.size) || 0, rec && !Number.isNaN(rec.getTime()) ? rec : null, up, auto ? 'queued' : 'idle']);
       }
       lastSync = Date.now();
-    } catch (e) { if (!(e instanceof StepError)) console.error('[회의록 목록]', e); else console.warn('[회의록 목록]', e.message); lastSync = Date.now(); }
+    } catch (e) {
+      recState = { ok: false, total: null, msg: e instanceof StepError ? e.message : '녹음 서버 목록을 받지 못했습니다', at: new Date() };
+      if (!(e instanceof StepError)) console.error('[회의록 목록]', e); else console.warn('[회의록 목록]', e.message); lastSync = Date.now();
+    }
   };
   const syncList = () => { if (!syncing) syncing = doSync().finally(() => { syncing = null; }); return syncing; };
 
@@ -410,10 +419,14 @@ export function minutesModule({ pool, adminUser, HttpError }) {
     },
     'GET /api/minutes': async req => {
       await adminUser(req);
-      if (Date.now() - lastSync > 15000) { syncList().then(drain).catch(() => {}); }   // 화면이 볼 때마다 새 녹음 확인 (기다리지 않음)
-      const { rows } = await pool.query('SELECT rec_id, filename, device, size_bytes, recorded_at, uploaded_at, status, error, duration, minutes, stt_model, ai_model, processed_at, has_text FROM jcal.recording_minutes ORDER BY coalesce(recorded_at, uploaded_at) DESC NULLS LAST, rec_id DESC LIMIT 300');
+      if (Date.now() - lastSync > 15000) {                         // 화면이 볼 때마다 새 녹음 확인 (처음 한 번은 기다려서 바로 보이게)
+        const p = syncList().then(drain).catch(() => {});
+        if (!recState.at) await Promise.race([syncList(), new Promise(r => setTimeout(r, 8000))]);
+        void p;
+      }
+      const { rows } = await pool.query('SELECT rec_id, filename, device, size_bytes, recorded_at, uploaded_at, status, error, duration, minutes, stt_model, ai_model, processed_at, has_text FROM jcal.recording_minutes ORDER BY coalesce(recorded_at, uploaded_at) DESC NULLS LAST, rec_id DESC LIMIT 3000');
       return {
-        ready: { api: recReady(), stt: sttReady(), ai: aiReady(), ffmpeg: hasFfmpeg }, auto: AUTO(), today: await doneToday(), limit: DAILY(),
+        ready: { api: recReady(), stt: sttReady(), ai: aiReady(), ffmpeg: hasFfmpeg }, auto: AUTO(), rec: { ...recState, url: recUrl() }, today: await doneToday(), limit: DAILY(),
         model: { stt: sttModel(), ai: `${provider() === 'anthropic' ? 'Claude' : 'ChatGPT'} · ${model()}` }, items: rows.map(listOut),
       };
     },

@@ -2566,3 +2566,4 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .ru-row.s-ok .ru-bar i, .ru-row.s-dup .ru-bar i { background: var(--ok); }
 .ru-err { flex-basis: 100%; color: var(--over); font-size: 12px; }
 .rec-bulk { margin: 8px 0 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rec-diag { margin: 0 0 8px; font-size: 13px; }
