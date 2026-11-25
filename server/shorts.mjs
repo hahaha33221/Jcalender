@@ -215,7 +215,8 @@ export const aiModel = () => env.SHORTS_MODEL || (aiProvider() === 'openai' ? 'g
 export const aiReady = () => (aiProvider() === 'openai' ? !!env.OPENAI_API_KEY : !!(env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN));
 // Claude SDK 는 쓸 때만 불러온다 (라이브러리가 아직 설치 안 됐어도 서버 · ChatGPT 는 동작)
 let Anthropic = null, client = null;
-const anthropic = async () => { Anthropic ||= (await import('@anthropic-ai/sdk')).default; return (client ||= new Anthropic()); };
+let clientKey = '';
+const anthropic = async () => { Anthropic ||= (await import('@anthropic-ai/sdk')).default; const k = env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || ''; if (!client || k !== clientKey) { client = new Anthropic(); clientKey = k; } return client; };   // 사이트에서 키를 바꾸면 새로 만든다
 /** AI 오류를 화면에 보일 말로: status 는 HTTP 상태로 그대로 씀 */
 export class AiError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
 const SCHEMA = {
