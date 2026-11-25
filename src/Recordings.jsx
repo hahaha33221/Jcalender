@@ -2,7 +2,9 @@
    - 휴대폰 녹음이 녹음 서버에 올라오면 서버가 받아 적고(STT) AI 가 회의록(1. 개요 ~ 6. 기타)으로 정리한다
    - 화면이 보이는 동안 30초마다 (처리 중인 것이 있으면 10초마다) 목록을 다시 받아 저절로 바뀐다
    - 회의록 창: 녹음 듣기 · 회의록 · 전문 · 복사 · 다시 만들기 · 지우기 · 할 일을 캘린더 일정으로
-   - 예전 녹음 올리기: 여러 파일 · 폴더 고르기 → 4MB 조각으로 차례로 올림 (파일별 진행), 같은 내용은 "이미 있음", 기본은 회의록 안 만듦
+   - 예전 녹음 올리기: 여러 파일 · 폴더 고르기 → 3MB 조각으로 차례로 올림 (파일별 진행), 같은 내용은 "이미 있음", 기본은 회의록 안 만듦
+     TXT(받아 적은 글 · 메모)도 같이: 한글 인코딩(UTF-8 · UTF-16 · EUC-KR/CP949)을 풀어 글로 보냄 → 받아쓰기 없이 회의록
+     녹음을 먼저 올리고 TXT 는 나중에 (같은 이름의 녹음이 있으면 그 녹음의 받아쓴 글로 붙음)
    - 설정 창: 녹음 서버 연결 상태 · 휴대폰 업로드 주소 · 토큰, OpenAI · Anthropic 키 넣기, 회의록 모델 · 자동 정리 (터미널 없이) */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { iso } from './data.js';
@@ -91,7 +93,7 @@ export function RecordingsHome() {
     <section className="panel rec-home" aria-label="녹음 · 회의록">
       <div className="csum-h"><h2>녹음 · 회의록</h2>
         <span className="muted">{data ? `${items.length}건 · 완료 ${counts.done}${counts.busy ? ` · 진행 중 ${counts.busy}` : ''}${data.auto ? ` · 자동 정리 오늘 ${data.today}/${data.limit}` : ' · 자동 정리 꺼짐'}` : '불러오는 중…'}</span>
-        <span className="ib-hb grow-r"><button className="btn sm" onClick={load}>새로고침</button><button className="btn sm" onClick={() => setUp(true)}>예전 녹음 올리기</button><button className="btn sm" onClick={() => setSetup(true)}>설정</button></span></div>
+        <span className="ib-hb grow-r"><button className="btn sm" onClick={load}>새로고침</button><button className="btn sm" onClick={() => setUp(true)}>예전 녹음 · TXT 올리기</button><button className="btn sm" onClick={() => setSetup(true)}>설정</button></span></div>
       {err && <p className="rec-msg bad">{err}</p>}
       {!!missing?.length && <p className="rec-msg">설정이 더 필요합니다: {missing.join(' · ')}. <button className="btn sm primary" onClick={() => setSetup(true)}>설정 열기</button></p>}
       {msg && <p className="rec-msg bad">{msg}</p>}
@@ -182,7 +184,7 @@ function MinutesPopup({ id, onClose, onChanged }) {
       {err && <p className="rec-msg bad">{err}</p>}
       {note && <p className="rec-msg">{note}</p>}
       {it && (<div className="rec-pop">
-        <div className="rec-audio">{typeof audio === 'string' && audio !== 'loading' ? <audio controls autoPlay src={audio} /> : <button className="btn sm" disabled={audio === 'loading'} onClick={listen}>{audio === 'loading' ? '녹음 받는 중…' : '녹음 듣기'}</button>}
+        <div className="rec-audio">{it.audio === false ? <span className="rec-st">TXT</span> : typeof audio === 'string' && audio !== 'loading' ? <audio controls autoPlay src={audio} /> : <button className="btn sm" disabled={audio === 'loading'} onClick={listen}>{audio === 'loading' ? '녹음 받는 중…' : '녹음 듣기'}</button>}
           <span className="muted">{it.filename}</span></div>
         {it.error && <p className="rec-msg bad">{it.error}</p>}
         {!m && BUSY.includes(it.status) && <p className="muted">{STATUS[it.status]}입니다. 끝나면 이 창이 저절로 바뀝니다.</p>}
@@ -303,6 +305,15 @@ function SettingsPopup({ onClose }) {
 
 /* ── 예전 녹음 올리기 ── */
 const EXT_OK = /\.(m4a|mp3|amr|wav|3gp|ogg|aac)$/i;
+const TXT_OK = /\.txt$/i;
+/** TXT 글 읽기: BOM → UTF-8 (틀리면) → EUC-KR/CP949 (옛 한글 메모장 · 윈도) */
+export function decodeText(buf) {
+  const b = new Uint8Array(buf);
+  if (b[0] === 0xff && b[1] === 0xfe) return new TextDecoder('utf-16le').decode(b);
+  if (b[0] === 0xfe && b[1] === 0xff) return new TextDecoder('utf-16be').decode(b);
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(b); } catch { /* 한글 윈도 인코딩 */ }
+  try { return new TextDecoder('euc-kr').decode(b); } catch { return new TextDecoder('utf-8').decode(b); }
+}
 const CHUNK = 3 * 1024 * 1024;   // Vercel 을 거쳐도 넉넉한 크기
 const fmtMB = b => (b >= 1048576 ? `${(b / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(b / 1024))}KB`);
 /** 녹음 시각: 파일 이름의 날짜(삼성 "…_241125_103015") → 없으면 파일 수정 시각 (유닉스 초) */
@@ -334,7 +345,7 @@ function UploadPopup({ onClose, onUploaded }) {
   const [running, setRunning] = useState(false);
   const pick = useRef(null), folder = useRef(null), stop = useRef(false);
   const add = files => {
-    const all = [...files], ok = all.filter(f => EXT_OK.test(f.name));
+    const all = [...files], ok = all.filter(f => EXT_OK.test(f.name) || TXT_OK.test(f.name));
     setRows(r => [...r.filter(x => x.state !== 'wait'), ...r.filter(x => x.state === 'wait'), ...ok.map(f => ({ f, key: `${f.name}|${f.size}|${f.lastModified}`, pct: 0, state: 'wait', msg: '' }))]
       .filter((x, i, a) => a.findIndex(y => y.key === x.key) === i));
     if (all.length > ok.length) setNoteSkip(all.length - ok.length);
@@ -343,8 +354,19 @@ function UploadPopup({ onClose, onUploaded }) {
   const start = async () => {
     setRunning(true); stop.current = false;
     const set = (key, p) => setRows(r => r.map(x => (x.key === key ? { ...x, ...p } : x)));
-    for (const row of rows.filter(x => x.state === 'wait' || x.state === 'fail')) {
+    const todo = rows.filter(x => x.state === 'wait' || x.state === 'fail');
+    for (const row of [...todo.filter(x => !TXT_OK.test(x.f.name)), ...todo.filter(x => TXT_OK.test(x.f.name))]) {   // 녹음 먼저 → TXT (같은 이름 녹음에 붙도록)
       if (stop.current) break;
+      if (TXT_OK.test(row.f.name)) {
+        set(row.key, { state: 'up', pct: 0, msg: '' });
+        try {
+          if (row.f.size > 5 * 1048576) throw new Error('5MB 가 넘는 TXT 는 올릴 수 없습니다');
+          const text = decodeText(await row.f.arrayBuffer()).slice(0, 400000);
+          const res = await sync.request('/api/minutes/text', { method: 'POST', body: { name: row.f.name, at: recordedAtOf(row.f), text, make } });
+          set(row.key, { state: res.duplicate ? 'dup' : res.paired ? 'pair' : 'ok', pct: 100 });
+        } catch (e) { set(row.key, { state: 'fail', msg: e.message }); }
+        continue;
+      }
       const { f, key } = row, n = Math.max(1, Math.ceil(f.size / CHUNK));
       const u = Array.from(crypto.getRandomValues(new Uint8Array(10)), b => b.toString(36).padStart(2, '0')).join('').slice(0, 20);
       const at = recordedAtOf(f);
@@ -364,20 +386,20 @@ function UploadPopup({ onClose, onUploaded }) {
   };
   const cnt = k => rows.filter(x => x.state === k).length;
   const total = rows.reduce((a, x) => a + x.f.size, 0);
-  const LABEL = { wait: '대기', up: '올리는 중', ok: '올림', dup: '이미 있음', fail: '실패' };
+  const LABEL = { wait: '대기', up: '올리는 중', ok: '올림', pair: '녹음에 붙임', dup: '이미 있음', fail: '실패' };
   return (
-    <Popup wide title="예전 녹음 올리기" sub="휴대폰 · 컴퓨터에 있는 녹음 파일을 골라 한꺼번에 올립니다. 이미 올린 것과 같은 파일은 건너뜁니다." onClose={() => { stop.current = true; onClose(); }}>
+    <Popup wide title="예전 녹음 · TXT 올리기" sub="휴대폰 · 컴퓨터에 있는 녹음 파일과 TXT(받아 적은 글 · 메모)를 골라 한꺼번에 올립니다. 이미 올린 것과 같은 파일은 건너뜁니다." onClose={() => { stop.current = true; onClose(); }}>
       <div className="ru-pick">
         <button className="btn primary" disabled={running} onClick={() => pick.current?.click()}>파일 고르기 (여러 개)</button>
         <button className="btn" disabled={running} onClick={() => folder.current?.click()}>폴더 통째로 고르기</button>
-        <input ref={pick} type="file" multiple hidden accept="audio/*,.m4a,.mp3,.amr,.wav,.3gp,.ogg,.aac" onChange={e => { add(e.target.files); e.target.value = ''; }} />
+        <input ref={pick} type="file" multiple hidden accept="audio/*,.m4a,.mp3,.amr,.wav,.3gp,.ogg,.aac,.txt,text/plain" onChange={e => { add(e.target.files); e.target.value = ''; }} />
         <input ref={folder} type="file" multiple hidden webkitdirectory="" directory="" onChange={e => { add(e.target.files); e.target.value = ''; }} />
       </div>
-      <p className="muted">휴대폰: "파일 고르기" → 내 파일 › Recordings › Call(통화) · Voice Recorder(음성)에서 길게 눌러 여러 개 선택. 컴퓨터: 녹음 폴더를 "폴더 통째로 고르기"로 고르면 녹음 파일만 골라 올립니다.</p>
-      {skip > 0 && <p className="muted">녹음 파일이 아닌 {skip}개는 뺐습니다.</p>}
-      <label className="rs-chk"><input type="checkbox" checked={make} disabled={running} onChange={e => setMake(e.target.checked)} /> 올린 뒤 바로 회의록도 만들기 <small className="muted">(끄면 목록에 "수동"으로 들어가고, 필요한 것만 골라 만들 수 있습니다. 비용: 녹음 1시간에 약 500원)</small></label>
+      <p className="muted">휴대폰: "파일 고르기" → 내 파일 › Recordings › Call(통화) · Voice Recorder(음성)에서 길게 눌러 여러 개 선택. 컴퓨터: 녹음 폴더를 "폴더 통째로 고르기"로 고르면 녹음 · TXT 파일만 골라 올립니다. TXT 는 받아쓰기 없이 바로 글로 회의록을 만들고, 이름이 같은 녹음(예: 통화.m4a · 통화.txt)이 있으면 그 녹음에 붙습니다.</p>
+      {skip > 0 && <p className="muted">녹음 · TXT 파일이 아닌 {skip}개는 뺐습니다.</p>}
+      <label className="rs-chk"><input type="checkbox" checked={make} disabled={running} onChange={e => setMake(e.target.checked)} /> 올린 뒤 바로 회의록도 만들기 <small className="muted">(끄면 목록에 "수동"으로 들어가고, 필요한 것만 골라 만들 수 있습니다. 비용: 녹음 1시간에 약 500원, TXT 는 한 건에 약 20~100원)</small></label>
       {!!rows.length && (<>
-        <div className="ru-sum"><span>{rows.length}개 · {fmtMB(total)}</span><span className="muted">올림 {cnt('ok')} · 이미 있음 {cnt('dup')}{cnt('fail') ? ` · 실패 ${cnt('fail')}` : ''}</span>
+        <div className="ru-sum"><span>{rows.length}개 · {fmtMB(total)}</span><span className="muted">올림 {cnt('ok')}{cnt('pair') ? ` · 녹음에 붙임 ${cnt('pair')}` : ''} · 이미 있음 {cnt('dup')}{cnt('fail') ? ` · 실패 ${cnt('fail')}` : ''}</span>
           <span className="grow-r ib-hb">{running ? <button className="btn sm" onClick={() => { stop.current = true; }}>멈추기</button>
             : <><button className="btn sm" onClick={() => setRows(r => r.filter(x => x.state === 'wait' || x.state === 'fail'))}>끝난 것 지우기</button>
               <button className="btn sm primary" disabled={!rows.some(x => x.state === 'wait' || x.state === 'fail')} onClick={start}>{cnt('fail') && !cnt('wait') ? '실패한 것 다시 올리기' : '올리기 시작'}</button></>}</span></div>
@@ -385,7 +407,7 @@ function UploadPopup({ onClose, onUploaded }) {
           <li key={x.key} className={`ru-row s-${x.state}`}>
             <span className="grow ru-n" title={x.f.name}>{x.f.name}</span><span className="muted ru-sz">{fmtMB(x.f.size)}</span>
             <span className="ru-bar" aria-hidden="true"><i style={{ width: `${x.pct}%` }} /></span>
-            <span className={`rec-st ${x.state === 'ok' ? 'st-done' : x.state === 'fail' ? 'st-failed' : x.state === 'up' ? 'st-stt' : ''}`}>{LABEL[x.state]}{x.state === 'up' ? ` ${x.pct}%` : ''}</span>
+            <span className={`rec-st ${x.state === 'ok' || x.state === 'pair' ? 'st-done' : x.state === 'fail' ? 'st-failed' : x.state === 'up' ? 'st-stt' : ''}`}>{LABEL[x.state]}{x.state === 'up' ? ` ${x.pct}%` : ''}</span>
             {x.msg && <span className="ru-err">{x.msg}</span>}
           </li>))}</ul>
       </>)}

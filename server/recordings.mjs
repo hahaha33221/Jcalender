@@ -9,6 +9,9 @@
    POST /api/minutes/upload?u=&i=&n=&name=&at=&make=  사이트에서 예전 녹음 올리기 — 4MB 조각으로 받아 모은 뒤 녹음 서버로 넘김
         (조각이라 Nginx · Vercel 크기 · 시간 제한에 안 걸림, 같은 내용은 녹음 서버가 SHA-256 으로 걸러 "이미 있음")
         올린 녹음은 "수동"(자동 정리 안 함), make=1 이면 바로 회의록 대기열
+   POST /api/minutes/text {name, at, text, make}  예전 TXT(받아 적은 글 · 메모) 올리기 — 받아쓰기 없이 글로 회의록
+        같은 이름의 녹음(확장자만 다름)이 아직 회의록 전이면 그 녹음의 받아쓴 글로 붙인다. 같은 글은 "이미 있음"
+        글만 있는 항목은 번호가 음수 (녹음 서버에 없음)
    GET  /api/minutes/settings        설정 상태 (키는 가린 값 · 어디서 왔는지, 녹음 서버 연결 시험 · 업로드 주소 · 토큰)
    POST /api/minutes/settings {openaiKey?, anthropicKey?, recToken?, model?, sttModel?, auto?, clear?: ['openai' | 'anthropic' | 'recToken']}
         키는 저장 전에 그 회사에 확인 (틀린 키는 저장 안 함) → server/siteSettings.mjs 파일에 저장
@@ -22,6 +25,7 @@
      MINUTES_STT_MODEL (기본 STT_MODEL 또는 gpt-4o-mini-transcribe, 키 OPENAI_API_KEY)
      MINUTES_PROVIDER anthropic | openai (기본: Anthropic 키가 있으면 Claude) · MINUTES_MODEL (기본 claude-opus-5-5 / gpt-5-mini)
    녹음 파일은 recording-api 에만 보관하고, 처리할 때 임시 폴더에 받아 쓴 뒤 바로 지운다 */
+import crypto from 'crypto';
 import fs from 'fs';
 import fsp from 'fs/promises';
 import os from 'os';
@@ -54,6 +58,20 @@ const BUSY = ['stt', 'summary'];
 const CHUNK_MAX = 4 * 1024 * 1024 + 1024;                      // 조각 하나 (화면은 3MB 로 자름)
 const UPLOAD_EXT = /\.(m4a|mp3|amr|wav|3gp|ogg|aac)$/i;            // 녹음 서버가 받는 형식과 같게
 export const STATUS = { idle: '수동', queued: '대기', stt: '받아쓰는 중', summary: '정리 중', done: '완료', failed: '실패', skipped: '건너뜀' };
+
+/** TXT 글 풀기: BOM(UTF-16 · UTF-8) → UTF-8 → 틀리면 EUC-KR/CP949 (옛 한글 메모장 · 윈도) */
+export function decodeTxt(buf) {
+  const b = new Uint8Array(buf);
+  let t;
+  if (b[0] === 0xff && b[1] === 0xfe) t = new TextDecoder('utf-16le').decode(b);
+  else if (b[0] === 0xfe && b[1] === 0xff) t = new TextDecoder('utf-16be').decode(b);
+  else { try { t = new TextDecoder('utf-8', { fatal: true }).decode(b); } catch { t = new TextDecoder('euc-kr').decode(b); } }
+  return tidyText(t);
+}
+export const tidyText = t => String(t || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').trim().slice(0, 400000);
+const isTxt = name => /\.txt$/i.test(String(name || ''));
+const baseOf = name => String(name || '').replace(/\.[^.]+$/, '').toLowerCase();
+const shaOf = t => crypto.createHash('sha256').update(t).digest('hex');
 
 class StepError extends Error { constructor(msg, status = 'failed') { super(msg); this.state = status; } }
 
@@ -179,9 +197,9 @@ async function summarize(row, transcript) {
   const prompt = `[녹음 정보]
 - 녹음 일시: ${kst(new Date(at))} (날짜 기준: ${kstDate(new Date(at))})
 - 파일 이름: ${row.filename || '없음'}
-- 기기: ${row.device || '없음'}${row.duration ? `\n- 길이: 약 ${Math.max(1, Math.round(Number(row.duration) / 60))}분` : ''}
+- 기기: ${row.device === 'txt' ? '없음 (TXT 파일로 올린 글)' : row.device || '없음'}${row.duration ? `\n- 길이: 약 ${Math.max(1, Math.round(Number(row.duration) / 60))}분` : ''}
 
-[받아쓴 글]
+[${row.has_text ? '올린 글 (받아 적은 글 또는 메모)' : '받아쓴 글'}]
 ${transcript}`;
   try { return tidyMinutes(await askJson(prompt, { system: SYSTEM, schema: SCHEMA, name: 'meeting_minutes', provider: provider(), model: model() })); }
   catch (e) { if (e instanceof AiError) throw new StepError(e.message); console.error('[회의록 AI]', e); throw new StepError('AI 회의록을 받지 못했습니다'); }
@@ -193,6 +211,7 @@ const listOut = r => ({
   status: r.status, error: r.error || '', duration: r.duration == null ? null : Number(r.duration),
   title: r.minutes?.title || '', kind: r.minutes?.kind || '', summary: r.minutes?.summary || '', steps: r.minutes?.next_steps?.length || 0,
   sttModel: r.stt_model || '', aiModel: r.ai_model || '', processedAt: r.processed_at,
+  hasText: !!r.has_text, audio: Number(r.rec_id) > 0 && !isTxt(r.filename),
 });
 
 
@@ -271,6 +290,43 @@ export function minutesModule({ pool, adminUser, HttpError }) {
   async function processOne(row) {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'jcal-minutes-'));
     try {
+      if (row.rec_id > 0 && isTxt(row.filename) && !row.has_text) {   // 휴대폰이 보낸 TXT: 녹음 서버에서 받아 글로
+        const r = await recFetch(`/api/recordings/${row.rec_id}/file`, { timeout: 120000 });
+        if (r.status === 404) throw new StepError('녹음 서버에 파일이 없습니다 (지워졌을 수 있음)', 'skipped');
+        if (!r.ok) throw new StepError(`TXT 파일을 받지 못했습니다 (${r.status})`);
+        const text = decodeTxt(await r.arrayBuffer());
+        if (text.replace(/\s/g, '').length < 5) throw new StepError('글이 거의 없는 파일입니다', 'skipped');
+        await setRow(row.rec_id, { transcript: text, has_text: true, text_sha256: shaOf(text), stt_model: 'TXT' });
+        Object.assign(row, { transcript: text, has_text: true });
+        // 같은 이름의 녹음: 회의록 전이면 그 녹음에 글을 붙이고 (받아쓰기 안 함) 이 TXT 는 건너뜀, 이미 끝났으면 이 TXT 만 건너뜀
+        const { rows: [au] } = await pool.query(`SELECT rec_id, filename, status FROM jcal.recording_minutes WHERE rec_id > 0 AND rec_id <> $1 AND filename !~* '\\.txt$'
+          AND lower(regexp_replace(filename, '\\.[^.]+$', '')) = $2 ORDER BY rec_id DESC LIMIT 1`, [row.rec_id, baseOf(row.filename)]);
+        if (au && (au.status === 'done' || BUSY.includes(au.status))) throw new StepError(`같은 이름의 녹음(${au.filename})으로 회의록을 만들었습니다`, 'skipped');
+        if (au) {
+          await pool.query(`UPDATE jcal.recording_minutes SET transcript = $2, has_text = true, stt_model = 'TXT', status = 'queued', error = '', updated_at = now() WHERE rec_id = $1`, [au.rec_id, text]);
+          throw new StepError(`녹음(${au.filename})에 글을 붙였습니다 (회의록은 그 녹음에)`, 'skipped');
+        }
+      }
+      if (row.rec_id > 0 && !isTxt(row.filename) && !row.has_text) {   // 녹음: 휴대폰이 같은 이름의 TXT 도 보냈으면 그 글을 씀
+        const { rows: [tx] } = await pool.query(`SELECT rec_id, filename, transcript FROM jcal.recording_minutes WHERE rec_id > 0 AND filename ~* '\\.txt$'
+          AND lower(regexp_replace(filename, '\\.[^.]+$', '')) = $1 AND status NOT IN ('stt', 'summary') ORDER BY rec_id DESC LIMIT 1`, [baseOf(row.filename)]);
+        if (tx) {
+          let text = tx.transcript;
+          if (!text) { const r = await recFetch(`/api/recordings/${tx.rec_id}/file`, { timeout: 120000 }).catch(() => null); if (r?.ok) text = decodeTxt(await r.arrayBuffer()); }
+          if (text && text.replace(/\s/g, '').length >= 5) {
+            await setRow(row.rec_id, { transcript: text, has_text: true, stt_model: 'TXT' });
+            Object.assign(row, { transcript: text, has_text: true });
+            await setRow(tx.rec_id, { status: 'skipped', error: `녹음(${row.filename})에 붙여 회의록을 만들었습니다`, processed_at: new Date() });
+          }
+        }
+      }
+      if (row.has_text && row.transcript) {                     // TXT 로 올린 글: 받아쓰기 없이 바로 회의록
+        if (!aiReady()) throw new StepError('회의록 AI 키가 없습니다 (설정 창에서 Anthropic 키 넣기)');
+        await setRow(row.rec_id, { status: 'summary', error: '' });
+        const minutes = await summarize(row, row.transcript);
+        await setRow(row.rec_id, { status: 'done', stt_model: 'TXT', minutes: JSON.stringify(minutes), ai_model: `${provider() === 'anthropic' ? 'Claude' : 'ChatGPT'} · ${model()}`, processed_at: new Date(), error: '' });
+        return;
+      }
       if (!sttReady()) throw new StepError('받아쓰기에 OpenAI API 키가 필요합니다 (VPS 에서 jcal-admin ai-key)');
       if (!aiReady()) throw new StepError('회의록 AI 키가 없습니다 (VPS 에서 jcal-admin ai-key 로 Anthropic 키 넣기)');
       await setRow(row.rec_id, { status: 'stt', error: '' });
@@ -355,7 +411,7 @@ export function minutesModule({ pool, adminUser, HttpError }) {
     'GET /api/minutes': async req => {
       await adminUser(req);
       if (Date.now() - lastSync > 15000) { syncList().then(drain).catch(() => {}); }   // 화면이 볼 때마다 새 녹음 확인 (기다리지 않음)
-      const { rows } = await pool.query('SELECT rec_id, filename, device, size_bytes, recorded_at, uploaded_at, status, error, duration, minutes, stt_model, ai_model, processed_at FROM jcal.recording_minutes ORDER BY coalesce(recorded_at, uploaded_at) DESC NULLS LAST, rec_id DESC LIMIT 300');
+      const { rows } = await pool.query('SELECT rec_id, filename, device, size_bytes, recorded_at, uploaded_at, status, error, duration, minutes, stt_model, ai_model, processed_at, has_text FROM jcal.recording_minutes ORDER BY coalesce(recorded_at, uploaded_at) DESC NULLS LAST, rec_id DESC LIMIT 300');
       return {
         ready: { api: recReady(), stt: sttReady(), ai: aiReady(), ffmpeg: hasFfmpeg }, auto: AUTO(), today: await doneToday(), limit: DAILY(),
         model: { stt: sttModel(), ai: `${provider() === 'anthropic' ? 'Claude' : 'ChatGPT'} · ${model()}` }, items: rows.map(listOut),
@@ -370,7 +426,7 @@ export function minutesModule({ pool, adminUser, HttpError }) {
     },
     'POST /api/minutes/process': async (req, body) => {
       await adminUser(req);
-      const ids = (Array.isArray(body.ids) ? body.ids : [body.id]).map(Number).filter(n => Number.isInteger(n) && n > 0).slice(0, 500);
+      const ids = (Array.isArray(body.ids) ? body.ids : [body.id]).map(Number).filter(n => Number.isInteger(n) && n !== 0).slice(0, 1000);
       const { rowCount } = await pool.query(`UPDATE jcal.recording_minutes SET status = 'queued', auto_run = false, error = '', updated_at = now() WHERE rec_id = ANY($1::bigint[]) AND status NOT IN ('stt', 'summary')`, [ids]);
       if (!rowCount) throw new HttpError(409, '이미 처리 중이거나 없는 녹음입니다');
       drain();
@@ -383,10 +439,37 @@ export function minutesModule({ pool, adminUser, HttpError }) {
       const { rows } = await pool.query('SELECT status FROM jcal.recording_minutes WHERE rec_id = $1', [id]);
       if (!rows[0]) throw new HttpError(404, '없는 녹음입니다');
       if (BUSY.includes(rows[0].status)) throw new HttpError(409, '처리 중에는 지울 수 없습니다. 끝난 뒤 다시 시도하세요');
-      const r = await recFetch(`/api/recordings/${id}`, { method: 'DELETE' }).catch(e => { throw new HttpError(502, e.message); });
-      if (!r.ok && r.status !== 404) throw new HttpError(502, `녹음 서버에서 지우지 못했습니다 (${r.status})`);
+      if (id > 0) {                                               // 음수 = TXT 로 올린 글 (녹음 서버에 없음)
+        const r = await recFetch(`/api/recordings/${id}`, { method: 'DELETE' }).catch(e => { throw new HttpError(502, e.message); });
+        if (!r.ok && r.status !== 404) throw new HttpError(502, `녹음 서버에서 지우지 못했습니다 (${r.status})`);
+      }
       await pool.query('DELETE FROM jcal.recording_minutes WHERE rec_id = $1', [id]);
       return { ok: true };
+    },
+    /** 예전 TXT 올리기 (화면이 한글 인코딩을 풀어 글로 보냄) */
+    'POST /api/minutes/text': async (req, body) => {
+      await adminUser(req);
+      const name = path.basename(String(body.name || '')).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 200);
+      if (!/\.txt$/i.test(name)) throw new HttpError(415, 'TXT 파일만 올릴 수 있습니다');
+      const text = tidyText(body.text);
+      if (text.replace(/\s/g, '').length < 5) throw new HttpError(400, '글이 거의 없는 파일입니다');
+      const sha = shaOf(text);
+      const make = !!body.make;
+      const dup = await pool.query('SELECT rec_id FROM jcal.recording_minutes WHERE text_sha256 = $1 LIMIT 1', [sha]);
+      if (dup.rows[0]) return { ok: true, duplicate: true, id: Number(dup.rows[0].rec_id) };
+      const atN = Number(body.at), at = Number.isFinite(atN) && atN > 1e8 && atN < Date.now() / 1000 + 86400 ? new Date(atN * 1000) : null;
+      // 같은 이름의 녹음이 아직 회의록 전이면 그 녹음에 글을 붙인다 (받아쓰기 비용 아낌)
+      const base = name.replace(/\.txt$/i, '').toLowerCase();
+      const pair = await pool.query(`UPDATE jcal.recording_minutes SET transcript = $2, has_text = true, text_sha256 = $3, stt_model = 'TXT', error = '',
+          status = CASE WHEN $4 THEN 'queued' ELSE status END, auto_run = CASE WHEN $4 THEN false ELSE auto_run END, updated_at = now()
+        WHERE rec_id = (SELECT rec_id FROM jcal.recording_minutes WHERE rec_id > 0 AND NOT has_text AND status IN ('idle', 'queued', 'failed', 'skipped')
+          AND lower(regexp_replace(filename, '\\.[^.]+$', '')) = $1 ORDER BY rec_id DESC LIMIT 1) RETURNING rec_id`, [base, text, sha, make]);
+      if (pair.rows[0]) { if (make) drain(); return { ok: true, paired: true, id: Number(pair.rows[0].rec_id) }; }
+      const { rows } = await pool.query(`INSERT INTO jcal.recording_minutes (rec_id, device, filename, size_bytes, recorded_at, uploaded_at, status, auto_run, transcript, has_text, text_sha256, stt_model)
+        VALUES (-nextval('jcal.recording_text_seq'), 'txt', $1, $2, $3, now(), $4, false, $5, true, $6, 'TXT') RETURNING rec_id`,
+      [name, Buffer.byteLength(text), at, make ? 'queued' : 'idle', text, sha]);
+      if (make) drain();
+      return { ok: true, id: Number(rows[0].rec_id) };
     },
   };
   const raw = {
@@ -434,7 +517,8 @@ export function minutesModule({ pool, adminUser, HttpError }) {
     'GET /api/minutes/audio': async (req, res) => {
       await adminUser(req);
       const id = Number(new URL(req.url, 'http://x').searchParams.get('id'));
-      if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, '녹음 번호가 없습니다');
+      if (!Number.isInteger(id) || id === 0) throw new HttpError(400, '녹음 번호가 없습니다');
+      if (id < 0) throw new HttpError(404, 'TXT 로 올린 글이라 녹음 파일이 없습니다');
       const r = await recFetch(`/api/recordings/${id}/file`, { timeout: 120000 }).catch(e => { throw new HttpError(502, e.message); });
       if (r.status === 404) throw new HttpError(404, '녹음 파일이 없습니다');
       if (!r.ok || !r.body) throw new HttpError(502, `녹음 파일을 받지 못했습니다 (${r.status})`);
