@@ -9,6 +9,10 @@
    POST /api/minutes/upload?u=&i=&n=&name=&at=&make=  사이트에서 예전 녹음 올리기 — 4MB 조각으로 받아 모은 뒤 녹음 서버로 넘김
         (조각이라 Nginx · Vercel 크기 · 시간 제한에 안 걸림, 같은 내용은 녹음 서버가 SHA-256 으로 걸러 "이미 있음")
         올린 녹음은 "수동"(자동 정리 안 함), make=1 이면 바로 회의록 대기열
+   GET  /api/minutes/dashboard       회의록 대시보드 (건수 · 종류 · 월별 · 할 일 모음 · 자주 만난 사람 · 최근)
+   POST /api/minutes/step {id, i, done}  회의록 할 일 끝냄 표시 (minutes.done_steps)
+   POST /api/minutes/text {name, at, text, make, kind?}  kind: auto | minutes | transcript — Word(docx) · 1.개요~6.기타 제목이 있는 글은
+        "이미 정리된 회의록"으로 AI 없이 완료 저장 (원문은 minutes.raw)
    POST /api/minutes/text {name, at, text, make}  예전 TXT(받아 적은 글 · 메모) 올리기 — 받아쓰기 없이 글로 회의록
         같은 이름의 녹음(확장자만 다름)이 아직 회의록 전이면 그 녹음의 받아쓴 글로 붙인다. 같은 글은 "이미 있음"
         글만 있는 항목은 번호가 음수 (녹음 서버에 없음)
@@ -192,6 +196,85 @@ export function tidyMinutes(m) {
   };
 }
 
+/* ── 이미 정리된 회의록 (Word · TXT) 을 AI 없이 1. 개요 ~ 6. 기타로 나누기 ── */
+const SECS = [
+  ['details', /^(안건\s*별\s*(주요\s*)?내용|안건별\s*(주요\s*)?내용|주요\s*(논의\s*)?내용|논의\s*내용|회의\s*내용|세부\s*내용)/],
+  ['overview', /^(회의\s*)?개요$|^개요/],
+  ['agenda', /^(안건|의제|회의\s*안건|주제)$/],
+  ['conclusion', /^(결론|결정\s*사항|합의\s*사항|결정\s*및\s*합의)/],
+  ['next', /^(향후\s*(진행\s*)?(사항|계획|일정)?|후속\s*(조치|사항)|할\s*일|조치\s*사항|action\s*items?)/i],
+  ['etc', /^(기타|비고|참고\s*사항?)$/],
+];
+const BULLET = /^\s*(?:[-*•·▪◦○●□■◆◇▶►※✓✔]|\(?\d{1,2}[.)]|\(?[가-하][.)]|[①-⑳])\s*/;
+function headingOf(line) {
+  const raw = line.trim();
+  if (!raw || raw.length > 40) return null;
+  const marked = /^(#{1,6}\s*|\[|【|<|(?:\d{1,2}|[IVX]{1,4}|[가-하])\s*[.)．]\s*|[□■◆●▶]\s*)/.test(raw) || /[:：]$/.test(raw);
+  const t = raw.replace(/^#{1,6}\s*/, '').replace(/^[\[【<]\s*/, '').replace(/^(?:\d{1,2}|[IVX]{1,4}|[가-하])\s*[.)．]\s*/, '').replace(/^[□■◆●▶]\s*/, '')
+    .replace(/\s*[\]】>]\s*$/, '').replace(/\s*[:：]\s*$/, '').trim();
+  if (!t || t.length > 20) return null;
+  for (const [k, re] of SECS) if (re.test(t) && (marked || t.length <= 10)) return k;
+  return null;
+}
+export function looksLikeMinutes(text) {
+  const found = new Set();
+  for (const l of String(text || '').split('\n').slice(0, 400)) { const h = headingOf(l); if (h) found.add(h); }
+  return found.size >= 2 || (found.size >= 1 && /회의록/.test(String(text).slice(0, 300)));
+}
+const strip = l => l.replace(BULLET, '').trim();
+function dueOf(s, base) {
+  let m = s.match(/(20\d{2})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})/);
+  let y, mo, d;
+  if (m) [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  else if ((m = s.match(/(?:^|[^\d])(\d{1,2})\s*[/.월]\s*(\d{1,2})\s*일?(?!\d)/))) { y = (base || new Date()).getFullYear(); [mo, d] = [Number(m[1]), Number(m[2])]; }
+  if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+export function parseMinutesText(text, { name = '', at = null } = {}) {
+  const lines = String(text || '').split('\n').map(l => l.replace(/\t/g, ' ').replace(/\s+$/, ''));
+  const sec = { pre: [], overview: [], agenda: [], details: [], conclusion: [], next: [], etc: [] };
+  let cur = 'pre';
+  for (const l of lines) { const h = headingOf(l); if (h) { cur = h; continue; } if (l.trim()) sec[cur].push(l); }
+  const base = at ? new Date(at) : null;
+  const titleLine = sec.pre.map(strip).find(l => l && !/^(일시|날짜|장소|참석|작성)/.test(l));
+  const fileTitle = String(name).replace(/\.[^.]+$/, '').replace(/(?:^|[_ -])(20)?\d{6}[_ -]?\d{0,6}/g, ' ').trim();
+  const ov = { when: '', participants: [], purpose: '' };
+  for (const l of [...sec.pre, ...sec.overview]) {
+    const s = strip(l), kv = s.match(/^(일\s*시|날\s*짜|일자|시간|참\s*석\s*자?|참여자|목\s*적|장\s*소|주\s*제)\s*[:：]?\s*(.+)$/);
+    if (kv) {
+      const k = kv[1].replace(/\s/g, '');
+      if (/일시|날짜|일자|시간/.test(k)) ov.when = ov.when || kv[2];
+      else if (/참석|참여/.test(k)) ov.participants.push(...kv[2].split(/[,、·/]|\s{2,}/).map(x => x.trim()).filter(Boolean));
+      else if (/목적|주제/.test(k)) ov.purpose = ov.purpose || kv[2];
+    } else if (sec.overview.includes(l) && s) ov.purpose = ov.purpose ? `${ov.purpose} ${s}` : s;
+  }
+  const details = [];
+  for (const l of sec.details) {
+    const isSub = /^\S/.test(l) && /^\s*(\d{1,2}[.)]|[가-하][.)]|[①-⑳]|\[)/.test(l) && strip(l).length <= 60;
+    if (isSub || !details.length) details.push({ agenda: isSub ? strip(l).replace(/[\]】]$/, '') : '주요 내용', points: isSub ? [] : [strip(l)] });
+    else details[details.length - 1].points.push(strip(l));
+  }
+  const next_steps = sec.next.map(strip).filter(Boolean).map(s => {
+    const ow = s.match(/(?:담당(?:자)?|책임)\s*[:：]?\s*([가-힣A-Za-z]{2,10})/) || s.match(/\(([가-힣]{2,4})\)/);
+    const tm = s.match(/(\d{1,2}):(\d{2})/);
+    return { task: s, owner: ow ? ow[1] : '', due: dueOf(s, base), time: tm ? `${tm[1].padStart(2, '0')}:${tm[2]}` : '' };
+  });
+  const conclusion = sec.conclusion.map(strip).filter(Boolean);
+  const all = String(text);
+  return {
+    title: (titleLine && titleLine.replace(/^회의록\s*[:：-]?\s*/, '').slice(0, 80)) || fileTitle || '올린 회의록',
+    kind: /통화|전화/.test(all.slice(0, 2000)) ? '통화' : /회의|미팅|협의/.test(all.slice(0, 2000)) ? '회의' : '메모',
+    summary: (conclusion[0] || ov.purpose || details[0]?.points[0] || sec.pre.map(strip).find(Boolean) || '').slice(0, 300),
+    overview: ov,
+    agenda: sec.agenda.map(strip).filter(Boolean),
+    details, conclusion, next_steps,
+    etc: sec.etc.map(strip).filter(Boolean),
+  };
+}
+/** 올린 회의록 → 저장할 회의록 (원문도 같이, AI 안 씀) */
+export function fileMinutes(text, opt) { return { ...tidyMinutes(parseMinutesText(text, opt)), raw: String(text).slice(0, 200000), source: 'file' }; }
+const FILE_AI = '올린 회의록 (AI 안 씀)';
+
 async function summarize(row, transcript) {
   const at = row.recorded_at || row.uploaded_at || new Date();
   const prompt = `[녹음 정보]
@@ -209,9 +292,9 @@ ${transcript}`;
 const listOut = r => ({
   id: Number(r.rec_id), filename: r.filename, device: r.device, size: Number(r.size_bytes), at: r.recorded_at || r.uploaded_at, uploadedAt: r.uploaded_at,
   status: r.status, error: r.error || '', duration: r.duration == null ? null : Number(r.duration),
-  title: r.minutes?.title || '', kind: r.minutes?.kind || '', summary: r.minutes?.summary || '', steps: r.minutes?.next_steps?.length || 0,
+  title: r.minutes?.title || '', kind: r.minutes?.kind || '', people: (r.minutes?.overview?.participants || []).join(', '), summary: r.minutes?.summary || '', steps: r.minutes?.next_steps?.length || 0,
   sttModel: r.stt_model || '', aiModel: r.ai_model || '', processedAt: r.processed_at,
-  hasText: !!r.has_text, audio: Number(r.rec_id) > 0 && !isTxt(r.filename),
+  hasText: !!r.has_text, audio: Number(r.rec_id) > 0 && !isTxt(r.filename) && !/\.(docx|md)$/i.test(r.filename), fromFile: r.minutes?.source === 'file',
 });
 
 
@@ -299,12 +382,25 @@ export function minutesModule({ pool, adminUser, HttpError }) {
   async function processOne(row) {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'jcal-minutes-'));
     try {
+      if (row.rec_id < 0 && !row.has_text && row.minutes?.raw) {   // 올린 회의록(Word 등)을 AI 로 다시 정리: 원문을 전문으로 남김
+        Object.assign(row, { transcript: row.minutes.raw, has_text: true });
+        await setRow(row.rec_id, { transcript: row.transcript, has_text: true });
+      }
       if (row.rec_id > 0 && isTxt(row.filename) && !row.has_text) {   // 휴대폰이 보낸 TXT: 녹음 서버에서 받아 글로
         const r = await recFetch(`/api/recordings/${row.rec_id}/file`, { timeout: 120000 });
         if (r.status === 404) throw new StepError('녹음 서버에 파일이 없습니다 (지워졌을 수 있음)', 'skipped');
         if (!r.ok) throw new StepError(`TXT 파일을 받지 못했습니다 (${r.status})`);
         const text = decodeTxt(await r.arrayBuffer());
         if (text.replace(/\s/g, '').length < 5) throw new StepError('글이 거의 없는 파일입니다', 'skipped');
+        if (looksLikeMinutes(text)) {                             // 이미 정리된 회의록: AI 없이 그대로 (같은 이름 녹음이 회의록 전이면 그 녹음에)
+          const mins = JSON.stringify(fileMinutes(text, { name: row.filename, at: row.recorded_at || row.uploaded_at }));
+          const { rows: [au] } = await pool.query(`SELECT rec_id, filename FROM jcal.recording_minutes WHERE rec_id > 0 AND rec_id <> $1 AND filename !~* '\\.txt$'
+            AND lower(regexp_replace(filename, '\\.[^.]+$', '')) = $2 AND status IN ('idle', 'queued', 'failed', 'skipped') ORDER BY rec_id DESC LIMIT 1`, [row.rec_id, baseOf(row.filename)]);
+          const target = au ? au.rec_id : row.rec_id;
+          await setRow(target, { status: 'done', minutes: mins, stt_model: 'TXT', ai_model: FILE_AI, processed_at: new Date(), error: '', text_sha256: shaOf(text) });
+          if (au) throw new StepError(`녹음(${au.filename})에 회의록으로 붙였습니다`, 'skipped');
+          return;
+        }
         await setRow(row.rec_id, { transcript: text, has_text: true, text_sha256: shaOf(text), stt_model: 'TXT' });
         Object.assign(row, { transcript: text, has_text: true });
         // 같은 이름의 녹음: 회의록 전이면 그 녹음에 글을 붙이고 (받아쓰기 안 함) 이 TXT 는 건너뜀, 이미 끝났으면 이 TXT 만 건너뜀
@@ -322,6 +418,11 @@ export function minutesModule({ pool, adminUser, HttpError }) {
         if (tx) {
           let text = tx.transcript;
           if (!text) { const r = await recFetch(`/api/recordings/${tx.rec_id}/file`, { timeout: 120000 }).catch(() => null); if (r?.ok) text = decodeTxt(await r.arrayBuffer()); }
+          if (text && looksLikeMinutes(text)) {                      // 같은 이름 TXT 가 이미 정리된 회의록이면 그대로 (AI 안 씀)
+            await setRow(row.rec_id, { status: 'done', minutes: JSON.stringify(fileMinutes(text, { name: tx.filename, at: row.recorded_at || row.uploaded_at })), stt_model: 'TXT', ai_model: FILE_AI, processed_at: new Date(), error: '' });
+            await setRow(tx.rec_id, { status: 'skipped', error: `녹음(${row.filename})에 회의록으로 붙였습니다`, processed_at: new Date() });
+            return;
+          }
           if (text && text.replace(/\s/g, '').length >= 5) {
             await setRow(row.rec_id, { transcript: text, has_text: true, stt_model: 'TXT' });
             Object.assign(row, { transcript: text, has_text: true });
@@ -437,6 +538,50 @@ export function minutesModule({ pool, adminUser, HttpError }) {
       if (!rows[0]) throw new HttpError(404, '없는 녹음입니다');
       return { item: { ...listOut(rows[0]), transcript: rows[0].transcript || '', minutes: rows[0].minutes || null } };
     },
+    /** 회의록 대시보드: 건수 · 종류 · 월별 · 할 일 모음 · 자주 만난 사람 · 최근 회의록 */
+    'GET /api/minutes/dashboard': async req => {
+      await adminUser(req);
+      const { rows } = await pool.query(`SELECT rec_id, filename, coalesce(recorded_at, uploaded_at) AS at, minutes FROM jcal.recording_minutes
+        WHERE status = 'done' AND minutes IS NOT NULL ORDER BY coalesce(recorded_at, uploaded_at) DESC NULLS LAST LIMIT 5000`);
+      const today = kstDate(new Date()), month = today.slice(0, 7);
+      const wk = new Date(`${today}T00:00:00+09:00`); wk.setDate(wk.getDate() - ((wk.getDay() + 6) % 7));
+      const kinds = {}, months = {}, people = {}, tasks = [];
+      let thisMonth = 0, thisWeek = 0, doneTasks = 0;
+      for (const r of rows) {
+        const m = r.minutes, at = r.at ? new Date(r.at) : null, d = at ? kstDate(at) : '';
+        kinds[m.kind || '기타'] = (kinds[m.kind || '기타'] || 0) + 1;
+        if (d) { months[d.slice(0, 7)] = (months[d.slice(0, 7)] || 0) + 1; if (d.startsWith(month)) thisMonth++; if (at >= wk) thisWeek++; }
+        for (const p of m.overview?.participants || []) { const k = String(p).trim(); if (k && !/^(나|본인|상대방|참석자\s*\d*|확인 필요)$/.test(k)) people[k] = (people[k] || 0) + 1; }
+        const doneSet = new Set(Array.isArray(m.done_steps) ? m.done_steps : []);
+        (m.next_steps || []).forEach((x, i) => {
+          if (doneSet.has(i)) { doneTasks++; return; }
+          tasks.push({ id: Number(r.rec_id), i, title: m.title || r.filename, task: x.task, owner: x.owner || '', due: x.due || '', time: x.time || '', at: r.at });
+        });
+      }
+      tasks.sort((a, b) => (a.due || '9999') .localeCompare(b.due || '9999') || String(b.at).localeCompare(String(a.at)));
+      const last12 = [];
+      for (let i = 11; i >= 0; i--) { const t = new Date(`${month}-01T00:00:00+09:00`); t.setMonth(t.getMonth() - i); const k = kstDate(t).slice(0, 7); last12.push({ month: k, n: months[k] || 0 }); }
+      return {
+        total: rows.length, thisMonth, thisWeek, today,
+        tasks: { open: tasks.length, done: doneTasks, overdue: tasks.filter(t => t.due && t.due < today).length, list: tasks.slice(0, 300) },
+        kinds: Object.entries(kinds).map(([kind, n]) => ({ kind, n })).sort((a, b) => b.n - a.n),
+        months: last12,
+        people: Object.entries(people).map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n).slice(0, 15),
+        recent: rows.slice(0, 8).map(r => ({ id: Number(r.rec_id), title: r.minutes.title || r.filename, kind: r.minutes.kind || '', summary: r.minutes.summary || '', at: r.at, steps: (r.minutes.next_steps || []).length })),
+      };
+    },
+    /** 할 일 끝냄 표시 (회의록 안 next_steps 순번) */
+    'POST /api/minutes/step': async (req, body) => {
+      await adminUser(req);
+      const id = Number(body.id), i = Number(body.i);
+      if (!Number.isInteger(id) || !Number.isInteger(i) || i < 0 || i > 100) throw new HttpError(400, '할 일 정보가 올바르지 않습니다');
+      const { rows: [r] } = await pool.query('SELECT minutes FROM jcal.recording_minutes WHERE rec_id = $1', [id]);
+      if (!r?.minutes) throw new HttpError(404, '없는 회의록입니다');
+      const set = new Set(Array.isArray(r.minutes.done_steps) ? r.minutes.done_steps : []);
+      if (body.done) set.add(i); else set.delete(i);
+      await pool.query(`UPDATE jcal.recording_minutes SET minutes = jsonb_set(minutes, '{done_steps}', $2::jsonb), updated_at = now() WHERE rec_id = $1`, [id, JSON.stringify([...set].sort((a, b) => a - b))]);
+      return { ok: true, done: [...set] };
+    },
     'POST /api/minutes/process': async (req, body) => {
       await adminUser(req);
       const ids = (Array.isArray(body.ids) ? body.ids : [body.id]).map(Number).filter(n => Number.isInteger(n) && n !== 0).slice(0, 1000);
@@ -463,7 +608,7 @@ export function minutesModule({ pool, adminUser, HttpError }) {
     'POST /api/minutes/text': async (req, body) => {
       await adminUser(req);
       const name = path.basename(String(body.name || '')).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 200);
-      if (!/\.txt$/i.test(name)) throw new HttpError(415, 'TXT 파일만 올릴 수 있습니다');
+      if (!/\.(txt|md|docx)$/i.test(name)) throw new HttpError(415, 'TXT · Word(docx) · MD 파일만 올릴 수 있습니다');
       const text = tidyText(body.text);
       if (text.replace(/\s/g, '').length < 5) throw new HttpError(400, '글이 거의 없는 파일입니다');
       const sha = shaOf(text);
@@ -471,8 +616,21 @@ export function minutesModule({ pool, adminUser, HttpError }) {
       const dup = await pool.query('SELECT rec_id FROM jcal.recording_minutes WHERE text_sha256 = $1 LIMIT 1', [sha]);
       if (dup.rows[0]) return { ok: true, duplicate: true, id: Number(dup.rows[0].rec_id) };
       const atN = Number(body.at), at = Number.isFinite(atN) && atN > 1e8 && atN < Date.now() / 1000 + 86400 ? new Date(atN * 1000) : null;
+      // 이미 정리된 회의록 (Word 는 늘 회의록으로 봄, TXT · MD 는 kind 또는 1. 개요 ~ 6. 기타 같은 제목으로 판단): AI 없이 완료로 저장
+      const asMin = body.kind === 'minutes' || (body.kind !== 'transcript' && (/\.docx$/i.test(name) || looksLikeMinutes(text)));
+      if (asMin) {
+        const mins = JSON.stringify(fileMinutes(text, { name, at }));
+        const base0 = name.replace(/\.[^.]+$/, '').toLowerCase();
+        const pr = await pool.query(`UPDATE jcal.recording_minutes SET minutes = $2, text_sha256 = $3, status = 'done', ai_model = $4, error = '', processed_at = now(), updated_at = now()
+          WHERE rec_id = (SELECT rec_id FROM jcal.recording_minutes WHERE rec_id > 0 AND status IN ('idle', 'queued', 'failed', 'skipped') AND filename !~* '\\.(txt|md|docx)$'
+            AND lower(regexp_replace(filename, '\\.[^.]+$', '')) = $1 ORDER BY rec_id DESC LIMIT 1) RETURNING rec_id`, [base0, mins, sha, FILE_AI]);
+        if (pr.rows[0]) return { ok: true, paired: true, minutes: true, id: Number(pr.rows[0].rec_id) };
+        const { rows } = await pool.query(`INSERT INTO jcal.recording_minutes (rec_id, device, filename, size_bytes, recorded_at, uploaded_at, status, auto_run, minutes, text_sha256, stt_model, ai_model, processed_at)
+          VALUES (-nextval('jcal.recording_text_seq'), 'file', $1, $2, $3, now(), 'done', false, $4, $5, '', $6, now()) RETURNING rec_id`, [name, Buffer.byteLength(text), at, mins, sha, FILE_AI]);
+        return { ok: true, minutes: true, id: Number(rows[0].rec_id) };
+      }
       // 같은 이름의 녹음이 아직 회의록 전이면 그 녹음에 글을 붙인다 (받아쓰기 비용 아낌)
-      const base = name.replace(/\.txt$/i, '').toLowerCase();
+      const base = name.replace(/\.[^.]+$/, '').toLowerCase();
       const pair = await pool.query(`UPDATE jcal.recording_minutes SET transcript = $2, has_text = true, text_sha256 = $3, stt_model = 'TXT', error = '',
           status = CASE WHEN $4 THEN 'queued' ELSE status END, auto_run = CASE WHEN $4 THEN false ELSE auto_run END, updated_at = now()
         WHERE rec_id = (SELECT rec_id FROM jcal.recording_minutes WHERE rec_id > 0 AND NOT has_text AND status IN ('idle', 'queued', 'failed', 'skipped')
