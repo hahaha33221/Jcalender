@@ -1,0 +1,25 @@
+[Unit]
+Description=Jcalender 녹음 받는 서버 (recording-api)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jcal
+Group=jcal
+WorkingDirectory=/opt/jcalender/recording-api
+# RECORDING_API_TOKEN 을 jcal-api 와 같은 설정 파일에서 읽어 API_TOKEN 으로 넘긴다
+EnvironmentFile=/etc/jcalender.env
+ExecStart=/bin/sh -c 'API_TOKEN="$RECORDING_API_TOKEN" PORT=__REC_PORT__ HOST=127.0.0.1 DATA_DIR=/var/lib/jcal-rec exec __NODE__ server.js'
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# 녹음 파일 · 목록 DB (/var/lib/jcal-rec, jcal 사용자만)
+StateDirectory=jcal-rec
+StateDirectoryMode=0750
+
+[Install]
+WantedBy=multi-user.target
