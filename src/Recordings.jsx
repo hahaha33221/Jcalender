@@ -130,7 +130,8 @@ function RecDiag({ rec, openSetup }) {
   if (!rec) return <p className="rec-msg bad">VPS 서버가 아직 옛 버전입니다. 맥북 터미널에서 <code>cd ~/Jcalender &amp;&amp; git pull &amp;&amp; bash server/deploy/update.sh</code> 를 한 번 실행하세요.</p>;
   const t = rec.at ? new Date(rec.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '';
   if (!rec.ok) return <p className="rec-msg bad">녹음 서버: {rec.msg}{t ? ` (${t} 확인)` : ''} <button className="btn sm" onClick={openSetup}>설정 열기</button></p>;
-  return <p className="muted rec-diag">녹음 서버 연결됨 · 녹음 서버에 {rec.total}건{t ? ` · ${t} 확인` : ''}{rec.total === 0 ? ' · 휴대폰에서 아직 한 건도 올라오지 않았습니다 (MacroDroid 알림의 결과가 201 또는 200 이어야 올라간 것)' : ''}</p>;
+  if (!rec.version) return <p className="rec-msg bad">녹음 서버가 옛 버전이라 TXT · mp4 · 확장자 없는 파일을 거절합니다 (MacroDroid 결과 415). 맥북 터미널에서 <code>cd ~/Jcalender &amp;&amp; git pull &amp;&amp; bash server/deploy/update.sh</code> 를 실행하세요. (지금 녹음 서버에 {rec.total}건)</p>;
+  return <p className="muted rec-diag">녹음 서버 {rec.version} 연결됨 · 녹음 서버에 {rec.total}건{t ? ` · ${t} 확인` : ''}{rec.total === 0 ? ' · 휴대폰에서 아직 한 건도 올라오지 않았습니다 (MacroDroid 알림의 결과가 201 또는 200 이어야 올라간 것)' : ''}</p>;
 }
 
 export function RecordingsHome() {
@@ -392,7 +393,7 @@ function SettingsPopup({ onClose }) {
 }
 
 /* ── 예전 녹음 올리기 ── */
-const EXT_OK = /\.(m4a|mp3|amr|wav|3gp|ogg|aac)$/i;
+const EXT_OK = /\.(m4a|mp4|m4b|mp3|amr|awb|wav|3gp|3ga|ogg|oga|opus|aac|flac|webm|wma)$/i;
 const TXT_OK = /\.(txt|md|docx)$/i;
 /** Word(docx) → 글: 문단 · 제목 · 목록(들여쓰기) · 표(칸은 " | ") */
 export function docxText(buf) {
@@ -531,7 +532,7 @@ function UploadPopup({ onClose, onUploaded }) {
       <div className="ru-pick">
         <button className="btn primary" disabled={running} onClick={() => pick.current?.click()}>파일 고르기 (여러 개)</button>
         <button className="btn" disabled={running} onClick={() => folder.current?.click()}>폴더 통째로 고르기</button>
-        <input ref={pick} type="file" multiple hidden accept="audio/*,.m4a,.mp3,.amr,.wav,.3gp,.ogg,.aac,.txt,.md,.docx,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={e => { add(e.target.files); e.target.value = ''; }} />
+        <input ref={pick} type="file" multiple hidden accept="audio/*,video/mp4,.m4a,.mp4,.mp3,.amr,.wav,.3gp,.ogg,.opus,.aac,.flac,.webm,.txt,.md,.docx,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={e => { add(e.target.files); e.target.value = ''; }} />
         <input ref={folder} type="file" multiple hidden webkitdirectory="" directory="" onChange={e => { add(e.target.files); e.target.value = ''; }} />
       </div>
       <p className="muted">휴대폰: "파일 고르기" → 내 파일 › Recordings › Call(통화) · Voice Recorder(음성)에서 길게 눌러 여러 개 선택. 컴퓨터: 녹음 · 회의록 폴더를 "폴더 통째로 고르기"로 고르면 녹음 · TXT · Word 파일만 골라 올립니다. 이름이 같은 녹음(예: 통화.m4a · 통화.docx)이 있으면 그 녹음에 붙습니다.</p>
