@@ -547,7 +547,7 @@ export function minutesModule({ pool, adminUser, HttpError }) {
         WHERE status = 'done' AND minutes IS NOT NULL ORDER BY coalesce(recorded_at, uploaded_at) DESC NULLS LAST LIMIT 5000`);
       const today = kstDate(new Date()), month = today.slice(0, 7);
       const wk = new Date(`${today}T00:00:00+09:00`); wk.setDate(wk.getDate() - ((wk.getDay() + 6) % 7));
-      const kinds = {}, months = {}, people = {}, tasks = [];
+      const kinds = {}, months = {}, people = {}, tasks = [], doneList = [];   // doneList: 끝낸 할 일 (엑셀 · 월 보기용)
       let thisMonth = 0, thisWeek = 0, doneTasks = 0;
       for (const r of rows) {
         const m = r.minutes, at = r.at ? new Date(r.at) : null, d = at ? kstDate(at) : '';
@@ -556,7 +556,7 @@ export function minutesModule({ pool, adminUser, HttpError }) {
         for (const p of m.overview?.participants || []) { const k = String(p).trim(); if (k && !/^(나|본인|상대방|참석자\s*\d*|확인 필요)$/.test(k)) people[k] = (people[k] || 0) + 1; }
         const doneSet = new Set(Array.isArray(m.done_steps) ? m.done_steps : []);
         (m.next_steps || []).forEach((x, i) => {
-          if (doneSet.has(i)) { doneTasks++; return; }
+          if (doneSet.has(i)) { doneTasks++; doneList.push({ id: Number(r.rec_id), i, title: m.title || r.filename, task: x.task, owner: x.owner || '', due: x.due || '', time: x.time || '', at: r.at, done: true }); return; }
           tasks.push({ id: Number(r.rec_id), i, title: m.title || r.filename, task: x.task, owner: x.owner || '', due: x.due || '', time: x.time || '', at: r.at });
         });
       }
@@ -565,10 +565,16 @@ export function minutesModule({ pool, adminUser, HttpError }) {
       for (let i = 11; i >= 0; i--) { const t = new Date(`${month}-01T00:00:00+09:00`); t.setMonth(t.getMonth() - i); const k = kstDate(t).slice(0, 7); last12.push({ month: k, n: months[k] || 0 }); }
       return {
         total: rows.length, thisMonth, thisWeek, today,
-        tasks: { open: tasks.length, done: doneTasks, overdue: tasks.filter(t => t.due && t.due < today).length, list: tasks.slice(0, 300) },
+        tasks: { open: tasks.length, done: doneTasks, overdue: tasks.filter(t => t.due && t.due < today).length, list: tasks.slice(0, 3000), doneList: doneList.slice(0, 3000) },
         kinds: Object.entries(kinds).map(([kind, n]) => ({ kind, n })).sort((a, b) => b.n - a.n),
         months: last12,
         people: Object.entries(people).map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n).slice(0, 15),
+        // 의사결정 모음 (회의록 "4. 결론"): 화면이 월별로 골라 엑셀로
+        decisions: rows.filter(r => (r.minutes.conclusion || []).some(c => !/^결정된 사항 없음/.test(c))).slice(0, 3000).map(r => ({
+          id: Number(r.rec_id), at: r.at, title: r.minutes.title || r.filename, kind: r.minutes.kind || '', when: r.minutes.overview?.when || '',
+          participants: (r.minutes.overview?.participants || []).join(', '), purpose: r.minutes.overview?.purpose || '', agenda: (r.minutes.agenda || []).join(', '),
+          conclusion: (r.minutes.conclusion || []).filter(c => !/^결정된 사항 없음/.test(c)), steps: (r.minutes.next_steps || []).length, source: r.minutes.source === 'file' ? '올린 회의록' : 'AI 회의록',
+        })),
         recent: rows.slice(0, 8).map(r => ({ id: Number(r.rec_id), title: r.minutes.title || r.filename, kind: r.minutes.kind || '', summary: r.minutes.summary || '', at: r.at, steps: (r.minutes.next_steps || []).length })),
       };
     },

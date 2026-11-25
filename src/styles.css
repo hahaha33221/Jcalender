@@ -2601,3 +2601,14 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .md-day.past h4 { color: var(--ink3); }
 .md-day .md-tl li:first-child { border-top: 0; }
 .md-none { margin: 4px 0; font-size: 12px; }
+.md-xbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+.md-xbar > span:first-child { font-weight: 600; }
+.md-cbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0 2px; font-size: 12px; }
+.md-cat { border: 1px solid var(--a3); color: var(--a3); background: none; border-radius: 999px; padding: 1px 8px; font: inherit; font-size: 12px; cursor: pointer; }
+.md-cat.none { border-color: var(--line); color: var(--ink3); }
+.md-cat[aria-pressed="true"] { background: var(--a3); color: var(--invert); }
+.md-pick { display: flex; flex-wrap: wrap; gap: 4px; flex-basis: 100%; padding: 4px 0; }
+.md-cedit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+.md-crow { display: inline-flex; gap: 2px; }
+.md-crow input { width: 110px; font-size: 13px; }
+.md-cedit small { flex-basis: 100%; }
