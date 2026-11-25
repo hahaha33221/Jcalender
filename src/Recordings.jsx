@@ -1,7 +1,8 @@
 /* 대시보드 맨 아래 · 녹음 · 회의록 (관리자만) — server/recordings.mjs
    - 휴대폰 녹음이 녹음 서버에 올라오면 서버가 받아 적고(STT) AI 가 회의록(1. 개요 ~ 6. 기타)으로 정리한다
    - 화면이 보이는 동안 30초마다 (처리 중인 것이 있으면 10초마다) 목록을 다시 받아 저절로 바뀐다
-   - 회의록 창: 녹음 듣기 · 회의록 · 전문 · 복사 · 다시 만들기 · 지우기 · 할 일을 캘린더 일정으로 */
+   - 회의록 창: 녹음 듣기 · 회의록 · 전문 · 복사 · 다시 만들기 · 지우기 · 할 일을 캘린더 일정으로
+   - 설정 창: 녹음 서버 연결 상태 · 휴대폰 업로드 주소 · 토큰, OpenAI · Anthropic 키 넣기, 회의록 모델 · 자동 정리 (터미널 없이) */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { iso } from './data.js';
 import { Popup, useCtx } from './shared.jsx';
@@ -63,6 +64,7 @@ export function RecordingsHome() {
   const [n, setN] = useState(PAGE);
   const [open, setOpen] = useState(null);
   const [msg, setMsg] = useState('');
+  const [setup, setSetup] = useState(false);
   const { sync } = useCtx();
   const items = data?.items || [];
   const list = useMemo(() => {
@@ -81,9 +83,9 @@ export function RecordingsHome() {
     <section className="panel rec-home" aria-label="녹음 · 회의록">
       <div className="csum-h"><h2>녹음 · 회의록</h2>
         <span className="muted">{data ? `${items.length}건 · 완료 ${counts.done}${counts.busy ? ` · 진행 중 ${counts.busy}` : ''}${data.auto ? ` · 자동 정리 오늘 ${data.today}/${data.limit}` : ' · 자동 정리 꺼짐'}` : '불러오는 중…'}</span>
-        <button className="btn sm" onClick={load}>새로고침</button></div>
+        <span className="ib-hb grow-r"><button className="btn sm" onClick={load}>새로고침</button><button className="btn sm" onClick={() => setSetup(true)}>설정</button></span></div>
       {err && <p className="rec-msg bad">{err}</p>}
-      {!!missing?.length && <p className="rec-msg">서버 설정이 더 필요합니다: {missing.join(' · ')}. 기획서 5번(향후 진행 사항) 순서대로 넣으면 새 녹음부터 자동으로 회의록이 만들어집니다.</p>}
+      {!!missing?.length && <p className="rec-msg">설정이 더 필요합니다: {missing.join(' · ')}. <button className="btn sm primary" onClick={() => setSetup(true)}>설정 열기</button></p>}
       {msg && <p className="rec-msg bad">{msg}</p>}
       {data && (<>
         <div className="rec-tools">
@@ -107,6 +109,7 @@ export function RecordingsHome() {
         {list.length > n && <button className="btn sm rec-more" onClick={() => setN(n + PAGE)}>더 보기 ({list.length - n})</button>}
       </>)}
       {open && <MinutesPopup id={open} onClose={() => setOpen(null)} onChanged={load} />}
+      {setup && <SettingsPopup onClose={() => { setSetup(false); load(); }} />}
     </section>
   );
 }
@@ -194,6 +197,94 @@ function MinutesPopup({ id, onClose, onChanged }) {
           {full && <pre className="rec-tr">{it.transcript}</pre>}
         </div>}
         {(it.sttModel || it.aiModel) && <p className="muted rec-model">받아쓰기 {it.sttModel || '-'} · 회의록 {it.aiModel || '-'}</p>}
+      </div>)}
+    </Popup>
+  );
+}
+
+/** 녹음 · 회의록 설정 (관리자): 키는 서버 파일에만 저장되고 화면에는 가린 값만 보인다 */
+function SettingsPopup({ onClose }) {
+  const { sync } = useCtx();
+  const [st, setSt] = useState(null);
+  const [err, setErr] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState('');
+  const [oa, setOa] = useState('');
+  const [an, setAn] = useState('');
+  const [rt, setRt] = useState('');
+  const [show, setShow] = useState(false);
+  const get = useCallback(async () => {
+    try { setSt(await sync.request('/api/minutes/settings')); setErr(''); }
+    catch (e) { setErr(e.status === 404 && e.server ? '서버 업데이트가 필요합니다 (이번 한 번만 맥북에서 bash server/deploy/update.sh)' : e.message); }
+  }, [sync]);
+  useEffect(() => { get(); }, [get]);
+  const save = async (what, body, after) => {
+    setBusy(what); setNote(''); setErr('');
+    try { const r = await sync.request('/api/minutes/settings', { method: 'POST', body }); after?.(); setNote(['저장했습니다.', ...(r.notes || [])].join(' ')); await get(); }
+    catch (e) { setErr(e.message); }
+    finally { setBusy(''); }
+  };
+  const copy = async (t, label) => { try { await navigator.clipboard.writeText(t); setNote(`${label}를 복사했습니다.`); } catch { setNote('복사하지 못했습니다. 글자를 길게 눌러 직접 복사하세요.'); } };
+  const FROM = { site: '사이트에서 넣음', server: '서버 설정 파일', '': '' };
+  const keyRow = ({ label, help, k, val, setVal, ph, clearKey }) => {   // 함수로 부름 (컴포넌트로 쓰면 글자마다 입력 칸이 새로 생겨 포커스가 풀림)
+    const cur = st?.[k];
+    return (
+      <div className="rs-key" key={k}>
+        <div className="rs-kh"><b>{label}</b><span className={`rec-st ${cur?.set ? 'st-done' : 'st-failed'}`}>{cur?.set ? `설정됨 ${cur.masked}` : '없음'}</span>{cur?.from && <span className="muted">{FROM[cur.from]}</span>}</div>
+        <p className="muted">{help}</p>
+        <div className="rs-in">
+          <input type="password" autoComplete="off" value={val} onChange={e => setVal(e.target.value)} placeholder={ph} aria-label={`${label} 입력`} />
+          <button className="btn sm primary" disabled={!val.trim() || !!busy} onClick={() => save(k, { [k === 'openai' ? 'openaiKey' : 'anthropicKey']: val.trim() }, () => setVal(''))}>{busy === k ? '확인 중…' : cur?.set ? '바꾸기' : '저장'}</button>
+          {cur?.from === 'site' && <button className="btn sm" disabled={!!busy} onClick={() => save(k, { clear: [clearKey] })}>사이트 값 지우기</button>}
+        </div>
+      </div>
+    );
+  };
+  const r = st?.recording;
+  return (
+    <Popup wide title="녹음 · 회의록 설정" sub="키와 토큰은 서버에만 저장되고, 화면에는 가린 값만 보입니다." onClose={onClose}
+      actions={<button className="btn sm" onClick={get}>다시 확인</button>}>
+      {err && <p className="rec-msg bad">{err}</p>}
+      {note && <p className="rec-msg">{note}</p>}
+      {!st && !err && <p className="muted">불러오는 중…</p>}
+      {st && (<div className="rs">
+        <h3>1. 녹음 서버 (휴대폰 → 서버)</h3>
+        <div className="rs-kh"><b>연결 상태</b>
+          <span className={`rec-st ${r.auth ? 'st-done' : 'st-failed'}`}>{r.auth ? `연결됨 · 녹음 ${r.total ?? 0}건` : r.health ? '켜져 있음 · 토큰 확인 필요' : '응답 없음'}</span></div>
+        {r.msg && <p className="muted">{r.msg}{!r.health ? ' · 서버 업데이트(update.sh)를 한 번 하면 녹음 서버도 함께 설치됩니다.' : ''}</p>}
+        <p className="muted">휴대폰 MacroDroid 의 HTTP 요청(POST)에 아래 두 값을 넣으면 새 녹음이 자동으로 올라옵니다 (recording-api/macrodroid-guide.md).</p>
+        <div className="rs-copy"><span className="rs-l">업로드 주소</span><code>{r.uploadUrl}?filename=[파일 이름]</code><button className="btn sm" onClick={() => copy(r.uploadUrl, '업로드 주소')}>복사</button></div>
+        <div className="rs-copy"><span className="rs-l">헤더</span>
+          {r.token ? <><code>Authorization: Bearer {show ? r.token : `${r.token.slice(0, 4)}••••••••${r.token.slice(-4)}`}</code>
+            <button className="btn sm" onClick={() => setShow(!show)}>{show ? '가리기' : '보기'}</button>
+            <button className="btn sm" onClick={() => copy(`Bearer ${r.token}`, '헤더 값')}>복사</button></> : <span className="muted">토큰 없음</span>}</div>
+        <details className="rs-more"><summary>토큰 직접 넣기 (녹음 서버를 따로 설치한 경우)</summary>
+          <div className="rs-in"><input type="password" autoComplete="off" value={rt} onChange={e => setRt(e.target.value)} placeholder="녹음 서버 API_TOKEN" aria-label="녹음 서버 토큰" />
+            <button className="btn sm primary" disabled={!rt.trim() || !!busy} onClick={() => save('rec', { recToken: rt.trim() }, () => setRt(''))}>저장</button>
+            {r.tokenFrom === 'site' && <button className="btn sm" disabled={!!busy} onClick={() => save('rec', { clear: ['recToken'] })}>사이트 값 지우기</button>}</div>
+        </details>
+
+        <h3>2. AI 키</h3>
+        {keyRow({ label: 'OpenAI (받아쓰기)', k: 'openai', val: oa, setVal: setOa, ph: 'sk-proj-…', clearKey: 'openai',
+          help: 'platform.openai.com › API keys 에서 만든 키. 녹음을 글로 받아 적을 때 씁니다 (아이디어 뱅크 받아쓰기 · 숏폼도 같이 씀).' })}
+        {keyRow({ label: 'Anthropic (회의록 정리)', k: 'anthropic', val: an, setVal: setAn, ph: 'sk-ant-…', clearKey: 'anthropic',
+          help: 'console.anthropic.com › API Keys 에서 만든 키. 받아쓴 글을 회의록으로 정리할 때 씁니다. 넣으면 그 회사에 바로 확인하고, 틀린 키는 저장하지 않습니다.' })}
+
+        <h3>3. 회의록 만들기</h3>
+        <div className="rs-in">
+          <label className="rs-l" htmlFor="rs-model">회의록 모델</label>
+          <select id="rs-model" value={st.model} disabled={!!busy} onChange={e => save('model', { model: e.target.value })}>
+            {!st.models.some(m => m.id === st.model) && <option value={st.model}>{st.model}</option>}
+            {st.models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
+        </div>
+        <div className="rs-in">
+          <label className="rs-l" htmlFor="rs-stt">받아쓰기 모델</label>
+          <select id="rs-stt" value={st.sttModel} disabled={!!busy} onChange={e => save('stt', { sttModel: e.target.value })}>
+            {!st.sttModels.some(m => m.id === st.sttModel) && <option value={st.sttModel}>{st.sttModel}</option>}
+            {st.sttModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
+        </div>
+        <label className="rs-chk"><input type="checkbox" checked={st.auto} disabled={!!busy} onChange={e => save('auto', { auto: e.target.checked })} /> 새 녹음이 올라오면 자동으로 회의록 만들기 <small className="muted">(하루 {st.daily}건까지, 끄면 목록에서 버튼으로)</small></label>
+        {st.provider !== 'anthropic' && <p className="muted">Anthropic 키가 없어서 지금은 ChatGPT 로 회의록을 만듭니다.</p>}
       </div>)}
     </Popup>
   );

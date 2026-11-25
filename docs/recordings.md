@@ -1,4 +1,4 @@
-# 녹음 · 회의록 (서버 1.18.0)
+# 녹음 · 회의록 (서버 1.19.0)
 
 휴대폰 통화 · 음성 녹음이 올라오면 서버가 받아 적고(STT) AI 가 회의록으로 정리해, 대시보드 맨 아래 "녹음 · 회의록" 칸(관리자 계정만)에 저절로 보여 준다.
 
@@ -8,6 +8,8 @@
 - 받아쓰기 · 회의록: `server/recordings.mjs` (jcal-api 안의 작업자, 1분마다 새 녹음 확인, 한 번에 1건)
 - 저장: `jcal.recording_minutes` (`db/migrations/013_recordings.sql`). 녹음 파일은 jcal-recording 에만 있고 jcal-api 는 처리할 때만 임시로 받는다
 - 화면: `src/Recordings.jsx` (30초마다, 처리 중이면 10초마다 목록 갱신)
+- 설정 창 (칸 오른쪽 위 "설정", 관리자만): 녹음 서버 연결 상태 · 휴대폰 업로드 주소 · 토큰 복사, OpenAI · Anthropic 키 넣기(저장 전에 그 회사에 확인), 회의록 · 받아쓰기 모델, 자동 정리 켜기 · 끄기
+  - 저장 위치: `/var/lib/jcalender/site-settings.json` (600, `server/siteSettings.mjs`). 저장소 · DB · 백업에 들어가지 않음. 사이트 값이 `/etc/jcalender.env` 보다 우선
 
 ## 2. 안건
 
@@ -58,11 +60,10 @@ recording-api 는 받기 전용, 받아쓰기 · 회의록은 jcal-api 가 맡�
 
 ## 5. 향후 진행 사항
 
-1. `bash recording-api/deploy/update.sh` (녹음 서버 jcal-recording 설치, 끝나면 주소 · 토큰을 보여 줌)
-2. `bash server/deploy/update.sh` (DB 표 추가 · 녹음 서버 토큰 연결 · jcal-api 재시작)
-3. VPS 에서 `jcal-admin ai-key` 로 OpenAI 키 · Anthropic 키 넣기 (각각 한 번씩)
-4. 휴대폰 MacroDroid 에 1번의 주소 · 토큰 넣기 (`recording-api/macrodroid-guide.md`)
-5. 짧은 시험 녹음 → 1~2분 뒤 대시보드 맨 아래 확인
+1. `bash server/deploy/update.sh` 한 번 (녹음 서버 jcal-recording 까지 같이 설치 · 토큰 연결 · DB 표 추가)
+2. 사이트 › 대시보드 맨 아래 › 녹음 · 회의록 › 설정: OpenAI 키 · Anthropic 키 넣기, 업로드 주소 · 토큰 복사
+3. 휴대폰 MacroDroid 에 2번의 주소 · 토큰 넣기 (`recording-api/macrodroid-guide.md`)
+4. 짧은 시험 녹음 → 1~2분 뒤 대시보드 맨 아래 확인
 
 ## 6. 기타
 

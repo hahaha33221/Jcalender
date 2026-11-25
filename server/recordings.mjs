@@ -5,6 +5,9 @@
    POST /api/minutes/process {id}    지금 만들기 · 다시 만들기 (대기열 맨 앞)
    POST /api/minutes/delete  {id}    녹음 파일 · 회의록 지우기 (recording-api 에서도 지움)
    GET  /api/minutes/audio?id=       녹음 파일 (재생용, recording-api 에서 받아 그대로 넘김)
+   GET  /api/minutes/settings        설정 상태 (키는 가린 값 · 어디서 왔는지, 녹음 서버 연결 시험 · 업로드 주소 · 토큰)
+   POST /api/minutes/settings {openaiKey?, anthropicKey?, recToken?, model?, sttModel?, auto?, clear?: ['openai' | 'anthropic' | 'recToken']}
+        키는 저장 전에 그 회사에 확인 (틀린 키는 저장 안 함) → server/siteSettings.mjs 파일에 저장
    흐름: 1분마다 recording-api 목록 확인 → 새 녹음은 "대기" → 한 번에 1건씩
          ffmpeg 로 16kHz 모노 mp3 · 10분 단위로 나눔 → OpenAI 받아쓰기 → AI(Claude 우선) 회의록 JSON → 저장
    설정 (환경 변수, /etc/jcalender.env)
@@ -24,6 +27,7 @@ import { pipeline } from 'stream/promises';
 import { spawn } from 'child_process';
 import { askJson, AiError } from './shorts.mjs';
 import { hasFfmpeg, RAW } from './shortsAssets.mjs';
+import { saveSiteSettings, sourceOf, mask } from './siteSettings.mjs';
 
 const env = process.env;
 const num = (v, d) => (Number.isFinite(Number(v)) && v !== '' && v != null ? Number(v) : d);
@@ -185,6 +189,44 @@ const listOut = r => ({
   sttModel: r.stt_model || '', aiModel: r.ai_model || '', processedAt: r.processed_at,
 });
 
+
+/* ── 사이트에서 하는 설정 (관리자) ── */
+export const MODELS = [
+  { id: 'claude-opus-5-5', name: 'Claude Opus 5.5 (기본 · 가장 정확)' },
+  { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5 (비용 절반)' },
+  { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5 (아주 저렴 · 짧은 통화용)' },
+];
+export const STT_MODELS = [
+  { id: 'gpt-4o-mini-transcribe', name: 'gpt-4o-mini-transcribe (기본 · 분당 약 $0.003)' },
+  { id: 'gpt-4o-transcribe', name: 'gpt-4o-transcribe (더 정확 · 분당 약 $0.006)' },
+];
+const publicUrl = () => String(env.RECORDING_PUBLIC_URL || 'https://rec-31-97-71-87.sslip.io').replace(/\/+$/, '');
+async function checkOpenAI(key) {
+  let r;
+  try { r = await fetch(`${(env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '')}/models`, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15000) }); }
+  catch { return { ok: null, msg: 'OpenAI 에 연결하지 못해 확인은 못 했습니다 (저장은 함)' }; }
+  if (r.status === 401) return { ok: false, msg: 'OpenAI 가 이 키를 거절했습니다. platform.openai.com › API keys 에서 다시 복사해 주세요' };
+  return r.ok ? { ok: true } : { ok: null, msg: `OpenAI 확인 중 오류 (${r.status}) · 저장은 함` };
+}
+async function checkAnthropic(key) {
+  let Anthropic;
+  try { Anthropic = (await import('@anthropic-ai/sdk')).default; } catch { return { ok: null, msg: 'Claude 라이브러리가 없어 확인은 못 했습니다 (저장은 함)' }; }
+  try { await new Anthropic({ apiKey: key, maxRetries: 0, timeout: 15000 }).models.list({ limit: 1 }); return { ok: true }; }
+  catch (e) {
+    if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) return { ok: false, msg: 'Anthropic 이 이 키를 거절했습니다. console.anthropic.com › API Keys 에서 다시 복사해 주세요' };
+    return { ok: null, msg: `Anthropic 확인 중 오류 (${e.status ?? '연결'}) · 저장은 함` };
+  }
+}
+async function recCheck() {
+  const out = { url: recUrl(), health: false, auth: false, total: null, msg: '' };
+  try { const r = await fetch(`${recUrl()}/api/health`, { signal: AbortSignal.timeout(5000) }); out.health = r.ok; } catch { /* 꺼짐 */ }
+  if (!out.health) { out.msg = '녹음 서버가 응답하지 않습니다 (아직 설치 전이거나 꺼져 있음)'; return out; }
+  if (!recReady()) { out.msg = '녹음 서버는 켜져 있지만 토큰이 없습니다'; return out; }
+  try { const j = await recJson('/api/recordings?limit=1'); out.auth = true; out.total = j.total; }
+  catch (e) { out.msg = e.message; }
+  return out;
+}
+
 export function minutesModule({ pool, adminUser, HttpError }) {
   let busy = false, lastSync = 0, timer = null, syncing = null;
 
@@ -267,6 +309,41 @@ export function minutesModule({ pool, adminUser, HttpError }) {
   const tick = async () => { await syncList(); await drain(); };
 
   const routes = {
+    'GET /api/minutes/settings': async req => {
+      await adminUser(req);
+      const key = k => ({ set: !!env[k], masked: mask(env[k] || ''), from: sourceOf(k) });
+      return {
+        openai: key('OPENAI_API_KEY'), anthropic: key('ANTHROPIC_API_KEY'),
+        recording: { ...(await recCheck()), uploadUrl: `${publicUrl()}/api/recordings/raw`, token: env.RECORDING_API_TOKEN || '', tokenFrom: sourceOf('RECORDING_API_TOKEN') },
+        model: model(), models: MODELS, provider: provider(), sttModel: sttModel(), sttModels: STT_MODELS, auto: AUTO(), daily: DAILY(),
+      };
+    },
+    'POST /api/minutes/settings': async (req, body) => {
+      await adminUser(req);
+      const ch = {}, notes = [];
+      const clear = Array.isArray(body.clear) ? body.clear : [];
+      if (clear.includes('openai')) ch.OPENAI_API_KEY = null;
+      if (clear.includes('anthropic')) ch.ANTHROPIC_API_KEY = null;
+      if (clear.includes('recToken')) ch.RECORDING_API_TOKEN = null;
+      const oa = String(body.openaiKey || '').trim(), an = String(body.anthropicKey || '').trim(), rt = String(body.recToken || '').trim();
+      if (oa) {
+        if (/^sk-ant-/.test(oa) || !/^sk-[\w-]{20,}$/.test(oa)) throw new HttpError(400, 'OpenAI 키 형식이 아닙니다 (sk- 또는 sk-proj- 로 시작)');
+        const c = await checkOpenAI(oa); if (c.ok === false) throw new HttpError(400, c.msg); if (c.msg) notes.push(c.msg);
+        ch.OPENAI_API_KEY = oa;
+      }
+      if (an) {
+        if (!/^sk-ant-[\w-]{20,}$/.test(an)) throw new HttpError(400, 'Anthropic 키 형식이 아닙니다 (sk-ant- 로 시작)');
+        const c = await checkAnthropic(an); if (c.ok === false) throw new HttpError(400, c.msg); if (c.msg) notes.push(c.msg);
+        ch.ANTHROPIC_API_KEY = an;
+      }
+      if (rt) { if (!/^[\w-]{16,200}$/.test(rt)) throw new HttpError(400, '녹음 서버 토큰 형식이 아닙니다'); ch.RECORDING_API_TOKEN = rt; }
+      if (body.model !== undefined) { if (!MODELS.some(m => m.id === body.model)) throw new HttpError(400, '고를 수 없는 모델입니다'); ch.MINUTES_MODEL = body.model; }
+      if (body.sttModel !== undefined) { if (!STT_MODELS.some(m => m.id === body.sttModel)) throw new HttpError(400, '고를 수 없는 받아쓰기 모델입니다'); ch.MINUTES_STT_MODEL = body.sttModel; }
+      if (body.auto !== undefined) ch.MINUTES_AUTO = body.auto ? '1' : '0';
+      try { saveSiteSettings(ch); } catch (e) { console.error('[사이트 설정] 저장 실패', e); throw new HttpError(500, '서버에 설정을 저장하지 못했습니다 (상태 폴더 권한 확인)'); }
+      if (ch.RECORDING_API_TOKEN !== undefined || ch.OPENAI_API_KEY || ch.ANTHROPIC_API_KEY) { lastSync = 0; tick().catch(() => {}); }   // 바로 새 녹음 확인 · 실패했던 것은 화면에서 다시 시도
+      return { ok: true, notes };
+    },
     'GET /api/minutes': async req => {
       await adminUser(req);
       if (Date.now() - lastSync > 15000) { syncList().then(drain).catch(() => {}); }   // 화면이 볼 때마다 새 녹음 확인 (기다리지 않음)

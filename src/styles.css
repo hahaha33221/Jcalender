@@ -2540,3 +2540,17 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .rec-tr { white-space: pre-wrap; word-break: break-word; background: var(--code); border: 1px solid var(--line2); border-radius: 6px; padding: 10px; max-height: 360px; overflow: auto; font: inherit; font-size: 13px; }
 .rec-model { margin-top: 10px; font-size: 12px; }
 @media (max-width: 640px) { .rec-at { width: 64px; } .rec-row { flex-wrap: wrap; } }
+/* 녹음 · 회의록 설정 창 */
+.rs h3 { margin: 16px 0 6px; }
+.rs h3:first-child { margin-top: 0; }
+.rs p { margin: 2px 0 6px; font-size: 13px; }
+.rs-kh { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 2px; }
+.rs-key { padding: 8px 0; border-top: 1px solid var(--line2); }
+.rs-in { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+.rs-in input[type=password], .rs-in select { flex: 1; min-width: 180px; border: 1px solid var(--line); background: var(--input); border-radius: 6px; padding: 5px 10px; }
+.rs-l { flex: none; min-width: 84px; color: var(--ink2); font-size: 13px; }
+.rs-copy { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+.rs-copy code { flex: 1; min-width: 0; overflow-wrap: anywhere; background: var(--code); border: 1px solid var(--line2); border-radius: 6px; padding: 3px 8px; font-size: 12.5px; }
+.rs-more { margin: 6px 0; font-size: 13px; }
+.rs-more summary { cursor: pointer; color: var(--ink2); }
+.rs-chk { display: block; margin: 8px 0; }
