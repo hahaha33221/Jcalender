@@ -130,6 +130,17 @@ if ! grep -q '^VAPID_PUBLIC_KEY=' "$ENV_FILE"; then
   ( umask 077; "$NODE" -e "const k=require('web-push').generateVAPIDKeys();console.log('VAPID_PUBLIC_KEY='+k.publicKey+'\nVAPID_PRIVATE_KEY='+k.privateKey)" >> "$ENV_FILE" )
   echo "웹 푸시 키를 만들었습니다"
 fi
+# 녹음 · 회의록: 녹음 받는 서버(jcal-recording, recording-api/deploy/setup.sh 로 설치)의 주소 · 토큰을 가져온다 (있을 때만, 다시 실행하면 새 값으로)
+REC_ENV=/etc/jcal-recording.env
+if [ -f "$REC_ENV" ]; then
+  REC_TOKEN=$(grep -s '^API_TOKEN=' "$REC_ENV" | head -1 | cut -d= -f2-); REC_PORT=$(grep -s '^PORT=' "$REC_ENV" | head -1 | cut -d= -f2-)
+  if [ -n "$REC_TOKEN" ]; then
+    ( umask 077; grep -vE '^(RECORDING_API_URL|RECORDING_API_TOKEN)=' "$ENV_FILE" > "$ENV_FILE.tmp"; printf 'RECORDING_API_URL=http://127.0.0.1:%s\nRECORDING_API_TOKEN=%s\n' "${REC_PORT:-8790}" "$REC_TOKEN" >> "$ENV_FILE.tmp"; mv "$ENV_FILE.tmp" "$ENV_FILE" )
+    chmod 600 "$ENV_FILE"; echo "녹음 서버(jcal-recording, 127.0.0.1:${REC_PORT:-8790})와 연결했습니다 (녹음 · 회의록)"
+  fi
+else
+  echo "알림: 녹음 서버가 아직 없습니다 → 녹음 · 회의록을 쓰려면 bash recording-api/deploy/update.sh 를 먼저 실행한 뒤 이 설치를 한 번 더"
+fi
 chown -R root:root "$APP_DIR"
 sed "s#__NODE__#${NODE}#" "$APP_DIR/server/deploy/jcal-api.service" > /etc/systemd/system/jcal-api.service
 printf '#!/bin/sh\ncd %s/server && exec %s admin.mjs "$@"\n' "$APP_DIR" "$NODE" > /usr/local/bin/jcal-admin

@@ -19,6 +19,7 @@
    GET  /api/admin/screen · POST {on?, cats?}       회원 화면: 켜면 회원에게는 cats(관리자가 검수 완료한 카테고리)만 보임
    GET  /api/admin/signup                           → { mode, code }
    POST /api/admin/signup {mode, newCode}           회원가입 방식 (code · open · closed) · 새 초대 코드
+   녹음 · 회의록 (관리자만) — server/recordings.mjs: /api/minutes, /api/minutes/item · process · delete · audio
    숏폼 제작 (관리자 + 회원 관리에서 허용한 회원, 데이터는 사람마다 따로) — server/shorts.mjs: /api/shorts, /api/shorts/source · item · generate · script · settings
    동기화 단위는 "앱 데이터 전체(비밀 정보 제외)". 올릴 때마다 db/convert.mjs 규칙으로 47개 표도 함께 갱신한다. */
 import http from 'http';
@@ -35,8 +36,9 @@ import { demoRoutes } from './shortsDemo.mjs';
 import { goalAiRoutes } from './goalAi.mjs';
 import { pushModule } from './push.mjs';
 import { ideaRoutes } from './ideas.mjs';
+import { minutesModule } from './recordings.mjs';
 
-const VERSION = '1.17.0';
+const VERSION = '1.18.0';
 const ROLES = ['admin', 'member', 'suspended'];
 const isOwner = email => config.ownerEmails.includes(String(email || '').toLowerCase());
 const roleOf = u => (isOwner(u.email) ? 'admin' : u.role === 'suspended' ? 'suspended' : 'member');   // 관리자는 관리자 계정(OWNER_EMAILS)뿐
@@ -370,7 +372,9 @@ Object.assign(routes, demoRoutes({ pool, tx, adminUser: shortsUser, HttpError })
 const social = socialRoutes({ pool, adminUser: shortsUser, HttpError, originOk });
 Object.assign(routes, social.json);
 routes['GET /api/shorts'] = async (req, body, res) => { const base = await shortsBase(req, body, res), uid = (await shortsUser(req)).id; return { ...base, ...(await assetData(pool, uid)), ...(await rendersOf(pool, uid)), ...(await socialOf(pool, uid)) }; };   // + 소재함 · 제작 준비 · 영상 · 업로드
-const rawRoutes = { ...assets.raw, ...social.raw, ...ideas.raw };                                    // 본문을 JSON 으로 읽지 않는 경로 (파일 올리기 · 내려주기)
+const minutes = minutesModule({ pool, adminUser, HttpError });   // 녹음 · 회의록 (관리자만, 휴대폰 녹음 서버 jcal-recording 에서 받아 받아쓰기 · AI 정리)
+Object.assign(routes, minutes.routes);
+const rawRoutes = { ...assets.raw, ...social.raw, ...ideas.raw, ...minutes.raw };                                    // 본문을 JSON 으로 읽지 않는 경로 (파일 올리기 · 내려주기)
 
 const server = http.createServer(async (req, res) => {
   const path = (req.url || '/').split('?')[0].replace(/\/+$/, '') || '/';
@@ -396,6 +400,7 @@ if (process.env.SHORTS_CRON !== '0') startShortsCron(pool);   // 게시판 자�
 startRenderWorker(pool).catch(e => console.error('[숏폼 영상 대기열]', e));   // 영상 만들기 (한 번에 1개)
 startSocialWorker(pool).catch(e => console.error('[숏폼 업로드 대기열]', e));   // 유튜브 · 인스타그램 올리기 · 성과 가져오기
 push.start();
+if (process.env.MINUTES_WORKER !== '0') minutes.start().catch(e => console.error('[회의록 대기열]', e));   // 새 녹음 확인 (1분마다) · 회의록 만들기 (한 번에 1개)
 server.listen(config.port, config.host, () => console.log(`Jcalender API ${VERSION} — http://${config.host}:${config.port} (허용 화면: ${config.origins.join(', ')})`));
 const stop = () => server.close(() => pool.end().then(() => process.exit(0)));
 process.on('SIGTERM', stop);

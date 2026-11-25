@@ -11,6 +11,7 @@ import { seedHealth } from './categories/health.js';
 import { clearFinanceOnce, seedFinance } from './categories/finance.js';
 import { addExampleGoals, boardForYear, boardKey, dropNoGoal, hasGoals, migrateGoals, seedGoals, setUserNoGoal } from './categories/goals.js';
 import { DashYearGantt, GoalBoard } from './categories/GoalView.jsx';
+import { RecordingsHome } from './Recordings.jsx';
 import { GoalOnboardCard } from './categories/GoalOnboard.jsx';
 import ShoppingList from './categories/Shopping.jsx';
 import { migratePeople, seedPeople } from './categories/RelationView.jsx';
@@ -343,7 +344,7 @@ const fmtMD = d => `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]
 const dayDiff = (a, b) => Math.round((b - a) / 864e5);
 
 function Home() {
-  const { now, go } = useCtx();
+  const { now, go, isAdmin } = useCtx();
   const [sel, setSel] = useState(iso(now));
   const dueToday = ['W', 'M', 'Y'].filter(c => isDue(c, now));
   return (
@@ -366,6 +367,7 @@ function Home() {
       <ShoppingList compact />
       {dueToday.map(c => <CycleSummary key={c} c={c} hot title={`오늘은 ${CYCLES[c]}일입니다`} note={`${dueRule(c)} 도래 · 기간 ${periodKey(c, now)}`} />)}
       <DashYearGantt />
+      {isAdmin && <RecordingsHome />}
     </>
   );
 }

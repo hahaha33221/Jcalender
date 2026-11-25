@@ -232,14 +232,14 @@ const SYSTEM = `당신은 한국어 숏폼(유튜브 쇼츠 · 인스타 릴스 
 - 원문이 영어 등 외국어면 한국 시청자에게 자연스러운 한국어로 옮겨 씁니다 (이름 · 지명은 일반화).
 - 원문에 없는 사실을 지어내지 않습니다. 글이 혐오 · 개인 공격 · 성적인 내용 중심이면 그 부분은 빼고 씁니다.`;
 /** OpenAI Chat Completions + JSON 스키마(structured outputs) */
-export async function askOpenAI(prompt, { system = SYSTEM, schema = SCHEMA, name = 'shorts_scripts' } = {}) {
+export async function askOpenAI(prompt, { system = SYSTEM, schema = SCHEMA, name = 'shorts_scripts', model = aiModel() } = {}) {
   let r;
   try {
     r = await fetch(`${(env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '')}/chat/completions`, {
       method: 'POST', signal: AbortSignal.timeout(180000),
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OPENAI_API_KEY}` },
       body: JSON.stringify({
-        model: aiModel(), max_completion_tokens: 16000,
+        model, max_completion_tokens: 16000,
         messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
         response_format: { type: 'json_schema', json_schema: { name, strict: true, schema } },
       }),
@@ -252,7 +252,7 @@ export async function askOpenAI(prompt, { system = SYSTEM, schema = SCHEMA, name
     if (r.status === 401) throw new AiError(503, 'OpenAI API 키가 올바르지 않습니다 (jcal-admin ai-key 로 다시 넣기)');
     if (code === 'insufficient_quota') throw new AiError(402, 'OpenAI 크레딧(잔액)이 없습니다. platform.openai.com › Billing 에서 충전하세요');
     if (r.status === 429) throw new AiError(429, 'OpenAI 사용량 한도에 걸렸습니다. 잠시 뒤 다시 시도하세요');
-    if (r.status === 404 || code === 'model_not_found') throw new AiError(503, `OpenAI 모델을 쓸 수 없습니다: ${aiModel()} (SHORTS_MODEL 확인)`);
+    if (r.status === 404 || code === 'model_not_found') throw new AiError(503, `OpenAI 모델을 쓸 수 없습니다: ${model} (SHORTS_MODEL 확인)`);
     throw new AiError(502, `AI 서버 오류 (${r.status})`);
   }
   const ch = j.choices?.[0] || {};
@@ -261,11 +261,11 @@ export async function askOpenAI(prompt, { system = SYSTEM, schema = SCHEMA, name
   return ch.message?.content || '';
 }
 /** Anthropic Claude (Messages API + JSON 스키마, 거절되면 권장 모델로 자동 재시도) */
-export async function askClaude(prompt, { system = SYSTEM, schema = SCHEMA } = {}) {
+export async function askClaude(prompt, { system = SYSTEM, schema = SCHEMA, model = aiModel() } = {}) {
   let res;
   try {
     res = await (await anthropic()).beta.messages.create({
-      model: aiModel(), max_tokens: 16000,
+      model, max_tokens: 16000,
       betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
       output_config: { effort: 'medium', format: { type: 'json_schema', schema } },
       system,
@@ -283,8 +283,8 @@ export async function askClaude(prompt, { system = SYSTEM, schema = SCHEMA } = {
   return res.content.filter(b => b.type === 'text').map(b => b.text).join('');
 }
 /** 정해진 JSON 형식으로 AI 에게 묻기 (지금 설정된 회사로) */
-export async function askJson(prompt, opts) {
-  const text = aiProvider() === 'openai' ? await askOpenAI(prompt, opts) : await askClaude(prompt, opts);
+export async function askJson(prompt, opts = {}) {
+  const text = (opts.provider || aiProvider()) === 'openai' ? await askOpenAI(prompt, opts) : await askClaude(prompt, opts);
   try { return JSON.parse(text); } catch { throw new AiError(502, 'AI 응답을 읽지 못했습니다. 다시 시도해 주세요'); }
 }
 export async function generateScripts(item, settings) {
