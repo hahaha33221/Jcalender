@@ -67,7 +67,7 @@ multipart/form-data
 |---|---|---|
 | device | 선택 | 기기 이름 (영문/숫자/-/_) |
 | recorded_at | 선택 | 녹음 시각 (유닉스 초) |
-| file | 필수 | 오디오 파일 (m4a, mp3, amr, wav, 3gp, ogg, aac / 최대 200MB) |
+| file | 필수 | 오디오 파일 (m4a, mp3, amr, wav, 3gp, ogg, aac / 최대 200MB) 또는 받아 적은 글 txt (최대 5MB) |
 
 응답
 - 201: 새로 저장됨 `{"duplicate": false, "recording": {...}}`

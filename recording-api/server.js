@@ -13,7 +13,8 @@ const API_TOKEN = process.env.API_TOKEN;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const FILE_DIR = path.join(DATA_DIR, 'files');
 const MAX_SIZE = 200 * 1024 * 1024; // 200MB
-const ALLOWED_EXT = /\.(m4a|mp3|amr|wav|3gp|ogg|aac)$/i;
+const ALLOWED_EXT = /\.(m4a|mp3|amr|wav|3gp|ogg|aac|txt)$/i; // txt: 휴대폰이 만든 받아 적은 글 (회의록에 그대로 씀)
+const TXT_MAX = 5 * 1024 * 1024;
 
 if (!API_TOKEN) {
   console.error('API_TOKEN 환경변수를 설정하세요.');
@@ -102,6 +103,10 @@ app.use('/api', (req, res, next) => {
 // 업로드된 임시 파일을 중복 확인 후 저장하고 DB에 기록
 async function saveRecording({ tmpPath, originalName, size, mime, device, recordedAt }, res) {
   device = String(device || 'unknown').replace(/[^\w-]/g, '').slice(0, 50) || 'unknown';
+  if (/\.txt$/i.test(originalName) && size > TXT_MAX) {
+    fs.rmSync(tmpPath, { force: true });
+    return res.status(413).json({ error: 'TXT 는 5MB 까지 받습니다' });
+  }
   const hash = await sha256File(tmpPath);
 
   // 같은 파일이 이미 있으면 새로 저장하지 않고 기존 정보 반환
