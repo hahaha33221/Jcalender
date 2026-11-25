@@ -60,6 +60,14 @@ function useMinutes() {
   return { data, err, load };
 }
 
+/** 녹음 서버 상태 한 줄: 휴대폰 녹음이 안 보일 때 어디가 막혔는지 */
+function RecDiag({ rec, openSetup }) {
+  if (!rec) return <p className="rec-msg bad">VPS 서버가 아직 옛 버전입니다. 맥북 터미널에서 <code>cd ~/Jcalender &amp;&amp; git pull &amp;&amp; bash server/deploy/update.sh</code> 를 한 번 실행하세요.</p>;
+  const t = rec.at ? new Date(rec.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '';
+  if (!rec.ok) return <p className="rec-msg bad">녹음 서버: {rec.msg}{t ? ` (${t} 확인)` : ''} <button className="btn sm" onClick={openSetup}>설정 열기</button></p>;
+  return <p className="muted rec-diag">녹음 서버 연결됨 · 녹음 서버에 {rec.total}건{t ? ` · ${t} 확인` : ''}{rec.total === 0 ? ' · 휴대폰에서 아직 한 건도 올라오지 않았습니다 (MacroDroid 알림의 결과가 201 또는 200 이어야 올라간 것)' : ''}</p>;
+}
+
 export function RecordingsHome() {
   const { data, err, load } = useMinutes();
   const [view, setView] = useState('all');
@@ -97,6 +105,7 @@ export function RecordingsHome() {
       {err && <p className="rec-msg bad">{err}</p>}
       {!!missing?.length && <p className="rec-msg">설정이 더 필요합니다: {missing.join(' · ')}. <button className="btn sm primary" onClick={() => setSetup(true)}>설정 열기</button></p>}
       {msg && <p className="rec-msg bad">{msg}</p>}
+      {data && <RecDiag rec={data.rec} openSetup={() => setSetup(true)} />}
       {data && (<>
         <div className="rec-tools">
           <div className="chips">{Object.entries(VIEWS).map(([k, label]) => <button key={k} aria-pressed={view === k} onClick={() => { setView(k); setN(PAGE); }}>{label} <small>{counts[k]}</small></button>)}</div>

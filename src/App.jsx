@@ -350,6 +350,7 @@ function Home() {
   return (
     <>
       <header className="page-h"><h1>대시보드</h1><p>{now.getFullYear()}년 {now.getMonth() + 1}월 {now.getDate()}일 {WEEK[now.getDay()]}요일 · 일정과 오늘 남은 항목을 한눈에 확인하세요.</p></header>
+      {isAdmin && <RecordingsHome />}
       {!ROWS.length && <section className="panel dash-start" aria-label="체크리스트 만들기">
         <div><h2>체크리스트부터 만들어 볼까요?</h2><p className="muted">관리하고 싶은 것과 체크 리듬을 클릭으로 고르면 나에게 맞는 체크리스트를 추천해 드려요. 1분이면 됩니다.</p></div>
         <button className="btn primary" onClick={() => go('check')}>추천받아 시작하기</button></section>}
@@ -367,7 +368,6 @@ function Home() {
       <ShoppingList compact />
       {dueToday.map(c => <CycleSummary key={c} c={c} hot title={`오늘은 ${CYCLES[c]}일입니다`} note={`${dueRule(c)} 도래 · 기간 ${periodKey(c, now)}`} />)}
       <DashYearGantt />
-      {isAdmin && <RecordingsHome />}
     </>
   );
 }
