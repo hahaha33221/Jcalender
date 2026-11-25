@@ -43,7 +43,7 @@ MacroDroid의 HTTP 요청은 파일을 본문에 그대로 담아 보내므로 m
 | 항목 | 값 |
 |---|---|
 | 요청 방식 | POST |
-| URL | `https://내사이트.com/api/recordings/raw` |
+| URL | `https://rec-31-97-71-87.sslip.io/api/recordings/raw` |
 | 시간 제한 | 300초 |
 | HTTP 응답 코드 저장 | 정수 변수 `upload_code` 새로 생성 (로컬) |
 | 다음 동작 차단 | 켜기 (Block next action until complete) |
@@ -107,12 +107,12 @@ MacroDroid 버전에 따라 콘텐츠 본문의 파일을 고정 파일로만 �
 
 ## 6. 테스트 순서
 
-1. 서버 실행 후 PC에서 `curl https://내사이트.com/api/health` → `{"ok":true}` 확인
+1. 서버 실행 후 PC에서 `curl https://rec-31-97-71-87.sslip.io/api/health` → `{"ok":true}` 확인
 2. 매크로 저장 → 짧게 음성녹음 1개 저장
 3. 알림으로 `201`이 뜨는지 확인
 4. 서버 목록 확인
    ```bash
-   curl -H "Authorization: Bearer 토큰" https://내사이트.com/api/recordings
+   curl -H "Authorization: Bearer 토큰" https://rec-31-97-71-87.sslip.io/api/recordings
    ```
 
 ## 7. 한계와 보완

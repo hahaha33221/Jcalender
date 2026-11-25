@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # 안드로이드(Termux) 녹음 파일 자동 업로드 스크립트
 
-URL="https://내사이트.com/api/recordings"   # 서버 주소
+URL="https://rec-31-97-71-87.sslip.io/api/recordings"   # 서버 주소
 TOKEN="서버의_API_TOKEN과_같은_값"
 DEVICE="phone01"                             # 기기 구분 이름 (영문/숫자)
 SRC="$HOME/storage/shared/Recordings"        # 녹음 폴더 (기종마다 다를 수 있음)

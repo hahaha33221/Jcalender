@@ -13,16 +13,37 @@ API_TOKEN=길고_랜덤한_문자열 node server.js
 |---|---|---|
 | API_TOKEN | 인증 토큰 (필수) | 없음 |
 | PORT | 포트 | 3000 |
+| HOST | 받을 주소 (VPS에서는 127.0.0.1) | 0.0.0.0 |
 | DATA_DIR | 파일·DB 저장 위치 | ./data |
 
 토큰 생성 예: `openssl rand -hex 32`
 
 저장 구조: `data/files/` (녹음 파일), `data/recordings.db` (SQLite 메타데이터)
 
-운영 시 확인 사항
-- HTTPS 적용 (nginx 등 리버스 프록시 사용 권장)
-- nginx 사용 시 `client_max_body_size 200M;` 추가 (기본 1MB라 업로드 거절됨)
-- 상시 실행: `pm2 start server.js --name recording-api` 등
+### Jcalender VPS에 설치 (맥북 터미널, 처음 한 번 · 업데이트할 때도 같은 명령)
+
+Jcalender API(`server/deploy/update.sh`)가 먼저 설치되어 있어야 합니다. 그 설치의 전용 Node와 `jcal` 사용자를 같이 씁니다.
+
+```bash
+cd ~/Jcalender && git pull
+bash recording-api/deploy/update.sh
+```
+
+- root 비밀번호를 물으면 hPanel에서 정한 비밀번호를 입력합니다.
+- 끝나면 업로드 주소와 토큰이 화면에 나옵니다. 이 두 값을 MacroDroid에 넣습니다.
+- 업로드 주소: `https://rec-31-97-71-87.sslip.io/api/recordings/raw`
+- 토큰 다시 보기: VPS에서 `grep API_TOKEN /etc/jcal-recording.env`
+
+| 항목 | 값 |
+|---|---|
+| 서비스 | `jcal-recording` (127.0.0.1:8790) |
+| 파일 위치 | `/opt/jcalender/recording-api` |
+| 녹음 · DB 저장 | `/var/lib/jcal-recording` |
+| 설정 (토큰) | `/etc/jcal-recording.env` |
+| Nginx | `jcal-recording.conf` 1개 추가, `client_max_body_size 200m`, 인증서는 certbot 자동 갱신 |
+| 상태 확인 | `systemctl status jcal-recording`, `journalctl -u jcal-recording -n 30` |
+
+기존 `jcal-api` 서비스, `jcalender.conf`, 다른 Nginx 사이트, 방화벽은 건드리지 않습니다.
 
 ## 2. API 명세
 
@@ -84,7 +105,7 @@ recording 객체
 ```bash
 curl -H "Authorization: Bearer 토큰" -H "Content-Type: application/octet-stream" \
      --data-binary "@test.m4a" -X POST \
-     "https://내사이트.com/api/recordings/raw?device=test&filename=test.m4a"
+     "https://rec-31-97-71-87.sslip.io/api/recordings/raw?device=test&filename=test.m4a"
 ```
 
 ### GET /api/recordings
@@ -99,8 +120,8 @@ curl -H "Authorization: Bearer 토큰" -H "Content-Type: application/octet-strea
 
 ```bash
 curl -H "Authorization: Bearer 토큰" --form-string "device=test" \
-     -F "file=@test.m4a" https://내사이트.com/api/recordings
-curl -H "Authorization: Bearer 토큰" https://내사이트.com/api/recordings
+     -F "file=@test.m4a" https://rec-31-97-71-87.sslip.io/api/recordings
+curl -H "Authorization: Bearer 토큰" https://rec-31-97-71-87.sslip.io/api/recordings
 ```
 
 ## 3. 휴대폰 설정
