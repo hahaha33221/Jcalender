@@ -5,6 +5,10 @@
    POST /api/minutes/process {id}    지금 만들기 · 다시 만들기 (대기열 맨 앞)
    POST /api/minutes/delete  {id}    녹음 파일 · 회의록 지우기 (recording-api 에서도 지움)
    GET  /api/minutes/audio?id=       녹음 파일 (재생용, recording-api 에서 받아 그대로 넘김)
+   POST /api/minutes/process {ids: [..]}  여러 개를 한 번에 (예전 녹음 골라 만들기)
+   POST /api/minutes/upload?u=&i=&n=&name=&at=&make=  사이트에서 예전 녹음 올리기 — 4MB 조각으로 받아 모은 뒤 녹음 서버로 넘김
+        (조각이라 Nginx · Vercel 크기 · 시간 제한에 안 걸림, 같은 내용은 녹음 서버가 SHA-256 으로 걸러 "이미 있음")
+        올린 녹음은 "수동"(자동 정리 안 함), make=1 이면 바로 회의록 대기열
    GET  /api/minutes/settings        설정 상태 (키는 가린 값 · 어디서 왔는지, 녹음 서버 연결 시험 · 업로드 주소 · 토큰)
    POST /api/minutes/settings {openaiKey?, anthropicKey?, recToken?, model?, sttModel?, auto?, clear?: ['openai' | 'anthropic' | 'recToken']}
         키는 저장 전에 그 회사에 확인 (틀린 키는 저장 안 함) → server/siteSettings.mjs 파일에 저장
@@ -47,6 +51,8 @@ const POLL_MS = () => Math.max(15, num(env.MINUTES_POLL_SEC, 60)) * 1000;
 const SEGMENT_SEC = 600;                                        // 10분씩 나눠 받아쓰기 (모델 길이 · 25MB 제한 안쪽)
 const OPENAI_MAX = 24 * 1024 * 1024;
 const BUSY = ['stt', 'summary'];
+const CHUNK_MAX = 4 * 1024 * 1024 + 1024;                      // 조각 하나 (화면은 3MB 로 자름)
+const UPLOAD_EXT = /\.(m4a|mp3|amr|wav|3gp|ogg|aac)$/i;            // 녹음 서버가 받는 형식과 같게
 export const STATUS = { idle: '수동', queued: '대기', stt: '받아쓰는 중', summary: '정리 중', done: '완료', failed: '실패', skipped: '건너뜀' };
 
 class StepError extends Error { constructor(msg, status = 'failed') { super(msg); this.state = status; } }
@@ -229,6 +235,8 @@ async function recCheck() {
 
 export function minutesModule({ pool, adminUser, HttpError }) {
   let busy = false, lastSync = 0, timer = null, syncing = null;
+  const ups = new Map();                                        // 올리는 중인 파일: u → { next, size, at }
+  setInterval(() => { for (const [u, v] of ups) if (Date.now() - v.at > 3600e3) { ups.delete(u); fsp.rm(path.join(os.tmpdir(), `jcal-up-${u}`), { force: true }).catch(() => {}); } }, 600e3).unref();
 
   const doSync = async () => {
     try {
@@ -362,12 +370,13 @@ export function minutesModule({ pool, adminUser, HttpError }) {
     },
     'POST /api/minutes/process': async (req, body) => {
       await adminUser(req);
-      const id = Number(body.id);
-      const { rowCount } = await pool.query(`UPDATE jcal.recording_minutes SET status = 'queued', auto_run = false, error = '', updated_at = now() WHERE rec_id = $1 AND status NOT IN ('stt', 'summary')`, [id]);
+      const ids = (Array.isArray(body.ids) ? body.ids : [body.id]).map(Number).filter(n => Number.isInteger(n) && n > 0).slice(0, 500);
+      const { rowCount } = await pool.query(`UPDATE jcal.recording_minutes SET status = 'queued', auto_run = false, error = '', updated_at = now() WHERE rec_id = ANY($1::bigint[]) AND status NOT IN ('stt', 'summary')`, [ids]);
       if (!rowCount) throw new HttpError(409, '이미 처리 중이거나 없는 녹음입니다');
       drain();
-      return { ok: true };
+      return { ok: true, queued: rowCount };
     },
+
     'POST /api/minutes/delete': async (req, body) => {
       await adminUser(req);
       const id = Number(body.id);
@@ -381,6 +390,47 @@ export function minutesModule({ pool, adminUser, HttpError }) {
     },
   };
   const raw = {
+    /** 예전 녹음 올리기: 조각(최대 4MB)을 차례로 받아 임시 파일에 모으고, 마지막 조각이 오면 녹음 서버로 넘긴다 */
+    'POST /api/minutes/upload': async req => {
+      await adminUser(req);
+      const q = new URL(req.url, 'http://x').searchParams;
+      const u = String(q.get('u') || ''), i = Number(q.get('i')), n = Number(q.get('n'));
+      const name = path.basename(String(q.get('name') || '')).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 200);
+      if (!/^[a-z0-9]{12,40}$/.test(u) || !Number.isInteger(i) || !Number.isInteger(n) || n < 1 || n > 60 || i < 0 || i >= n) throw new HttpError(400, '올리기 정보가 올바르지 않습니다');
+      if (!UPLOAD_EXT.test(name)) throw new HttpError(415, '녹음 파일만 올릴 수 있습니다 (m4a · mp3 · amr · wav · 3gp · ogg · aac)');
+      const file = path.join(os.tmpdir(), `jcal-up-${u}`);
+      const st = ups.get(u) || { next: 0, size: 0, at: Date.now() };
+      if (i < st.next) { for await (const c of req) void c; return { ok: true, part: i, again: true }; }   // 다시 보낸 조각 (이미 받음)
+      if (i !== st.next) throw new HttpError(409, `조각 순서가 맞지 않습니다 (${st.next}번째부터 다시)`);
+      let size = 0; const chunks = [];
+      for await (const c of req) { size += c.length; if (size > CHUNK_MAX) throw new HttpError(413, '조각이 너무 큽니다'); chunks.push(c); }
+      if (st.size + size > 200 * 1024 * 1024) { ups.delete(u); await fsp.rm(file, { force: true }); throw new HttpError(413, '200MB 가 넘는 녹음은 올릴 수 없습니다'); }
+      await fsp.appendFile(file, Buffer.concat(chunks));
+      ups.set(u, { next: i + 1, size: st.size + size, at: Date.now() });
+      if (i < n - 1) return { ok: true, part: i };
+      ups.delete(u);
+      try {
+        const at = /^\d{9,11}$/.test(String(q.get('at') || '')) ? `&recorded_at=${q.get('at')}` : '';
+        let r;
+        try {
+          r = await fetch(`${recUrl()}/api/recordings/raw?device=web&filename=${encodeURIComponent(name)}${at}`, {
+            method: 'POST', duplex: 'half', body: Readable.toWeb(fs.createReadStream(file)), signal: AbortSignal.timeout(10 * 60 * 1000),
+            headers: { Authorization: `Bearer ${env.RECORDING_API_TOKEN || ''}`, 'Content-Type': 'application/octet-stream' },
+          });
+        } catch { throw new HttpError(502, '녹음 서버에 연결하지 못했습니다 (설정 창에서 상태 확인)'); }
+        const j = await r.json().catch(() => ({}));
+        if (r.status === 401) throw new HttpError(502, '녹음 서버 토큰이 맞지 않습니다 (설정 창에서 확인)');
+        if (!r.ok || !j.recording) throw new HttpError(r.status === 415 ? 415 : 502, j.error ? `녹음 서버: ${j.error}` : `녹음 서버 오류 (${r.status})`);
+        const it = j.recording, rec = it.recorded_at ? new Date(it.recorded_at) : null;
+        // 올린 녹음은 자동 정리하지 않음(수동). make=1 이면 바로 대기열 (버튼과 같은 대우)
+        const make = q.get('make') === '1';
+        await pool.query(`INSERT INTO jcal.recording_minutes (rec_id, sha256, device, filename, size_bytes, recorded_at, uploaded_at, status, auto_run)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false) ON CONFLICT (rec_id) DO NOTHING`,
+        [it.id, String(it.sha256 || ''), String(it.device || 'web').slice(0, 60), String(it.filename || name), Number(it.size) || 0, rec && !Number.isNaN(rec.getTime()) ? rec : null, sqliteTime(it.uploaded_at) || new Date(), make ? 'queued' : 'idle']);
+        if (make) { await pool.query(`UPDATE jcal.recording_minutes SET status = 'queued', auto_run = false, error = '' WHERE rec_id = $1 AND status IN ('idle', 'failed', 'skipped')`, [it.id]); drain(); }
+        return { ok: true, done: true, duplicate: !!j.duplicate, id: it.id };
+      } finally { await fsp.rm(file, { force: true }).catch(() => {}); }
+    },
     'GET /api/minutes/audio': async (req, res) => {
       await adminUser(req);
       const id = Number(new URL(req.url, 'http://x').searchParams.get('id'));

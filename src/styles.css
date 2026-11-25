@@ -2554,3 +2554,15 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .rs-more { margin: 6px 0; font-size: 13px; }
 .rs-more summary { cursor: pointer; color: var(--ink2); }
 .rs-chk { display: block; margin: 8px 0; }
+/* 예전 녹음 올리기 */
+.ru-pick { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.ru-sum { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0 6px; }
+.ru-list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; }
+.ru-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 4px 0; border-top: 1px solid var(--line2); font-size: 13px; }
+.ru-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ru-sz { flex: none; width: 58px; text-align: right; }
+.ru-bar { flex: none; width: 80px; height: 6px; border-radius: 3px; background: var(--line2); overflow: hidden; }
+.ru-bar i { display: block; height: 100%; background: var(--a3); }
+.ru-row.s-ok .ru-bar i, .ru-row.s-dup .ru-bar i { background: var(--ok); }
+.ru-err { flex-basis: 100%; color: var(--over); font-size: 12px; }
+.rec-bulk { margin: 8px 0 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
