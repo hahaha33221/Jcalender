@@ -12,6 +12,9 @@ import { Popup, useCtx } from './shared.jsx';
 import { API_BASE } from './serverSync.js';
 import { uid } from './ideas.js';
 import { unzipSync, strFromU8 } from 'fflate';
+import { writeXlsx, download } from './xlsx.js';
+/** 표 → 엑셀 시트 (머리글 굵게, 내용은 테두리 · 줄바꿈, 셀 병합 없음) */
+const xsheet = (name, rows, cols) => ({ name, rows, cols, rowStyle: Object.fromEntries(rows.map((_, i) => [i, i === 0 ? 1 : 2])) });
 
 const STATUS = { idle: '수동', queued: '대기', stt: '받아쓰는 중', summary: '정리 중', done: '완료', failed: '실패', skipped: '건너뜀' };
 const BUSY = ['queued', 'stt', 'summary'];
@@ -77,8 +80,23 @@ export function taskSpan(mode, k) {
 }
 
 /** 회의록 대시보드: 숫자 · 할 일 모음(끝냄 · 캘린더) · 종류 · 월별 · 자주 만난 사람 · 최근 회의록 */
+const NONE = '미선정';
+const DEFAULT_CATS = ['업무', '거래처', '개인'];
+const tkey = t => `${t.id}|${t.i}`;
+const monthOfTask = t => (t.due || ymd(t.at)).slice(0, 7);
+const ymLabel = m => `${m.slice(0, 4)}년 ${Number(m.slice(5))}월`;
+
 function MinutesDash({ version, onOpen, onFind }) {
-  const { sync, setStore, now } = useCtx();
+  const { sync, store, setStore, now } = useCtx();
+  const cats = Array.isArray(store.taskCats) ? store.taskCats : DEFAULT_CATS;   // 할 일 분류 (직접 추가 · 수정, 앱 데이터로 저장 · 동기화)
+  const catOf = t => { const c = store.taskCatOf?.[tkey(t)]; return c && cats.includes(c) ? c : NONE; };
+  const setCat = (t, c) => setStore(s => { const m = { ...(s.taskCatOf || {}) }; if (c === NONE) delete m[tkey(t)]; else m[tkey(t)] = c; return { ...s, taskCatOf: m }; });
+  const [catF, setCatF] = useState('all');
+  const [pick, setPick] = useState('');
+  const [editCats, setEditCats] = useState(false);
+  const [newCat, setNewCat] = useState('');
+  const [xm, setXm] = useState(() => iso(now).slice(0, 7));     // 엑셀로 받을 달
+  const [xmsg, setXmsg] = useState('');
   const [d, setD] = useState(null);
   const [err, setErr] = useState('');
   const [tf, setTf] = useState('open');                        // open(전체) · late(기한 지남) · month · week · day
@@ -101,7 +119,9 @@ function MinutesDash({ version, onOpen, onFind }) {
   if (!d) return <p className="muted">회의록 대시보드를 불러오는 중…</p>;
   if (!d.total) return <p className="muted rec-empty">아직 완료된 회의록이 없습니다. 녹음이 정리되거나, "예전 녹음 · 회의록 올리기"로 Word 회의록을 올리면 여기에 모입니다.</p>;
   const span = taskSpan(tf, anchor);
-  const tasks = d.tasks.list.filter(t => (tf === 'late' ? t.due && t.due < d.today : span ? t.due && t.due >= span.from && t.due <= span.to : true));
+  const inView = d.tasks.list.filter(t => (tf === 'late' ? t.due && t.due < d.today : span ? t.due && t.due >= span.from && t.due <= span.to : true));
+  const catCount = c => inView.filter(t => catOf(t) === c).length;
+  const tasks = catF === 'all' ? inView : inView.filter(t => catOf(t) === catF);
   const undated = tf === 'open' ? tasks.filter(t => !t.due) : [];
   const dated = tf === 'open' ? tasks.filter(t => t.due) : tasks;
   // 날짜별 묶음 (주 보기는 빈 날도 보여 줌)
@@ -111,10 +131,46 @@ function MinutesDash({ version, onOpen, onFind }) {
   const row = t => (
     <li key={`${t.id}|${t.i}`} className={t.due && t.due < d.today ? 'late' : ''}>
       <input type="checkbox" aria-label="끝냄" onChange={() => done(t)} />
-      <span className="grow"><span>{t.task}</span>{t.owner && <span className="tag">{t.owner}</span>}{t.time && <span className="tag">{t.time}</span>}
-        <button className="md-src" onClick={() => onOpen(t.id)}>{t.title}</button></span>
+      <span className="grow"><button className={`md-cat${catOf(t) === NONE ? ' none' : ''}`} aria-expanded={pick === tkey(t)} title="분류 바꾸기" onClick={() => setPick(pick === tkey(t) ? '' : tkey(t))}>{catOf(t)}</button><span>{t.task}</span>{t.owner && <span className="tag">{t.owner}</span>}{t.time && <span className="tag">{t.time}</span>}
+        <button className="md-src" onClick={() => onOpen(t.id)}>{t.title}</button>
+        {pick === tkey(t) && <span className="md-pick">{[...cats, NONE].map(c => <button key={c} className={`md-cat${c === NONE ? ' none' : ''}`} aria-pressed={catOf(t) === c} onClick={() => { setCat(t, c); setPick(''); }}>{c}</button>)}</span>}</span>
       <button className="btn sm" disabled={added[`${t.id}|${t.i}`]} onClick={() => toCal(t)}>{added[`${t.id}|${t.i}`] ? '추가함' : '캘린더에'}</button>
     </li>);
+  const addCat = () => { const c = newCat.trim().slice(0, 20); if (!c || c === NONE || cats.includes(c)) { setNewCat(''); return; } setStore(s => ({ ...s, taskCats: [...cats, c] })); setNewCat(''); };
+  const removeCat = c => setStore(s => ({ ...s, taskCats: cats.filter(x => x !== c) }));
+  const renameCat = (from, to) => {
+    to = String(to || '').trim().slice(0, 20);
+    if (!to || to === from || to === NONE || cats.includes(to)) return;
+    setStore(s => ({ ...s, taskCats: cats.map(x => (x === from ? to : x)), taskCatOf: Object.fromEntries(Object.entries(s.taskCatOf || {}).map(([k, v]) => [k, v === from ? to : v])) }));
+    if (catF === from) setCatF(to);
+  };
+  // 엑셀: 그 달의 할 일 (기한이 그 달, 기한이 없으면 회의 날짜로) · 의사결정 (회의록 "4. 결론")
+  const allTasks = [...d.tasks.list, ...(d.tasks.doneList || [])];
+  const xMonths = [...new Set([iso(now).slice(0, 7), ...d.months.map(x => x.month), ...allTasks.map(monthOfTask), ...(d.decisions || []).map(x => ymd(x.at).slice(0, 7))])].filter(Boolean).sort().reverse();
+  const exportTodos = () => {
+    const list = allTasks.filter(t => monthOfTask(t) === xm).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999') || String(a.at).localeCompare(String(b.at)));
+    if (!list.length) { setXmsg(`${ymLabel(xm)}에 할 일이 없습니다.`); return; }
+    const rows = [['번호', '기한', '시간', '할 일', '담당', '분류', '상태', '회의록', '회의 날짜'],
+      ...list.map((t, n) => [n + 1, t.due || '기한 없음', t.time || '', t.task, t.owner || '', catOf(t), t.done ? '끝냄' : t.due && t.due < d.today ? '기한 지남' : '남음', t.title, ymd(t.at)])];
+    const byCat = [...cats, NONE].map(c => { const x = list.filter(t => catOf(t) === c); return [c, x.length, x.filter(t => !t.done).length, x.filter(t => t.done).length]; });
+    download(writeXlsx([
+      xsheet(`할 일 ${Number(xm.slice(5))}월`, rows, [6, 12, 7, 50, 10, 10, 10, 30, 12]),
+      xsheet('분류별', [['분류', '전체', '남음', '끝냄'], ...byCat, ['합계', list.length, list.filter(t => !t.done).length, list.filter(t => t.done).length]], [14, 8, 8, 8]),
+    ]), `todos_${xm}.xlsx`);
+    setXmsg(`${ymLabel(xm)} 할 일 ${list.length}건을 엑셀로 받았습니다${d.tasks.doneList ? '' : ' (끝낸 할 일은 서버 업데이트 뒤에 들어갑니다)'}.`);
+  };
+  const exportDecisions = () => {
+    if (!d.decisions) { setXmsg('의사결정 엑셀은 서버 업데이트 뒤에 쓸 수 있습니다 (맥북에서 bash server/deploy/update.sh).'); return; }
+    const list = d.decisions.filter(x => ymd(x.at).slice(0, 7) === xm).sort((a, b) => String(a.at).localeCompare(String(b.at)));
+    if (!list.length) { setXmsg(`${ymLabel(xm)}에 결론(의사결정)이 적힌 회의록이 없습니다.`); return; }
+    let n = 0;
+    const rows = [['번호', '회의 날짜', '회의록', '종류', '참석자', '안건', '결정 내용', '출처'], ...list.flatMap(x => x.conclusion.map(c => [++n, ymd(x.at), x.title, x.kind, x.participants, x.agenda, c, x.source]))];
+    download(writeXlsx([
+      xsheet(`의사결정 ${Number(xm.slice(5))}월`, rows, [6, 12, 30, 8, 22, 30, 60, 12]),
+      xsheet('회의별', [['회의 날짜', '회의록', '참석자', '목적', '결정 수', '결정 내용', '할 일 수'], ...list.map(x => [ymd(x.at), x.title, x.participants, x.purpose, x.conclusion.length, x.conclusion.map(c => `- ${c}`).join('\n'), x.steps])], [12, 30, 22, 30, 8, 60, 8]),
+    ]), `decisions_${xm}.xlsx`);
+    setXmsg(`${ymLabel(xm)} 의사결정 ${n}건 (회의 ${list.length}개)을 엑셀로 받았습니다.`);
+  };
   const move = n => setAnchor(a => (tf === 'month' ? addMonths(a, n) : addDays(a, tf === 'week' ? 7 * n : n)));
   const maxM = Math.max(1, ...d.months.map(x => x.n));
   return (
@@ -126,6 +182,13 @@ function MinutesDash({ version, onOpen, onFind }) {
         <div><b>{d.tasks.open}</b><span>남은 할 일</span></div>
         <div className={d.tasks.overdue ? 'md-late' : ''}><b>{d.tasks.overdue}</b><span>기한 지남</span></div>
       </div>
+      <div className="md-xbar">
+        <span>엑셀로 받기</span>
+        <select value={xm} onChange={e => { setXm(e.target.value); setXmsg(''); }} aria-label="받을 달">{xMonths.map(m => <option key={m} value={m}>{ymLabel(m)}</option>)}</select>
+        <button className="btn sm" onClick={exportTodos}>할 일 엑셀</button>
+        <button className="btn sm" onClick={exportDecisions}>의사결정 엑셀</button>
+        {xmsg && <span className="muted">{xmsg}</span>}
+      </div>
       <div className="md-grid">
         <section className="md-card md-tasks"><h3>할 일 모음 <small className="muted">회의록의 "5. 향후 진행 사항" · 끝낸 것 {d.tasks.done}</small></h3>
           <div className="md-tbar">
@@ -133,6 +196,16 @@ function MinutesDash({ version, onOpen, onFind }) {
             {span && <div className="md-nav"><button className="btn sm" aria-label="이전" onClick={() => move(-1)}>‹</button><b>{span.label}</b><button className="btn sm" aria-label="다음" onClick={() => move(1)}>›</button>
               <button className="btn sm" onClick={() => setAnchor(iso(now))}>{tf === 'month' ? '이번 달' : tf === 'week' ? '이번 주' : '오늘'}</button><span className="muted">{tasks.length}건</span></div>}
           </div>
+          <div className="md-cbar">
+            <span className="muted">분류</span>
+            <div className="chips">{[['all', `전체 ${inView.length}`], ...cats.map(c => [c, `${c} ${catCount(c)}`]), [NONE, `${NONE} ${catCount(NONE)}`]].map(([k, l]) => <button key={k} aria-pressed={catF === k} onClick={() => setCatF(k)}>{l}</button>)}</div>
+            <button className="btn sm" onClick={() => setEditCats(!editCats)}>{editCats ? '분류 편집 닫기' : '분류 편집'}</button>
+          </div>
+          {editCats && <div className="md-cedit">
+            {cats.map((c, i) => <span key={c} className="md-crow"><input defaultValue={c} aria-label={`분류 ${c} 이름`} onBlur={e => renameCat(c, e.target.value)} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }} /><button className="btn sm" aria-label={`${c} 지우기`} onClick={() => removeCat(c)}>×</button></span>)}
+            <span className="md-crow"><input value={newCat} placeholder="새 분류 이름" onChange={e => setNewCat(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addCat(); }} /><button className="btn sm primary" onClick={addCat}>추가</button></span>
+            <small className="muted">분류를 지우면 그 분류의 할 일은 "미선정"이 됩니다. 각 할 일 앞의 분류 버튼을 눌러 바꿉니다.</small>
+          </div>}
           {groups.some(g => g.items.length) || undated.length ? (<>
             {groups.map(g => (tf === 'day' ? <ul key={g.key} className="md-tl">{g.items.map(row)}</ul> : (
               <div key={g.key} className={`md-day${g.key === d.today ? ' today' : ''}${g.key < d.today ? ' past' : ''}`}>
