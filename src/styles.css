@@ -2593,3 +2593,11 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .rec-steps li.rec-step-done .grow { text-decoration: line-through; color: var(--ink3); }
 .ru-kind { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; font-size: 13px; }
 @media (max-width: 760px) { .md-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .md-grid { grid-template-columns: 1fr; } }
+.md-tbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.md-nav { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+.md-day { margin-top: 8px; }
+.md-day h4 { margin: 0; padding: 4px 0; font-size: 13px; display: flex; gap: 6px; align-items: center; border-bottom: 1px solid var(--line); }
+.md-day.today h4 { color: var(--a3); }
+.md-day.past h4 { color: var(--ink3); }
+.md-day .md-tl li:first-child { border-top: 0; }
+.md-none { margin: 4px 0; font-size: 12px; }
