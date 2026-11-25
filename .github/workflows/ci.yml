@@ -86,4 +86,7 @@ jobs:
           npm i -g vercel@latest
           vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
           vercel build --prod --token="$VERCEL_TOKEN"
+          # GitHub 에서 병합한 커밋은 작성자가 hahaha33221 계정이라 Vercel 팀(koreamate2026-ux)이 "팀 접근 권한 없음"으로 막는다
+          # → 두 계정 모두 본인 것이므로 커밋 정보를 빼고 VERCEL_TOKEN 주인으로 배포 (2026-11-25, 프로젝트 주인 승인)
+          rm -rf .git
           vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
