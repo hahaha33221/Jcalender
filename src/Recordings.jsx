@@ -62,13 +62,28 @@ function useMinutes() {
   return { data, err, load };
 }
 
+/* 할 일 보기 기간 (YYYY-MM-DD 문자열로 계산, 주는 월요일 시작) */
+const WD = ['일', '월', '화', '수', '목', '금', '토'];
+const dOf = k => new Date(`${k}T00:00:00`);
+const addDays = (k, n) => { const x = dOf(k); x.setDate(x.getDate() + n); return iso(x); };
+const addMonths = (k, n) => { const x = dOf(k); x.setDate(1); x.setMonth(x.getMonth() + n); return iso(x); };
+const dayLabel = (k, yr) => { const x = dOf(k); return `${yr || x.getFullYear() !== new Date().getFullYear() ? `${x.getFullYear()}. ` : ''}${x.getMonth() + 1}/${x.getDate()} (${WD[x.getDay()]})`; };
+export function taskSpan(mode, k) {
+  const x = dOf(k);
+  if (mode === 'day') return { from: k, to: k, label: dayLabel(k, true) };
+  if (mode === 'week') { const from = addDays(k, -((x.getDay() + 6) % 7)), to = addDays(from, 6); return { from, to, label: `${dayLabel(from)} ~ ${dayLabel(to)}` }; }
+  if (mode === 'month') { const from = `${k.slice(0, 7)}-01`, to = addDays(addMonths(from, 1), -1); return { from, to, label: `${x.getFullYear()}년 ${x.getMonth() + 1}월` }; }
+  return null;
+}
+
 /** 회의록 대시보드: 숫자 · 할 일 모음(끝냄 · 캘린더) · 종류 · 월별 · 자주 만난 사람 · 최근 회의록 */
 function MinutesDash({ version, onOpen, onFind }) {
   const { sync, setStore, now } = useCtx();
   const [d, setD] = useState(null);
   const [err, setErr] = useState('');
-  const [tf, setTf] = useState('open');
+  const [tf, setTf] = useState('open');                        // open(전체) · late(기한 지남) · month · week · day
   const [tn, setTn] = useState(10);
+  const [anchor, setAnchor] = useState(() => iso(now));          // 월 · 주 · 일 보기의 기준 날짜
   const [added, setAdded] = useState({});
   const load = useCallback(async () => {
     try { setD(await sync.request('/api/minutes/dashboard')); setErr(''); }
@@ -85,7 +100,22 @@ function MinutesDash({ version, onOpen, onFind }) {
   if (err) return <p className="rec-msg bad">{err}</p>;
   if (!d) return <p className="muted">회의록 대시보드를 불러오는 중…</p>;
   if (!d.total) return <p className="muted rec-empty">아직 완료된 회의록이 없습니다. 녹음이 정리되거나, "예전 녹음 · 회의록 올리기"로 Word 회의록을 올리면 여기에 모입니다.</p>;
-  const tasks = d.tasks.list.filter(t => (tf === 'late' ? t.due && t.due < d.today : tf === 'week' ? t.due && t.due <= iso(new Date(Date.now() + 7 * 864e5)) : true));
+  const span = taskSpan(tf, anchor);
+  const tasks = d.tasks.list.filter(t => (tf === 'late' ? t.due && t.due < d.today : span ? t.due && t.due >= span.from && t.due <= span.to : true));
+  const undated = tf === 'open' ? tasks.filter(t => !t.due) : [];
+  const dated = tf === 'open' ? tasks.filter(t => t.due) : tasks;
+  // 날짜별 묶음 (주 보기는 빈 날도 보여 줌)
+  const groups = [];
+  if (tf === 'week') for (let i = 0; i < 7; i++) { const k = addDays(span.from, i); groups.push({ key: k, items: dated.filter(t => t.due === k) }); }
+  else for (const t of dated.slice(0, tf === 'month' || tf === 'day' ? 1000 : tn)) { const g = groups[groups.length - 1]; if (g?.key === t.due) g.items.push(t); else groups.push({ key: t.due, items: [t] }); }
+  const row = t => (
+    <li key={`${t.id}|${t.i}`} className={t.due && t.due < d.today ? 'late' : ''}>
+      <input type="checkbox" aria-label="끝냄" onChange={() => done(t)} />
+      <span className="grow"><span>{t.task}</span>{t.owner && <span className="tag">{t.owner}</span>}{t.time && <span className="tag">{t.time}</span>}
+        <button className="md-src" onClick={() => onOpen(t.id)}>{t.title}</button></span>
+      <button className="btn sm" disabled={added[`${t.id}|${t.i}`]} onClick={() => toCal(t)}>{added[`${t.id}|${t.i}`] ? '추가함' : '캘린더에'}</button>
+    </li>);
+  const move = n => setAnchor(a => (tf === 'month' ? addMonths(a, n) : addDays(a, tf === 'week' ? 7 * n : n)));
   const maxM = Math.max(1, ...d.months.map(x => x.n));
   return (
     <div className="md">
@@ -98,15 +128,20 @@ function MinutesDash({ version, onOpen, onFind }) {
       </div>
       <div className="md-grid">
         <section className="md-card md-tasks"><h3>할 일 모음 <small className="muted">회의록의 "5. 향후 진행 사항" · 끝낸 것 {d.tasks.done}</small></h3>
-          <div className="chips">{[['open', '전체'], ['week', '7일 안'], ['late', '기한 지남']].map(([k, l]) => <button key={k} aria-pressed={tf === k} onClick={() => { setTf(k); setTn(10); }}>{l}</button>)}</div>
-          {tasks.length ? <ul className="md-tl">{tasks.slice(0, tn).map(t => (
-            <li key={`${t.id}|${t.i}`} className={t.due && t.due < d.today ? 'late' : ''}>
-              <input type="checkbox" aria-label="끝냄" onChange={() => done(t)} />
-              <span className="grow"><span>{t.task}</span>{t.owner && <span className="tag">{t.owner}</span>}{t.due && <span className="tag">{t.due.slice(5).replace('-', '/')}{t.time ? ` ${t.time}` : ''}</span>}
-                <button className="md-src" onClick={() => onOpen(t.id)}>{t.title}</button></span>
-              <button className="btn sm" disabled={added[`${t.id}|${t.i}`]} onClick={() => toCal(t)}>{added[`${t.id}|${t.i}`] ? '추가함' : '캘린더에'}</button>
-            </li>))}</ul> : <p className="muted">남은 할 일이 없습니다.</p>}
-          {tasks.length > tn && <button className="btn sm rec-more" onClick={() => setTn(tn + 20)}>더 보기 ({tasks.length - tn})</button>}
+          <div className="md-tbar">
+            <div className="chips">{[['open', '전체'], ['month', '월'], ['week', '주'], ['day', '일'], ['late', '기한 지남']].map(([k, l]) => <button key={k} aria-pressed={tf === k} onClick={() => { setTf(k); setTn(10); }}>{l}</button>)}</div>
+            {span && <div className="md-nav"><button className="btn sm" aria-label="이전" onClick={() => move(-1)}>‹</button><b>{span.label}</b><button className="btn sm" aria-label="다음" onClick={() => move(1)}>›</button>
+              <button className="btn sm" onClick={() => setAnchor(iso(now))}>{tf === 'month' ? '이번 달' : tf === 'week' ? '이번 주' : '오늘'}</button><span className="muted">{tasks.length}건</span></div>}
+          </div>
+          {groups.some(g => g.items.length) || undated.length ? (<>
+            {groups.map(g => (tf === 'day' ? <ul key={g.key} className="md-tl">{g.items.map(row)}</ul> : (
+              <div key={g.key} className={`md-day${g.key === d.today ? ' today' : ''}${g.key < d.today ? ' past' : ''}`}>
+                <h4>{dayLabel(g.key)}{g.key === d.today && <span className="tag">오늘</span>}<small className="muted">{g.items.length ? `${g.items.length}건` : ''}</small></h4>
+                {g.items.length ? <ul className="md-tl">{g.items.map(row)}</ul> : <p className="muted md-none">없음</p>}
+              </div>)))}
+            {tf === 'open' && dated.length > tn && <button className="btn sm rec-more" onClick={() => setTn(tn + 20)}>더 보기 ({dated.length - tn})</button>}
+            {!!undated.length && <div className="md-day"><h4>기한 없음<small className="muted">{undated.length}건</small></h4><ul className="md-tl">{undated.slice(0, 10).map(row)}</ul>{undated.length > 10 && <p className="muted">외 {undated.length - 10}건 (회의록 창에서 확인)</p>}</div>}
+          </>) : <p className="muted">{span ? `${span.label}에 기한인 할 일이 없습니다.` : '남은 할 일이 없습니다.'}</p>}
         </section>
         <section className="md-card"><h3>최근 회의록</h3>
           <ul className="md-recent">{d.recent.map(r => (
