@@ -11,6 +11,7 @@ import { iso } from './data.js';
 import { Popup, useCtx } from './shared.jsx';
 import { API_BASE } from './serverSync.js';
 import { uid } from './ideas.js';
+import { unzipSync, strFromU8 } from 'fflate';
 
 const STATUS = { idle: '수동', queued: '대기', stt: '받아쓰는 중', summary: '정리 중', done: '완료', failed: '실패', skipped: '건너뜀' };
 const BUSY = ['queued', 'stt', 'summary'];
@@ -18,6 +19,7 @@ const VIEWS = { all: '전체', done: '완료', busy: '진행 중', todo: '실패
 const inView = (v, s) => v === 'all' || (v === 'done' && s === 'done') || (v === 'busy' && BUSY.includes(s)) || (v === 'todo' && ['idle', 'failed', 'skipped'].includes(s));
 const PAGE = 10;
 const p2 = n => String(n).padStart(2, '0');
+const ymd = s => { if (!s) return ''; const d = new Date(s); return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`; };
 const fmtAt = s => { if (!s) return ''; const d = new Date(s); return `${d.getMonth() + 1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
 const fmtLen = s => (s == null ? '' : s >= 3600 ? `${Math.floor(s / 3600)}시간 ${Math.round((s % 3600) / 60)}분` : s >= 60 ? `${Math.round(s / 60)}분` : `${Math.round(s)}초`);
 const nameOf = it => it.title || String(it.filename || '').replace(/\.\w+$/, '') || `녹음 ${it.id}`;
@@ -60,6 +62,69 @@ function useMinutes() {
   return { data, err, load };
 }
 
+/** 회의록 대시보드: 숫자 · 할 일 모음(끝냄 · 캘린더) · 종류 · 월별 · 자주 만난 사람 · 최근 회의록 */
+function MinutesDash({ version, onOpen, onFind }) {
+  const { sync, setStore, now } = useCtx();
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState('');
+  const [tf, setTf] = useState('open');
+  const [tn, setTn] = useState(10);
+  const [added, setAdded] = useState({});
+  const load = useCallback(async () => {
+    try { setD(await sync.request('/api/minutes/dashboard')); setErr(''); }
+    catch (e) { setErr(e.status === 404 && e.server ? '서버 업데이트가 필요합니다 (맥북에서 bash server/deploy/update.sh)' : e.message); }
+  }, [sync]);
+  useEffect(() => { load(); }, [load, version]);
+  const done = async t => {
+    try { await sync.request('/api/minutes/step', { method: 'POST', body: { id: t.id, i: t.i, done: true } }); await load(); } catch (e) { setErr(e.message); }
+  };
+  const toCal = t => {
+    setStore(s => ({ ...s, events: [...(s.events || []), { id: uid(), date: t.due || iso(now), time: t.time || '', end: '', title: t.task, area: 'W', memo: `회의록: ${t.title}${t.owner ? ` · 담당 ${t.owner}` : ''}` }] }));
+    setAdded(a => ({ ...a, [`${t.id}|${t.i}`]: true }));
+  };
+  if (err) return <p className="rec-msg bad">{err}</p>;
+  if (!d) return <p className="muted">회의록 대시보드를 불러오는 중…</p>;
+  if (!d.total) return <p className="muted rec-empty">아직 완료된 회의록이 없습니다. 녹음이 정리되거나, "예전 녹음 · 회의록 올리기"로 Word 회의록을 올리면 여기에 모입니다.</p>;
+  const tasks = d.tasks.list.filter(t => (tf === 'late' ? t.due && t.due < d.today : tf === 'week' ? t.due && t.due <= iso(new Date(Date.now() + 7 * 864e5)) : true));
+  const maxM = Math.max(1, ...d.months.map(x => x.n));
+  return (
+    <div className="md">
+      <div className="md-stats">
+        <div><b>{d.total}</b><span>전체 회의록</span></div>
+        <div><b>{d.thisMonth}</b><span>이번 달</span></div>
+        <div><b>{d.thisWeek}</b><span>이번 주</span></div>
+        <div><b>{d.tasks.open}</b><span>남은 할 일</span></div>
+        <div className={d.tasks.overdue ? 'md-late' : ''}><b>{d.tasks.overdue}</b><span>기한 지남</span></div>
+      </div>
+      <div className="md-grid">
+        <section className="md-card md-tasks"><h3>할 일 모음 <small className="muted">회의록의 "5. 향후 진행 사항" · 끝낸 것 {d.tasks.done}</small></h3>
+          <div className="chips">{[['open', '전체'], ['week', '7일 안'], ['late', '기한 지남']].map(([k, l]) => <button key={k} aria-pressed={tf === k} onClick={() => { setTf(k); setTn(10); }}>{l}</button>)}</div>
+          {tasks.length ? <ul className="md-tl">{tasks.slice(0, tn).map(t => (
+            <li key={`${t.id}|${t.i}`} className={t.due && t.due < d.today ? 'late' : ''}>
+              <input type="checkbox" aria-label="끝냄" onChange={() => done(t)} />
+              <span className="grow"><span>{t.task}</span>{t.owner && <span className="tag">{t.owner}</span>}{t.due && <span className="tag">{t.due.slice(5).replace('-', '/')}{t.time ? ` ${t.time}` : ''}</span>}
+                <button className="md-src" onClick={() => onOpen(t.id)}>{t.title}</button></span>
+              <button className="btn sm" disabled={added[`${t.id}|${t.i}`]} onClick={() => toCal(t)}>{added[`${t.id}|${t.i}`] ? '추가함' : '캘린더에'}</button>
+            </li>))}</ul> : <p className="muted">남은 할 일이 없습니다.</p>}
+          {tasks.length > tn && <button className="btn sm rec-more" onClick={() => setTn(tn + 20)}>더 보기 ({tasks.length - tn})</button>}
+        </section>
+        <section className="md-card"><h3>최근 회의록</h3>
+          <ul className="md-recent">{d.recent.map(r => (
+            <li key={r.id}><button onClick={() => onOpen(r.id)}><span className="md-at">{fmtAt(r.at)}</span><b>{r.title}</b>{r.kind && <span className="tag">{r.kind}</span>}<span className="muted md-sum">{r.summary}</span></button></li>))}</ul>
+        </section>
+        <section className="md-card"><h3>월별 회의록 <small className="muted">최근 12개월</small></h3>
+          <ul className="md-bars">{d.months.map(x => (
+            <li key={x.month}><button onClick={() => onFind(x.month)} title={`${x.month} 회의록 보기`}><span>{Number(x.month.slice(5))}월</span><i style={{ width: `${(x.n / maxM) * 100}%` }} /><em>{x.n}</em></button></li>))}</ul>
+        </section>
+        <section className="md-card"><h3>종류 · 자주 만난 사람</h3>
+          <div className="md-chips">{d.kinds.map(k => <button key={k.kind} className="tag" onClick={() => onFind(k.kind)}>{k.kind} {k.n}</button>)}</div>
+          {d.people.length ? <div className="md-chips">{d.people.map(p => <button key={p.name} className="tag" onClick={() => onFind(p.name)}>{p.name} {p.n}</button>)}</div> : <p className="muted">참석자가 적힌 회의록이 아직 없습니다.</p>}
+        </section>
+      </div>
+    </div>
+  );
+}
+
 /** 녹음 서버 상태 한 줄: 휴대폰 녹음이 안 보일 때 어디가 막혔는지 */
 function RecDiag({ rec, openSetup }) {
   if (!rec) return <p className="rec-msg bad">VPS 서버가 아직 옛 버전입니다. 맥북 터미널에서 <code>cd ~/Jcalender &amp;&amp; git pull &amp;&amp; bash server/deploy/update.sh</code> 를 한 번 실행하세요.</p>;
@@ -77,11 +142,12 @@ export function RecordingsHome() {
   const [msg, setMsg] = useState('');
   const [setup, setSetup] = useState(false);
   const [up, setUp] = useState(false);
+  const [tab, setTab] = useState('dash');
   const { sync } = useCtx();
   const items = data?.items || [];
   const list = useMemo(() => {
     const k = q.trim().toLowerCase();
-    return items.filter(i => inView(view, i.status) && (!k || `${i.title} ${i.summary} ${i.filename} ${i.device}`.toLowerCase().includes(k)));
+    return items.filter(i => inView(view, i.status) && (!k || `${i.title} ${i.summary} ${i.filename} ${i.device} ${i.people || ''} ${ymd(i.at)}`.toLowerCase().includes(k)));
   }, [items, view, q]);
   const counts = useMemo(() => Object.fromEntries(Object.keys(VIEWS).map(v => [v, items.filter(i => inView(v, i.status)).length])), [items]);
   const run = async id => {
@@ -101,15 +167,19 @@ export function RecordingsHome() {
     <section className="panel rec-home" aria-label="녹음 · 회의록">
       <div className="csum-h"><h2>녹음 · 회의록</h2>
         <span className="muted">{data ? `${items.length}건 · 완료 ${counts.done}${counts.busy ? ` · 진행 중 ${counts.busy}` : ''}${data.auto ? ` · 자동 정리 오늘 ${data.today}/${data.limit}` : ' · 자동 정리 꺼짐'}` : '불러오는 중…'}</span>
-        <span className="ib-hb grow-r"><button className="btn sm" onClick={load}>새로고침</button><button className="btn sm" onClick={() => setUp(true)}>예전 녹음 · TXT 올리기</button><button className="btn sm" onClick={() => setSetup(true)}>설정</button></span></div>
+        <span className="ib-hb grow-r"><button className="btn sm" onClick={load}>새로고침</button><button className="btn sm" onClick={() => setUp(true)}>예전 녹음 · 회의록 올리기</button><button className="btn sm" onClick={() => setSetup(true)}>설정</button></span></div>
       {err && <p className="rec-msg bad">{err}</p>}
       {!!missing?.length && <p className="rec-msg">설정이 더 필요합니다: {missing.join(' · ')}. <button className="btn sm primary" onClick={() => setSetup(true)}>설정 열기</button></p>}
       {msg && <p className="rec-msg bad">{msg}</p>}
       {data && <RecDiag rec={data.rec} openSetup={() => setSetup(true)} />}
-      {data && (<>
+      {data && <div className="chips rec-tabs" role="tablist">
+        <button role="tab" aria-pressed={tab === 'dash'} onClick={() => setTab('dash')}>회의록 대시보드</button>
+        <button role="tab" aria-pressed={tab === 'list'} onClick={() => setTab('list')}>목록 <small>{items.length}</small></button></div>}
+      {data && tab === 'dash' && <MinutesDash version={`${counts.done}|${items.length}`} onOpen={setOpen} onFind={k => { setQ(k); setView('all'); setTab('list'); setN(PAGE); }} />}
+      {data && tab === 'list' && (<>
         <div className="rec-tools">
           <div className="chips">{Object.entries(VIEWS).map(([k, label]) => <button key={k} aria-pressed={view === k} onClick={() => { setView(k); setN(PAGE); }}>{label} <small>{counts[k]}</small></button>)}</div>
-          <input className="rec-q" value={q} onChange={e => { setQ(e.target.value); setN(PAGE); }} placeholder="제목 · 요약 · 파일 이름 검색" aria-label="녹음 검색" />
+          <input className="rec-q" value={q} onChange={e => { setQ(e.target.value); setN(PAGE); }} placeholder="제목 · 요약 · 사람 · 날짜(2024-03) 검색" aria-label="녹음 검색" />
         </div>
         {list.length ? (
           <ul className="rec-list">{list.slice(0, n).map(it => (
@@ -144,6 +214,11 @@ function MinutesPopup({ id, onClose, onChanged }) {
   const [audio, setAudio] = useState(null);
   const [note, setNote] = useState('');
   const [added, setAdded] = useState({});
+  const [raw, setRaw] = useState(false);
+  const toggleStep = async (i, done) => {
+    try { const r = await sync.request('/api/minutes/step', { method: 'POST', body: { id, i, done } }); setIt(x => ({ ...x, minutes: { ...x.minutes, done_steps: r.done } })); onChanged(); }
+    catch (e) { setNote(e.message); }
+  };
   const urlRef = useRef(null);
   const get = useCallback(async () => {
     try { setIt((await sync.request(`/api/minutes/item?id=${id}`)).item); setErr(''); } catch (e) { setErr(e.message); }
@@ -187,7 +262,7 @@ function MinutesPopup({ id, onClose, onChanged }) {
     <Popup wide title={it ? nameOf(it) : '회의록'} sub={sub} onClose={onClose}
       actions={it && <span className="rec-acts">
         {m && <button className="btn sm" onClick={copy}>회의록 복사</button>}
-        {!BUSY.includes(it.status) && <button className="btn sm" onClick={redo}>{m ? '다시 만들기' : '회의록 만들기'}</button>}
+        {!BUSY.includes(it.status) && (it.audio || it.hasText || m?.raw) && <button className="btn sm" onClick={redo}>{m?.source === 'file' ? 'AI 로 다시 정리' : m ? '다시 만들기' : '회의록 만들기'}</button>}
         {!['stt', 'summary'].includes(it.status) && <button className="btn sm danger" onClick={remove}>지우기</button>}
       </span>}>
       {err && <p className="rec-msg bad">{err}</p>}
@@ -209,11 +284,15 @@ function MinutesPopup({ id, onClose, onChanged }) {
           {m.conclusion?.length ? <ul>{m.conclusion.map((c, i) => <li key={i}>{c}</li>)}</ul> : <p className="muted">없음</p>}
           <h3>5. 향후 진행 사항</h3>
           {m.next_steps?.length ? <ul className="rec-steps">{m.next_steps.map((x, i) => (
-            <li key={i}><span className="grow">{x.task}{x.owner && <span className="tag">{x.owner}</span>}{x.due && <span className="tag">{x.due.slice(5).replace('-', '/')}{x.time ? ` ${x.time}` : ''}</span>}</span>
+            <li key={i} className={m.done_steps?.includes(i) ? 'rec-step-done' : ''}><input type="checkbox" aria-label="끝냄" checked={!!m.done_steps?.includes(i)} onChange={e => toggleStep(i, e.target.checked)} /><span className="grow">{x.task}{x.owner && <span className="tag">{x.owner}</span>}{x.due && <span className="tag">{x.due.slice(5).replace('-', '/')}{x.time ? ` ${x.time}` : ''}</span>}</span>
               <button className="btn sm" disabled={added[i]} onClick={() => toCalendar(x, i)}>{added[i] ? '추가함' : '캘린더에 추가'}</button></li>))}</ul> : <p className="muted">없음</p>}
           <h3>6. 기타</h3>
           {m.etc?.length ? <ul>{m.etc.map((c, i) => <li key={i}>{c}</li>)}</ul> : <p className="muted">없음</p>}
         </div>)}
+        {m?.raw && <div className="rec-full">
+          <button className="btn sm" onClick={() => setRaw(!raw)}>{raw ? '원문 접기' : '올린 회의록 원문 보기'}</button>
+          {raw && <pre className="rec-tr">{m.raw}</pre>}
+        </div>}
         {it.transcript && <div className="rec-full">
           <button className="btn sm" onClick={() => setFull(!full)}>{full ? '전문 접기' : `전문 보기 (${it.transcript.length.toLocaleString('ko-KR')}자)`}</button>
           {full && <pre className="rec-tr">{it.transcript}</pre>}
@@ -314,7 +393,55 @@ function SettingsPopup({ onClose }) {
 
 /* ── 예전 녹음 올리기 ── */
 const EXT_OK = /\.(m4a|mp3|amr|wav|3gp|ogg|aac)$/i;
-const TXT_OK = /\.txt$/i;
+const TXT_OK = /\.(txt|md|docx)$/i;
+/** Word(docx) → 글: 문단 · 제목 · 목록(들여쓰기) · 표(칸은 " | ") */
+export function docxText(buf) {
+  const files = unzipSync(new Uint8Array(buf), { filter: f => f.name === 'word/document.xml' });
+  const xml = files['word/document.xml'];
+  if (!xml) throw new Error('Word 파일이 아니거나 손상되었습니다');
+  const doc = new DOMParser().parseFromString(strFromU8(xml), 'application/xml');
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const body = doc.getElementsByTagNameNS(W, 'body')[0];
+  if (!body) throw new Error('Word 내용을 읽지 못했습니다');
+  const runText = p => {
+    let t = '';
+    const walk = n => { for (const c of n.childNodes) { if (c.namespaceURI !== W) continue; if (c.localName === 't') t += c.textContent; else if (c.localName === 'tab') t += ' '; else if (c.localName === 'br' || c.localName === 'cr') t += '\n'; else if (c.localName !== 'pPr' && c.localName !== 'rPr') walk(c); } };
+    walk(p); return t;
+  };
+  // 목록 단계: 문단의 번호 매기기(numPr) 또는 "List Number 2" 같은 목록 스타일 (null = 목록 아님)
+  const levelOf = p => {
+    const pr = [...p.childNodes].find(c => c.localName === 'pPr');
+    if (!pr) return null;
+    const num = pr.getElementsByTagNameNS(W, 'numPr')[0];
+    if (num) return Number(num.getElementsByTagNameNS(W, 'ilvl')[0]?.getAttributeNS(W, 'val') || 0);
+    const st = pr.getElementsByTagNameNS(W, 'pStyle')[0]?.getAttributeNS(W, 'val') || '';
+    const m = st.match(/^(?:List|ListBullet|ListNumber|ListParagraph|목록)\D*(\d)?$/i);
+    return m ? Math.max(0, Number(m[1] || 1) - 1) : null;
+  };
+  const paras = [...body.getElementsByTagNameNS(W, 'p')];
+  const deep = paras.some(p => (levelOf(p) || 0) > 0);
+  const out = [], cnt = {};
+  const para = p => {
+    const t = runText(p).trim();
+    if (!t) { cnt.reset = true; return; }
+    const lv = levelOf(p);
+    if (lv != null) {
+      if (lv === 0 && deep) { if (cnt.reset) cnt.n = 0; cnt.n = (cnt.n || 0) + 1; cnt.reset = false; out.push(`${cnt.n}) ${t}`); }
+      else out.push(`${'  '.repeat(Math.max(lv, deep ? 1 : 0))}- ${t}`);
+    } else { cnt.n = 0; out.push(t); }
+  };
+  for (const n of body.childNodes) {
+    if (n.namespaceURI !== W) continue;
+    if (n.localName === 'p') para(n);
+    else if (n.localName === 'tbl') {
+      for (const tr of n.getElementsByTagNameNS(W, 'tr')) {
+        const cells = [...tr.getElementsByTagNameNS(W, 'tc')].map(tc => [...tc.getElementsByTagNameNS(W, 'p')].map(runText).map(x => x.trim()).filter(Boolean).join(' / '));
+        if (cells.some(Boolean)) out.push(cells.length === 2 && cells[0].length <= 10 ? `${cells[0]}: ${cells[1]}` : cells.join(' | '));
+      }
+    }
+  }
+  return out.join('\n');
+}
 /** TXT 글 읽기: BOM → UTF-8 (틀리면) → EUC-KR/CP949 (옛 한글 메모장 · 윈도) */
 export function decodeText(buf) {
   const b = new Uint8Array(buf);
@@ -351,6 +478,7 @@ function UploadPopup({ onClose, onUploaded }) {
   const { sync } = useCtx();
   const [rows, setRows] = useState([]);
   const [make, setMake] = useState(false);
+  const [txtKind, setTxtKind] = useState('auto');
   const [running, setRunning] = useState(false);
   const pick = useRef(null), folder = useRef(null), stop = useRef(false);
   const add = files => {
@@ -369,10 +497,12 @@ function UploadPopup({ onClose, onUploaded }) {
       if (TXT_OK.test(row.f.name)) {
         set(row.key, { state: 'up', pct: 0, msg: '' });
         try {
-          if (row.f.size > 5 * 1048576) throw new Error('5MB 가 넘는 TXT 는 올릴 수 없습니다');
-          const text = decodeText(await row.f.arrayBuffer()).slice(0, 400000);
-          const res = await sync.request('/api/minutes/text', { method: 'POST', body: { name: row.f.name, at: recordedAtOf(row.f), text, make } });
-          set(row.key, { state: res.duplicate ? 'dup' : res.paired ? 'pair' : 'ok', pct: 100 });
+          const isDoc = /\.docx$/i.test(row.f.name);
+          if (row.f.size > (isDoc ? 30 : 5) * 1048576) throw new Error(`${isDoc ? '30' : '5'}MB 가 넘는 파일은 올릴 수 없습니다`);
+          const buf = await row.f.arrayBuffer();
+          const text = (isDoc ? docxText(buf) : decodeText(buf)).slice(0, 400000);
+          const res = await sync.request('/api/minutes/text', { method: 'POST', body: { name: row.f.name, at: recordedAtOf(row.f), text, make, kind: txtKind } });
+          set(row.key, { state: res.duplicate ? 'dup' : res.minutes ? 'min' : res.paired ? 'pair' : 'ok', pct: 100 });
         } catch (e) { set(row.key, { state: 'fail', msg: e.message }); }
         continue;
       }
@@ -395,20 +525,27 @@ function UploadPopup({ onClose, onUploaded }) {
   };
   const cnt = k => rows.filter(x => x.state === k).length;
   const total = rows.reduce((a, x) => a + x.f.size, 0);
-  const LABEL = { wait: '대기', up: '올리는 중', ok: '올림', pair: '녹음에 붙임', dup: '이미 있음', fail: '실패' };
+  const LABEL = { wait: '대기', up: '올리는 중', ok: '올림', pair: '녹음에 붙임', min: '회의록으로 저장', dup: '이미 있음', fail: '실패' };
   return (
-    <Popup wide title="예전 녹음 · TXT 올리기" sub="휴대폰 · 컴퓨터에 있는 녹음 파일과 TXT(받아 적은 글 · 메모)를 골라 한꺼번에 올립니다. 이미 올린 것과 같은 파일은 건너뜁니다." onClose={() => { stop.current = true; onClose(); }}>
+    <Popup wide title="예전 녹음 · 회의록 올리기" sub="녹음 파일, TXT(받아 적은 글), 이미 만든 회의록(Word · TXT)을 골라 한꺼번에 올립니다. 이미 올린 것과 같은 파일은 건너뜁니다." onClose={() => { stop.current = true; onClose(); }}>
       <div className="ru-pick">
         <button className="btn primary" disabled={running} onClick={() => pick.current?.click()}>파일 고르기 (여러 개)</button>
         <button className="btn" disabled={running} onClick={() => folder.current?.click()}>폴더 통째로 고르기</button>
-        <input ref={pick} type="file" multiple hidden accept="audio/*,.m4a,.mp3,.amr,.wav,.3gp,.ogg,.aac,.txt,text/plain" onChange={e => { add(e.target.files); e.target.value = ''; }} />
+        <input ref={pick} type="file" multiple hidden accept="audio/*,.m4a,.mp3,.amr,.wav,.3gp,.ogg,.aac,.txt,.md,.docx,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={e => { add(e.target.files); e.target.value = ''; }} />
         <input ref={folder} type="file" multiple hidden webkitdirectory="" directory="" onChange={e => { add(e.target.files); e.target.value = ''; }} />
       </div>
-      <p className="muted">휴대폰: "파일 고르기" → 내 파일 › Recordings › Call(통화) · Voice Recorder(음성)에서 길게 눌러 여러 개 선택. 컴퓨터: 녹음 폴더를 "폴더 통째로 고르기"로 고르면 녹음 · TXT 파일만 골라 올립니다. TXT 는 받아쓰기 없이 바로 글로 회의록을 만들고, 이름이 같은 녹음(예: 통화.m4a · 통화.txt)이 있으면 그 녹음에 붙습니다.</p>
-      {skip > 0 && <p className="muted">녹음 · TXT 파일이 아닌 {skip}개는 뺐습니다.</p>}
+      <p className="muted">휴대폰: "파일 고르기" → 내 파일 › Recordings › Call(통화) · Voice Recorder(음성)에서 길게 눌러 여러 개 선택. 컴퓨터: 녹음 · 회의록 폴더를 "폴더 통째로 고르기"로 고르면 녹음 · TXT · Word 파일만 골라 올립니다. 이름이 같은 녹음(예: 통화.m4a · 통화.docx)이 있으면 그 녹음에 붙습니다.</p>
+      {skip > 0 && <p className="muted">녹음 · TXT · Word 파일이 아닌 {skip}개는 뺐습니다.</p>}
+      <label className="ru-kind">TXT 가 무엇인가요?
+        <select value={txtKind} disabled={running} onChange={e => setTxtKind(e.target.value)}>
+          <option value="auto">자동으로 판단 (1. 개요 · 4. 결론 같은 제목이 있으면 회의록)</option>
+          <option value="minutes">이미 정리된 회의록 (AI 안 씀 · 비용 없음)</option>
+          <option value="transcript">받아 적은 글 · 메모 (AI 가 회의록으로 정리)</option>
+        </select>
+        <small className="muted">Word(docx)는 늘 "이미 정리된 회의록"으로 그대로 저장합니다 (1. 개요 ~ 6. 기타를 알아서 나눔, 원문도 보관).</small></label>
       <label className="rs-chk"><input type="checkbox" checked={make} disabled={running} onChange={e => setMake(e.target.checked)} /> 올린 뒤 바로 회의록도 만들기 <small className="muted">(끄면 목록에 "수동"으로 들어가고, 필요한 것만 골라 만들 수 있습니다. 비용: 녹음 1시간에 약 500원, TXT 는 한 건에 약 20~100원)</small></label>
       {!!rows.length && (<>
-        <div className="ru-sum"><span>{rows.length}개 · {fmtMB(total)}</span><span className="muted">올림 {cnt('ok')}{cnt('pair') ? ` · 녹음에 붙임 ${cnt('pair')}` : ''} · 이미 있음 {cnt('dup')}{cnt('fail') ? ` · 실패 ${cnt('fail')}` : ''}</span>
+        <div className="ru-sum"><span>{rows.length}개 · {fmtMB(total)}</span><span className="muted">올림 {cnt('ok')}{cnt('min') ? ` · 회의록 ${cnt('min')}` : ''}{cnt('pair') ? ` · 녹음에 붙임 ${cnt('pair')}` : ''} · 이미 있음 {cnt('dup')}{cnt('fail') ? ` · 실패 ${cnt('fail')}` : ''}</span>
           <span className="grow-r ib-hb">{running ? <button className="btn sm" onClick={() => { stop.current = true; }}>멈추기</button>
             : <><button className="btn sm" onClick={() => setRows(r => r.filter(x => x.state === 'wait' || x.state === 'fail'))}>끝난 것 지우기</button>
               <button className="btn sm primary" disabled={!rows.some(x => x.state === 'wait' || x.state === 'fail')} onClick={start}>{cnt('fail') && !cnt('wait') ? '실패한 것 다시 올리기' : '올리기 시작'}</button></>}</span></div>
@@ -416,7 +553,7 @@ function UploadPopup({ onClose, onUploaded }) {
           <li key={x.key} className={`ru-row s-${x.state}`}>
             <span className="grow ru-n" title={x.f.name}>{x.f.name}</span><span className="muted ru-sz">{fmtMB(x.f.size)}</span>
             <span className="ru-bar" aria-hidden="true"><i style={{ width: `${x.pct}%` }} /></span>
-            <span className={`rec-st ${x.state === 'ok' || x.state === 'pair' ? 'st-done' : x.state === 'fail' ? 'st-failed' : x.state === 'up' ? 'st-stt' : ''}`}>{LABEL[x.state]}{x.state === 'up' ? ` ${x.pct}%` : ''}</span>
+            <span className={`rec-st ${['ok', 'pair', 'min'].includes(x.state) ? 'st-done' : x.state === 'fail' ? 'st-failed' : x.state === 'up' ? 'st-stt' : ''}`}>{LABEL[x.state]}{x.state === 'up' ? ` ${x.pct}%` : ''}</span>
             {x.msg && <span className="ru-err">{x.msg}</span>}
           </li>))}</ul>
       </>)}
