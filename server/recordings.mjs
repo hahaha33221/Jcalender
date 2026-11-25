@@ -60,7 +60,7 @@ const SEGMENT_SEC = 600;                                        // 10분씩 나�
 const OPENAI_MAX = 24 * 1024 * 1024;
 const BUSY = ['stt', 'summary'];
 const CHUNK_MAX = 4 * 1024 * 1024 + 1024;                      // 조각 하나 (화면은 3MB 로 자름)
-const UPLOAD_EXT = /\.(m4a|mp3|amr|wav|3gp|ogg|aac)$/i;            // 녹음 서버가 받는 형식과 같게
+const UPLOAD_EXT = /\.(m4a|mp4|m4b|mp3|amr|awb|wav|3gp|3ga|ogg|oga|opus|aac|flac|webm|wma)$/i;            // 녹음 서버가 받는 형식과 같게
 export const STATUS = { idle: '수동', queued: '대기', stt: '받아쓰는 중', summary: '정리 중', done: '완료', failed: '실패', skipped: '건너뜀' };
 
 /** TXT 글 풀기: BOM(UTF-16 · UTF-8) → UTF-8 → 틀리면 EUC-KR/CP949 (옛 한글 메모장 · 윈도) */
@@ -345,7 +345,9 @@ export function minutesModule({ pool, adminUser, HttpError }) {
     try {
       if (!recReady()) { recState = { ok: false, total: null, msg: '녹음 서버 토큰이 없습니다 (설정 창에서 넣기)', at: new Date() }; return; }
       const j = await recJson('/api/recordings?limit=200');
-      recState = { ok: true, total: Number(j.total) || 0, msg: '', at: new Date() };
+      let version = '';
+      try { version = (await (await fetch(`${recUrl()}/api/health`, { signal: AbortSignal.timeout(5000) })).json()).version || ''; } catch { /* 옛 녹음 서버 */ }
+      recState = { ok: true, total: Number(j.total) || 0, msg: '', at: new Date(), version };
       const items = [...(j.items || [])];
       // 녹음 서버에 200건이 넘게 있고 아직 다 받지 않았으면 나머지도 (예전 녹음을 한꺼번에 보낸 경우)
       const known = (await pool.query('SELECT count(*)::int AS n FROM jcal.recording_minutes WHERE rec_id > 0')).rows[0].n;

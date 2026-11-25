@@ -13,7 +13,30 @@ const API_TOKEN = process.env.API_TOKEN;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const FILE_DIR = path.join(DATA_DIR, 'files');
 const MAX_SIZE = 200 * 1024 * 1024; // 200MB
-const ALLOWED_EXT = /\.(m4a|mp3|amr|wav|3gp|ogg|aac|txt)$/i; // txt: 휴대폰이 만든 받아 적은 글 (회의록에 그대로 씀)
+const ALLOWED_EXT = /\.(m4a|mp4|m4b|mp3|amr|awb|wav|3gp|3ga|ogg|oga|opus|aac|flac|webm|wma|txt)$/i; // txt: 휴대폰이 만든 받아 적은 글 (회의록에 그대로 씀)
+const VERSION = '1.2.0';                 // /api/health 로 확인 (VPS 업데이트가 됐는지)
+
+/** 확장자가 없거나 낯선 파일: 앞부분을 보고 형식을 알아낸다 (없으면 null) */
+function sniffExt(file) {
+  const fd = fs.openSync(file, 'r');
+  const b = Buffer.alloc(4096);
+  const n = fs.readSync(fd, b, 0, 4096, 0);
+  fs.closeSync(fd);
+  const h = b.subarray(0, n), s = (i, j) => h.subarray(i, j).toString('latin1');
+  if (n >= 12 && s(4, 8) === 'ftyp') return /^3g/.test(s(8, 11)) ? '.3gp' : '.m4a';
+  if (s(0, 3) === 'ID3' || (h[0] === 0xff && (h[1] & 0xe0) === 0xe0 && (h[1] & 0x06) !== 0)) return '.mp3';
+  if (h[0] === 0xff && (h[1] & 0xf6) === 0xf0) return '.aac';
+  if (s(0, 5) === '#!AMR') return '.amr';
+  if (s(0, 4) === 'RIFF' && s(8, 12) === 'WAVE') return '.wav';
+  if (s(0, 4) === 'OggS') return '.ogg';
+  if (s(0, 4) === 'fLaC') return '.flac';
+  if (h.readUInt32BE?.(0) === 0x1a45dfa3) return '.webm';
+  if (n && !h.includes(0)) {                                  // 글자만 있으면 TXT (UTF-8 · EUC-KR · UTF-16 BOM)
+    return '.txt';
+  }
+  if (n >= 2 && ((h[0] === 0xff && h[1] === 0xfe) || (h[0] === 0xfe && h[1] === 0xff))) return '.txt';
+  return null;
+}
 const TXT_MAX = 5 * 1024 * 1024;
 
 if (!API_TOKEN) {
@@ -57,10 +80,7 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     // multer는 한글 파일명을 latin1로 읽으므로 UTF-8로 복원
     file.originalname = Buffer.from(file.originalname, 'latin1').toString('utf8');
-    if (!ALLOWED_EXT.test(file.originalname)) {
-      return cb(Object.assign(new Error('허용되지 않는 파일 형식'), { status: 415 }));
-    }
-    cb(null, true);
+    cb(null, true);                                              // 형식은 저장 전에 확인 (확장자 · 내용)
   },
 });
 
@@ -87,7 +107,7 @@ function toJson(r) {
 // ---------- 앱 ----------
 const app = express();
 
-app.get('/api/health', (req, res) => res.json({ ok: true }));
+app.get('/api/health', (req, res) => res.json({ ok: true, version: VERSION, accepts: 'm4a mp4 mp3 amr wav 3gp ogg opus aac flac webm txt (확장자 없으면 내용으로 판단)' }));
 
 // 인증: Authorization: Bearer <API_TOKEN>
 app.use('/api', (req, res, next) => {
@@ -103,6 +123,15 @@ app.use('/api', (req, res, next) => {
 // 업로드된 임시 파일을 중복 확인 후 저장하고 DB에 기록
 async function saveRecording({ tmpPath, originalName, size, mime, device, recordedAt }, res) {
   device = String(device || 'unknown').replace(/[^\w-]/g, '').slice(0, 50) || 'unknown';
+  if (!ALLOWED_EXT.test(originalName)) {                        // 확장자가 없거나 낯섦 → 내용으로 판단
+    const ext = sniffExt(tmpPath);
+    if (!ext) {
+      fs.rmSync(tmpPath, { force: true });
+      console.warn(`[415] 받지 않은 파일: ${originalName} (${size}바이트, ${mime || '-'})`);
+      return res.status(415).json({ error: `녹음 · TXT 파일이 아닙니다: "${originalName}" (받는 형식: m4a · mp4 · mp3 · amr · wav · 3gp · ogg · aac · txt)` });
+    }
+    originalName = `${originalName.replace(/\.$/, '')}${ext}`;
+  }
   if (/\.txt$/i.test(originalName) && size > TXT_MAX) {
     fs.rmSync(tmpPath, { force: true });
     return res.status(413).json({ error: 'TXT 는 5MB 까지 받습니다' });
@@ -161,7 +190,6 @@ app.post('/api/recordings', upload.single('file'), async (req, res, next) => {
 app.post('/api/recordings/raw', (req, res, next) => {
   const originalName = path.basename(String(req.query.filename || '')).replace(/[\\/:*?"<>|]/g, '_');
   if (!originalName) return res.status(400).json({ error: 'filename 파라미터가 없습니다' });
-  if (!ALLOWED_EXT.test(originalName)) return res.status(415).json({ error: '허용되지 않는 파일 형식' });
 
   const tmpPath = path.join(FILE_DIR, `${Date.now()}_${crypto.randomBytes(6).toString('hex')}.tmp`);
   const out = fs.createWriteStream(tmpPath);
