@@ -2,14 +2,6 @@
 
 안드로이드 휴대폰의 녹음 파일을 주기적으로 받아 저장하는 API 서버입니다.
 
-## 0. Jcalender VPS 에서 쓰는 경우 (권장)
-
-따로 설치하지 않아도 됩니다. 맥북에서 `bash server/deploy/update.sh` 를 실행하면 이 서버가 서비스 `jcal-rec`(127.0.0.1:8790, 파일은 `/var/lib/jcal-rec`)로 함께 설치되고, 토큰도 자동으로 만들어집니다.
-
-- 휴대폰에서 올릴 주소: `https://jcal-31-97-71-87.sslip.io/rec/api/recordings/raw` (아래 문서의 `https://내사이트.com/api/...` 를 `https://jcal-31-97-71-87.sslip.io/rec/api/...` 로 바꿔 읽기)
-- 토큰 확인 (VPS): `grep RECORDING_API_TOKEN /etc/jcalender.env`
-- 올라온 녹음은 Jcalender 서버가 1분마다 확인해서 받아쓰기 · AI 회의록으로 정리하고, 대시보드 맨 아래 "녹음 · 회의록" 칸에 보여 줍니다 (`docs/recordings.md`).
-
 ## 1. 서버 설치/실행
 
 ```bash
@@ -21,7 +13,6 @@ API_TOKEN=길고_랜덤한_문자열 node server.js
 |---|---|---|
 | API_TOKEN | 인증 토큰 (필수) | 없음 |
 | PORT | 포트 | 3000 |
-| HOST | 받는 주소 | 0.0.0.0 (Jcalender VPS 는 127.0.0.1) |
 | DATA_DIR | 파일·DB 저장 위치 | ./data |
 
 토큰 생성 예: `openssl rand -hex 32`

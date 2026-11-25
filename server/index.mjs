@@ -372,7 +372,7 @@ Object.assign(routes, demoRoutes({ pool, tx, adminUser: shortsUser, HttpError })
 const social = socialRoutes({ pool, adminUser: shortsUser, HttpError, originOk });
 Object.assign(routes, social.json);
 routes['GET /api/shorts'] = async (req, body, res) => { const base = await shortsBase(req, body, res), uid = (await shortsUser(req)).id; return { ...base, ...(await assetData(pool, uid)), ...(await rendersOf(pool, uid)), ...(await socialOf(pool, uid)) }; };   // + 소재함 · 제작 준비 · 영상 · 업로드
-const minutes = minutesModule({ pool, adminUser, HttpError });   // 녹음 · 회의록 (관리자만, 휴대폰 녹음 서버 jcal-rec 에서 받아 받아쓰기 · AI 정리)
+const minutes = minutesModule({ pool, adminUser, HttpError });   // 녹음 · 회의록 (관리자만, 휴대폰 녹음 서버 jcal-recording 에서 받아 받아쓰기 · AI 정리)
 Object.assign(routes, minutes.routes);
 const rawRoutes = { ...assets.raw, ...social.raw, ...ideas.raw, ...minutes.raw };                                    // 본문을 JSON 으로 읽지 않는 경로 (파일 올리기 · 내려주기)
 

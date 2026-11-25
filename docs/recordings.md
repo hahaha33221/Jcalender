@@ -4,9 +4,9 @@
 
 ## 1. 개요
 
-- 녹음 받기: `recording-api/` (서비스 `jcal-rec`, 127.0.0.1:8790). 휴대폰은 `https://API주소/rec/api/recordings/raw` 로 올린다 (Nginx · Caddy 가 `/rec` 를 떼고 넘김)
+- 녹음 받기: `recording-api/` (서비스 `jcal-recording`, 127.0.0.1:8790, 설치 `recording-api/deploy/update.sh`). 휴대폰은 `https://rec-31-97-71-87.sslip.io/api/recordings/raw` 로 올린다
 - 받아쓰기 · 회의록: `server/recordings.mjs` (jcal-api 안의 작업자, 1분마다 새 녹음 확인, 한 번에 1건)
-- 저장: `jcal.recording_minutes` (`db/migrations/013_recordings.sql`). 녹음 파일은 jcal-rec 에만 있고 jcal-api 는 처리할 때만 임시로 받는다
+- 저장: `jcal.recording_minutes` (`db/migrations/013_recordings.sql`). 녹음 파일은 jcal-recording 에만 있고 jcal-api 는 처리할 때만 임시로 받는다
 - 화면: `src/Recordings.jsx` (30초마다, 처리 중이면 10초마다 목록 갱신)
 
 ## 2. 안건
@@ -40,8 +40,8 @@
 
 | 이름 | 기본값 | 설명 |
 |---|---|---|
-| RECORDING_API_URL | http://127.0.0.1:8790 | setup.sh 가 넣음 |
-| RECORDING_API_TOKEN | 자동 생성 | 휴대폰에도 같은 값 |
+| RECORDING_API_URL | http://127.0.0.1:8790 | server/deploy/setup.sh 가 /etc/jcal-recording.env 의 PORT 로 넣음 |
+| RECORDING_API_TOKEN | /etc/jcal-recording.env 의 API_TOKEN | setup.sh 가 옮겨 넣음 (휴대폰에도 같은 값) |
 | MINUTES_AUTO | 1 | 0 이면 버튼으로만 |
 | MINUTES_DAILY | 30 | 하루 자동 처리 한도 |
 | MINUTES_BACKFILL_HOURS | 48 | 처음 발견했을 때 자동 처리할 범위 |
@@ -58,12 +58,13 @@ recording-api 는 받기 전용, 받아쓰기 · 회의록은 jcal-api 가 맡�
 
 ## 5. 향후 진행 사항
 
-1. `bash server/deploy/update.sh` (DB 표 · jcal-rec · 토큰 · /rec 경로까지 한 번에)
-2. VPS 에서 `jcal-admin ai-key` 로 OpenAI 키 · Anthropic 키 넣기 (각각 한 번씩)
-3. `grep RECORDING_API_TOKEN /etc/jcalender.env` → 휴대폰 MacroDroid 에 주소 · 토큰 넣기 (`recording-api/macrodroid-guide.md`)
-4. 짧은 시험 녹음 → 1~2분 뒤 대시보드 맨 아래 확인
+1. `bash recording-api/deploy/update.sh` (녹음 서버 jcal-recording 설치, 끝나면 주소 · 토큰을 보여 줌)
+2. `bash server/deploy/update.sh` (DB 표 추가 · 녹음 서버 토큰 연결 · jcal-api 재시작)
+3. VPS 에서 `jcal-admin ai-key` 로 OpenAI 키 · Anthropic 키 넣기 (각각 한 번씩)
+4. 휴대폰 MacroDroid 에 1번의 주소 · 토큰 넣기 (`recording-api/macrodroid-guide.md`)
+5. 짧은 시험 녹음 → 1~2분 뒤 대시보드 맨 아래 확인
 
 ## 6. 기타
 
-- 확인: `journalctl -u jcal-rec -n 30` (녹음 받기) · `journalctl -u jcal-api -n 50 | grep 회의록` (처리)
+- 확인: `journalctl -u jcal-recording -n 30` (녹음 받기) · `journalctl -u jcal-api -n 50 | grep 회의록` (처리)
 - 2단계 후보: 화자 구분(CLOVA Speech), 할 일을 목표 To do · 체크리스트로, 회의록 직접 고치기

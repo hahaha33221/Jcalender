@@ -43,7 +43,7 @@ MacroDroid의 HTTP 요청은 파일을 본문에 그대로 담아 보내므로 m
 | 항목 | 값 |
 |---|---|
 | 요청 방식 | POST |
-| URL | `https://내사이트.com/api/recordings/raw` (Jcalender VPS: `https://jcal-31-97-71-87.sslip.io/rec/api/recordings/raw`) |
+| URL | `https://내사이트.com/api/recordings/raw` |
 | 시간 제한 | 300초 |
 | HTTP 응답 코드 저장 | 정수 변수 `upload_code` 새로 생성 (로컬) |
 | 다음 동작 차단 | 켜기 (Block next action until complete) |

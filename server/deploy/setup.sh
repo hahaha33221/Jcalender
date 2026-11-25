@@ -130,11 +130,17 @@ if ! grep -q '^VAPID_PUBLIC_KEY=' "$ENV_FILE"; then
   ( umask 077; "$NODE" -e "const k=require('web-push').generateVAPIDKeys();console.log('VAPID_PUBLIC_KEY='+k.publicKey+'\nVAPID_PRIVATE_KEY='+k.privateKey)" >> "$ENV_FILE" )
   echo "웹 푸시 키를 만들었습니다"
 fi
-# 녹음 받는 서버(jcal-rec) 토큰 · 주소: 없을 때만 만든다 (휴대폰 MacroDroid 에 같은 토큰을 넣음 → grep RECORDING_API_TOKEN /etc/jcalender.env)
-REC_PORT=${REC_PORT:-$(saved RECORDING_API_URL | sed -n 's#^http://127\.0\.0\.1:\([0-9]*\).*#\1#p')}
-REC_PORT=${REC_PORT:-8790}
-if ! grep -q '^RECORDING_API_TOKEN=' "$ENV_FILE"; then ( umask 077; echo "RECORDING_API_TOKEN=$(openssl rand -hex 32)" >> "$ENV_FILE" ); echo "녹음 서버 토큰을 만들었습니다"; fi
-grep -q '^RECORDING_API_URL=' "$ENV_FILE" || echo "RECORDING_API_URL=http://127.0.0.1:${REC_PORT}" >> "$ENV_FILE"
+# 녹음 · 회의록: 녹음 받는 서버(jcal-recording, recording-api/deploy/setup.sh 로 설치)의 주소 · 토큰을 가져온다 (있을 때만, 다시 실행하면 새 값으로)
+REC_ENV=/etc/jcal-recording.env
+if [ -f "$REC_ENV" ]; then
+  REC_TOKEN=$(grep -s '^API_TOKEN=' "$REC_ENV" | head -1 | cut -d= -f2-); REC_PORT=$(grep -s '^PORT=' "$REC_ENV" | head -1 | cut -d= -f2-)
+  if [ -n "$REC_TOKEN" ]; then
+    ( umask 077; grep -vE '^(RECORDING_API_URL|RECORDING_API_TOKEN)=' "$ENV_FILE" > "$ENV_FILE.tmp"; printf 'RECORDING_API_URL=http://127.0.0.1:%s\nRECORDING_API_TOKEN=%s\n' "${REC_PORT:-8790}" "$REC_TOKEN" >> "$ENV_FILE.tmp"; mv "$ENV_FILE.tmp" "$ENV_FILE" )
+    chmod 600 "$ENV_FILE"; echo "녹음 서버(jcal-recording, 127.0.0.1:${REC_PORT:-8790})와 연결했습니다 (녹음 · 회의록)"
+  fi
+else
+  echo "알림: 녹음 서버가 아직 없습니다 → 녹음 · 회의록을 쓰려면 bash recording-api/deploy/update.sh 를 먼저 실행한 뒤 이 설치를 한 번 더"
+fi
 chown -R root:root "$APP_DIR"
 sed "s#__NODE__#${NODE}#" "$APP_DIR/server/deploy/jcal-api.service" > /etc/systemd/system/jcal-api.service
 printf '#!/bin/sh\ncd %s/server && exec %s admin.mjs "$@"\n' "$APP_DIR" "$NODE" > /usr/local/bin/jcal-admin
@@ -144,22 +150,6 @@ systemctl enable jcal-api >/dev/null 2>&1
 systemctl restart jcal-api
 for _ in 1 2 3 4 5 6 7 8 9 10; do curl -fsS "http://127.0.0.1:$API_PORT/api/health" >/dev/null 2>&1 && break; sleep 1; done
 curl -fsS "http://127.0.0.1:$API_PORT/api/health" && echo || die "API 서버가 응답하지 않습니다: journalctl -u jcal-api -n 30 결과를 보내 주세요"
-
-# 녹음 받는 서버 (recording-api → 서비스 jcal-rec, 127.0.0.1:$REC_PORT, 파일은 /var/lib/jcal-rec). 바깥 주소: https://$API_HOST/rec/api/recordings/raw
-if [ -f "$APP_DIR/recording-api/server.js" ]; then
-  if ss -ltnH "sport = :$REC_PORT" | grep -q . && ! systemctl is-active --quiet jcal-rec; then
-    echo "알림: $REC_PORT 번 포트를 다른 프로그램이 써서 녹음 서버는 건너뜁니다 → REC_PORT=다른번호 를 앞에 붙여 다시 실행하세요"
-  else
-    ( cd "$APP_DIR/recording-api" && PATH="$NODE_DIR/bin:$PATH" "$NPM" ci --omit=dev --no-audit --no-fund --loglevel=error )
-    chown -R root:root "$APP_DIR/recording-api"
-    sed -e "s#__NODE__#${NODE}#" -e "s#__REC_PORT__#${REC_PORT}#" "$APP_DIR/server/deploy/jcal-rec.service" > /etc/systemd/system/jcal-rec.service
-    systemctl daemon-reload
-    systemctl enable jcal-rec >/dev/null 2>&1
-    systemctl restart jcal-rec
-    for _ in 1 2 3 4 5 6 7 8 9 10; do curl -fsS "http://127.0.0.1:$REC_PORT/api/health" >/dev/null 2>&1 && break; sleep 1; done
-    curl -fsS "http://127.0.0.1:$REC_PORT/api/health" >/dev/null && echo "녹음 서버 jcal-rec 동작 중 (127.0.0.1:$REC_PORT)" || echo "알림: 녹음 서버가 응답하지 않습니다 → journalctl -u jcal-rec -n 30"
-  fi
-fi
 
 step "6/7 HTTPS 주소 ($API_HOST)"
 if systemctl is-active --quiet nginx; then
@@ -220,16 +210,6 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_read_timeout 60s;
     }
-    # 휴대폰 녹음 올리기 · 받기 (녹음 서버 jcal-rec, /rec 를 떼고 넘김: /rec/api/recordings/raw → /api/recordings/raw)
-    location ^~ /rec/ {
-        client_max_body_size 200m;
-        proxy_request_buffering off;
-        proxy_pass http://127.0.0.1:${REC_PORT}/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Forwarded-For \$remote_addr;
-        proxy_read_timeout 600s;
-        proxy_send_timeout 600s;
-    }
     # 숏폼 소재 올리기 (큰 파일, 바로 서버로 흘려보냄)
     location = /api/shorts/upload {
         client_max_body_size 320m;
@@ -267,7 +247,7 @@ else
     curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt > /etc/apt/sources.list.d/caddy-stable.list
     apt-get update -q && apt-get install -y -q caddy >/dev/null
   fi
-  sed -e "s#__API_HOST__#${API_HOST}#" -e "s#__API_PORT__#${API_PORT}#" -e "s#__REC_PORT__#${REC_PORT}#" "$APP_DIR/server/deploy/Caddyfile" > /etc/caddy/Caddyfile
+  sed -e "s#__API_HOST__#${API_HOST}#" -e "s#__API_PORT__#${API_PORT}#" "$APP_DIR/server/deploy/Caddyfile" > /etc/caddy/Caddyfile
   systemctl enable caddy >/dev/null 2>&1
   systemctl reload caddy 2>/dev/null || systemctl restart caddy
 fi
@@ -285,5 +265,4 @@ printf '\n\033[1m완료\033[0m\n'
 echo "API 주소:    https://${API_HOST}"
 echo "확인:        curl https://${API_HOST}/api/health"
 echo "사용자 추가: jcal-admin add-user 이메일 이름"
-echo "녹음 올리기: https://${API_HOST}/rec/api/recordings/raw (토큰: grep RECORDING_API_TOKEN $ENV_FILE)"
 /usr/local/bin/jcal-admin signup

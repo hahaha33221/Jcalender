@@ -1,4 +1,4 @@
-/* 녹음 · 회의록 — 휴대폰 녹음을 받는 서버(recording-api, 서비스 jcal-rec)에 올라온 녹음을 받아 적고(STT) AI 로 회의록을 만든다
+/* 녹음 · 회의록 — 휴대폰 녹음을 받는 서버(recording-api, 서비스 jcal-recording)에 올라온 녹음을 받아 적고(STT) AI 로 회의록을 만든다
    (db/migrations/013_recordings.sql · 관리자 계정만)
    GET  /api/minutes                 → { ready, auto, today, limit, items: [{ id, filename, device, at, status, title, kind, summary, … }] }
    GET  /api/minutes/item?id=        → { item: { …, transcript, minutes } }
@@ -8,7 +8,7 @@
    흐름: 1분마다 recording-api 목록 확인 → 새 녹음은 "대기" → 한 번에 1건씩
          ffmpeg 로 16kHz 모노 mp3 · 10분 단위로 나눔 → OpenAI 받아쓰기 → AI(Claude 우선) 회의록 JSON → 저장
    설정 (환경 변수, /etc/jcalender.env)
-     RECORDING_API_URL (기본 http://127.0.0.1:8790) · RECORDING_API_TOKEN (setup.sh 가 만듦)
+     RECORDING_API_URL (기본 http://127.0.0.1:8790) · RECORDING_API_TOKEN (setup.sh 가 /etc/jcal-recording.env 의 API_TOKEN 을 옮겨 넣음)
      MINUTES_AUTO=0 이면 자동 처리 안 함 (버튼으로만) · MINUTES_DAILY 하루 자동 처리 한도 (기본 30)
      MINUTES_BACKFILL_HOURS 처음 발견했을 때 이 시간 안에 올라온 녹음만 자동 처리 (기본 48, 나머지는 버튼)
      MINUTES_MAX_MIN 이보다 긴 녹음은 자동 처리 안 함 (기본 180분)
@@ -49,10 +49,10 @@ class StepError extends Error { constructor(msg, status = 'failed') { super(msg)
 
 /* ── recording-api 부르기 ── */
 async function recFetch(p, { method = 'GET', timeout = 20000 } = {}) {
-  if (!recReady()) throw new StepError('녹음 서버 토큰(RECORDING_API_TOKEN)이 없습니다. VPS 에서 update.sh 를 다시 실행하세요');
+  if (!recReady()) throw new StepError('녹음 서버 토큰(RECORDING_API_TOKEN)이 없습니다. 녹음 서버를 설치(recording-api/deploy/update.sh)한 뒤 server/deploy/update.sh 를 다시 실행하세요');
   let r;
   try { r = await fetch(recUrl() + p, { method, headers: { Authorization: `Bearer ${env.RECORDING_API_TOKEN}` }, signal: AbortSignal.timeout(timeout) }); }
-  catch (e) { throw new StepError(e.name === 'TimeoutError' ? '녹음 서버가 응답하지 않습니다' : '녹음 서버(jcal-rec)에 연결하지 못했습니다'); }
+  catch (e) { throw new StepError(e.name === 'TimeoutError' ? '녹음 서버가 응답하지 않습니다' : '녹음 서버(jcal-recording)에 연결하지 못했습니다'); }
   if (r.status === 401) throw new StepError('녹음 서버 토큰이 맞지 않습니다 (RECORDING_API_TOKEN 확인)');
   return r;
 }
