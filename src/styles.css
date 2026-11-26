@@ -2612,3 +2612,4 @@ b.pos { color: var(--ok); } b.neg { color: var(--over); }
 .md-crow { display: inline-flex; gap: 2px; }
 .md-crow input { width: 110px; font-size: 13px; }
 .md-cedit small { flex-basis: 100%; }
+.rec-errs ul { margin: 4px 0; padding-left: 18px; } .rec-errs li { font-size: 12px; }

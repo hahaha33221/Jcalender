@@ -239,6 +239,15 @@ function RecDiag({ rec, openSetup }) {
   const t = rec.at ? new Date(rec.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '';
   if (!rec.ok) return <p className="rec-msg bad">녹음 서버: {rec.msg}{t ? ` (${t} 확인)` : ''} <button className="btn sm" onClick={openSetup}>설정 열기</button></p>;
   if (!rec.version) return <p className="rec-msg bad">녹음 서버가 옛 버전이라 TXT · mp4 · 확장자 없는 파일을 거절합니다 (MacroDroid 결과 415). 맥북 터미널에서 <code>cd ~/Jcalender &amp;&amp; git pull &amp;&amp; bash server/deploy/update.sh</code> 를 실행하세요. (지금 녹음 서버에 {rec.total}건)</p>;
+  const errs = rec.errors || [];
+  return (<>
+    {!!errs.length && <div className="rec-msg bad rec-errs"><b>최근 휴대폰 올리기 실패 {errs.length}건</b> (48시간 안, 최근 것부터)
+      <ul>{errs.map((e, i) => <li key={i}>{fmtAt(e.at)} · <b>{e.status}</b> {e.error} <span className="muted">· 파일 이름 {e.filename} · 길이 {e.contentLength} · {e.contentType}</span></li>)}</ul>
+      <small>길이가 0 이거나 "본문이 비어 있습니다"면 MacroDroid 콘텐츠 본문의 파일 경로를, 401 이면 토큰을, 415 면 보낸 파일 종류를 확인하세요.</small></div>}
+    {DiagLine(rec, t)}
+  </>);
+}
+function DiagLine(rec, t) {
   return <p className="muted rec-diag">녹음 서버 {rec.version} 연결됨 · 녹음 서버에 {rec.total}건{t ? ` · ${t} 확인` : ''}{rec.total === 0 ? ' · 휴대폰에서 아직 한 건도 올라오지 않았습니다 (MacroDroid 알림의 결과가 201 또는 200 이어야 올라간 것)' : ''}</p>;
 }
 
