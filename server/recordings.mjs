@@ -347,7 +347,9 @@ export function minutesModule({ pool, adminUser, HttpError }) {
       const j = await recJson('/api/recordings?limit=200');
       let version = '';
       try { version = (await (await fetch(`${recUrl()}/api/health`, { signal: AbortSignal.timeout(5000) })).json()).version || ''; } catch { /* 옛 녹음 서버 */ }
-      recState = { ok: true, total: Number(j.total) || 0, msg: '', at: new Date(), version };
+      let errors = [];
+      if (version) { try { errors = ((await recJson('/api/recent-errors')).items || []).filter(e => Date.now() - new Date(e.at) < 48 * 3600e3).slice(0, 5); } catch { /* 1.3.0 전 녹음 서버 */ } }
+      recState = { ok: true, total: Number(j.total) || 0, msg: '', at: new Date(), version, errors };
       const items = [...(j.items || [])];
       // 녹음 서버에 200건이 넘게 있고 아직 다 받지 않았으면 나머지도 (예전 녹음을 한꺼번에 보낸 경우)
       const known = (await pool.query('SELECT count(*)::int AS n FROM jcal.recording_minutes WHERE rec_id > 0')).rows[0].n;
